@@ -1,35 +1,22 @@
 let player1, player2;
 let projectiles = [];
-let tyemanIdleFrames = [];
-let tyemanWalkFrames = [];
 let playersReady = false;
 
 function preload() {
-  // Usamos promesas para sincronizar mejor la carga
-  piskelPromiseIdle = new Promise((resolve) => {
-    loadPiskel('src/tyeman/tyeman_idle.piskel', (frames) => {
-      tyemanIdleFrames = frames;
-      resolve();
-    });
-  });
-  
-  piskelPromiseWalk = new Promise((resolve) => {
-    loadPiskel('src/tyeman/tyeman_walk.piskel', (frames) => {
-      tyemanWalkFrames = frames;
-      resolve();
-    });
-  });
+  // Preload solo para evitar que setup corra antes de que las animaciones estén listas
+  // Pero cargaremos en setup usando await y promesas para mejor control
 }
 
 async function setup() {
   createCanvas(800, 400);
 
-  // Esperamos que carguen ambas animaciones, ahora serán arrays de capas
+  // Cargamos animaciones .piskel para idle y walk (solo uso idle aquí para demo)
   const tyemanIdleLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_idle.piskel', resolve));
-  const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
+  // Puedes cargar otras animaciones igual, ejemplo:
+  // const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
 
   player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers);
-  player2 = new Fighter(600, color(100, 100, 255), 'p2');
+  player2 = new Fighter(600, color(100, 100, 255), 'p2'); // sin animación por ahora
 
   playersReady = true;
 }
@@ -54,6 +41,7 @@ function draw() {
   player1.display();
   player2.display();
 
+  // Actualizar y dibujar proyectiles
   for (let i = projectiles.length - 1; i >= 0; i--) {
     projectiles[i].update();
     projectiles[i].display();
@@ -88,7 +76,7 @@ function keyReleased() {
 }
 
 // ----------------------------------------
-// PISKEL PARSER (.piskel JSON → p5.Images)
+// Función para cargar .piskel JSON y parsear a array de capas con frames (p5.Image)
 // ----------------------------------------
 function loadPiskel(jsonPath, callback) {
   loadJSON(jsonPath,
@@ -105,7 +93,7 @@ function loadPiskel(jsonPath, callback) {
         return;
       }
 
-      let allLayersFrames = []; // arreglo que tendrá arrays de frames por capa
+      let allLayersFrames = [];
       let layersLoaded = 0;
 
       layers.forEach((layerStr, idx) => {
@@ -181,13 +169,9 @@ function loadPiskel(jsonPath, callback) {
   );
 }
 
-
-
-
 // ----------------------------------------
-// Fighter y Projectile classes
+// Clases Fighter y Projectile
 // ----------------------------------------
-
 class Fighter {
   constructor(x, col, id, idleFramesByLayer = []) {
     this.x = x;
@@ -219,21 +203,32 @@ class Fighter {
   }
 
   display() {
-    if (this.id === 'p1' && this.action === 'idle' && this.idleFramesByLayer.length > 0) {
-      for (let layerFrames of this.idleFramesByLayer) {
-        let img = layerFrames[this.frameIndex];
-        if (img) image(img, this.x, this.y, this.w, this.h);
-      }
-    } else {
-      fill(this.col);
-      rect(this.x, this.y, this.w, this.h);
-    }
-
-    fill(255);
-    textSize(12);
-    textAlign(CENTER);
-    text(this.action, this.x + this.w / 2, this.y - 10);
+  if (this.idleFramesByLayer.length > 0) {
+    for (let i = 1; i < this.idleFramesByLayer.length; i++) {
+  let layerFrames = this.idleFramesByLayer[i];
+  let img = layerFrames[this.frameIndex];
+  if (img) {
+    let frameWidth = img.width / this.idleFramesByLayer[0].length;
+    image(
+      img,
+      this.x, this.y, this.w, this.h,
+      frameWidth * this.frameIndex, 0,
+      frameWidth, img.height
+    );
   }
+}
+
+  } else {
+    fill(this.col);
+    rect(this.x, this.y, this.w, this.h);
+  }
+
+  fill(255);
+  textSize(12);
+  textAlign(CENTER);
+  text(this.action, this.x + this.w / 2, this.y - 10);
+}
+
 
   handleInput(k, isPressed) {
     if (this.id === 'p1') {
@@ -315,5 +310,39 @@ class Projectile {
 
   offscreen() {
     return this.x < 0 || this.x > width;
+  }
+}
+class PiskelSprite {
+  constructor(data, x, y, w, h) {
+    this.data = data;
+    this.x = x;
+    this.y = y;
+    this.w = w;
+    this.h = h;
+    this.frameActual = 0;
+    this.totalFrames = data.frames.length;
+    this.frameRate = 10;
+    this.ultimaAnimacion = millis();
+  }
+
+  actualizarAnimacion() {
+    if (millis() - this.ultimaAnimacion > 1000 / this.frameRate) {
+      this.frameActual = (this.frameActual + 1) % this.totalFrames;
+      this.ultimaAnimacion = millis();
+    }
+  }
+
+  dibujar() {
+    const frame = this.data.frames[this.frameActual];
+    const layers = this.data.layers;
+
+    for (let layer of layers) {
+      const img = layer.image;
+      const sx = frame.x;
+      const sy = frame.y;
+      const sWidth = frame.width;
+      const sHeight = frame.height;
+      image(img, this.x, this.y, this.w, this.h, sx, sy, sWidth, sHeight);
+    }
   }
 }
