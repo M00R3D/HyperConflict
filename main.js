@@ -1,40 +1,63 @@
 let player1, player2;
 let projectiles = [];
 let tyemanIdleFrames = [];
+let tyemanWalkFrames = [];
+let playersReady = false;
 
 function preload() {
-  for (let i = 0; i < 3; i++) {
-    let path = `src/tyeman/tyeman_idle/sprite_tyeman_idle${i}.png`;
-    tyemanIdleFrames[i] = loadImage(path);
-  }
+  // Usamos promesas para sincronizar mejor la carga
+  piskelPromiseIdle = new Promise((resolve) => {
+    loadPiskel('src/tyeman/tyeman_idle.piskel', (frames) => {
+      tyemanIdleFrames = frames;
+      resolve();
+    });
+  });
+  
+  piskelPromiseWalk = new Promise((resolve) => {
+    loadPiskel('src/tyeman/tyeman_walk.piskel', (frames) => {
+      tyemanWalkFrames = frames;
+      resolve();
+    });
+  });
 }
 
-function setup() {
+async function setup() {
   createCanvas(800, 400);
-    
-  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleFrames);
+
+  // Esperamos que carguen ambas animaciones, ahora serán arrays de capas
+  const tyemanIdleLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_idle.piskel', resolve));
+  const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
+
+  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2');
+
+  playersReady = true;
 }
 
 function draw() {
+  if (!playersReady) {
+    background(0);
+    fill(255);
+    textSize(24);
+    textAlign(CENTER, CENTER);
+    text("Cargando animaciones...", width/2, height/2);
+    return;
+  }
+
   background(50, 180, 50);
-  
-  // Dibujar suelo
   fill(80, 50, 20);
   rect(0, height - 40, width, 40);
-  
+
   player1.update();
   player2.update();
-  
+
   player1.display();
   player2.display();
-  
-  // Dibujar proyectiles
+
   for (let i = projectiles.length - 1; i >= 0; i--) {
     projectiles[i].update();
     projectiles[i].display();
-    
-    // Checar colisión con los jugadores
+
     if (projectiles[i].from === 'p1' && projectiles[i].hits(player2)) {
       player2.hit();
       projectiles.splice(i, 1);
@@ -45,8 +68,7 @@ function draw() {
       projectiles.splice(i, 1);
     }
   }
-  
-  // Dibujar vidas
+
   fill(255);
   textSize(20);
   text(`P1 HP: ${player1.hp}`, 20, 30);
@@ -54,17 +76,120 @@ function draw() {
 }
 
 function keyPressed() {
+  if (!playersReady) return;
   player1.handleInput(key, true);
   player2.handleInput(key, true);
 }
 
 function keyReleased() {
+  if (!playersReady) return;
   player1.handleInput(key, false);
   player2.handleInput(key, false);
 }
 
+// ----------------------------------------
+// PISKEL PARSER (.piskel JSON → p5.Images)
+// ----------------------------------------
+function loadPiskel(jsonPath, callback) {
+  loadJSON(jsonPath,
+    (data) => {
+      if (!data || !data.piskel || !data.piskel.layers) {
+        console.error("Archivo .piskel no tiene la estructura esperada:", data);
+        callback([]);
+        return;
+      }
+
+      let layers = data.piskel.layers;
+      if (layers.length === 0) {
+        callback([]);
+        return;
+      }
+
+      let allLayersFrames = []; // arreglo que tendrá arrays de frames por capa
+      let layersLoaded = 0;
+
+      layers.forEach((layerStr, idx) => {
+        let layer;
+        try {
+          layer = JSON.parse(layerStr);
+        } catch (e) {
+          console.error("Error parseando layer:", e);
+          layersLoaded++;
+          if (layersLoaded === layers.length) callback(allLayersFrames);
+          return;
+        }
+
+        if (!layer.chunks || layer.chunks.length === 0) {
+          console.warn(`No se encontraron 'chunks' en layer ${idx}`);
+          layersLoaded++;
+          if (layersLoaded === layers.length) callback(allLayersFrames);
+          return;
+        }
+
+        let frames = [];
+        let chunks = layer.chunks;
+        let loadedCount = 0;
+        let totalFrames = 0;
+        for (let c = 0; c < chunks.length; c++) {
+          totalFrames += chunks[c].layout.flat().length;
+        }
+
+        chunks.forEach((chunk) => {
+          chunk.layout.forEach((frameIndices) => {
+            frameIndices.forEach((frameIndex) => {
+              let base64 = chunk.base64PNG;
+              if (!base64) {
+                console.warn(`Frame ${frameIndex} no tiene base64PNG`);
+                loadedCount++;
+                if (loadedCount === totalFrames) {
+                  allLayersFrames[idx] = frames;
+                  layersLoaded++;
+                  if (layersLoaded === layers.length) callback(allLayersFrames);
+                }
+                return;
+              }
+
+              loadImage(base64,
+                (img) => {
+                  frames[frameIndex] = img;
+                  loadedCount++;
+                  if (loadedCount === totalFrames) {
+                    allLayersFrames[idx] = frames;
+                    layersLoaded++;
+                    if (layersLoaded === layers.length) callback(allLayersFrames);
+                  }
+                },
+                (err) => {
+                  console.error("Error cargando frame:", err);
+                  loadedCount++;
+                  if (loadedCount === totalFrames) {
+                    allLayersFrames[idx] = frames;
+                    layersLoaded++;
+                    if (layersLoaded === layers.length) callback(allLayersFrames);
+                  }
+                }
+              );
+            });
+          });
+        });
+      });
+    },
+    (err) => {
+      console.error("Error cargando JSON .piskel:", err);
+      callback([]);
+    }
+  );
+}
+
+
+
+
+// ----------------------------------------
+// Fighter y Projectile classes
+// ----------------------------------------
+
 class Fighter {
-  constructor(x, col, id, idleFrames = []) {
+  constructor(x, col, id, idleFramesByLayer = []) {
     this.x = x;
     this.y = height - 52;
     this.w = 32;
@@ -75,45 +200,41 @@ class Fighter {
     this.id = id;
     this.action = 'idle';
 
-    this.idleFrames = idleFrames;
+    this.idleFramesByLayer = idleFramesByLayer; // array de arrays de frames
     this.frameIndex = 0;
     this.frameDelay = 10;
   }
-  
-    update() {
-    if (this.action === 'moveLeft') {
-      this.x -= this.speed;
-    } else if (this.action === 'moveRight') {
-      this.x += this.speed;
-    }
+
+  update() {
+    if (this.action === 'moveLeft') this.x -= this.speed;
+    else if (this.action === 'moveRight') this.x += this.speed;
 
     this.x = constrain(this.x, 0, width - this.w);
 
-    // Ciclar animación idle
-    if (this.action === 'idle' && this.idleFrames.length > 0) {
+    if (this.action === 'idle' && this.idleFramesByLayer.length > 0) {
       if (frameCount % this.frameDelay === 0) {
-        this.frameIndex = (this.frameIndex + 1) % this.idleFrames.length;
+        this.frameIndex = (this.frameIndex + 1) % this.idleFramesByLayer[0].length;
       }
     }
   }
 
-  
-    display() {
-    if (this.id === 'p1' && this.action === 'idle' && this.idleFrames.length > 0) {
-      image(this.idleFrames[this.frameIndex], this.x, this.y, this.w, this.h);
+  display() {
+    if (this.id === 'p1' && this.action === 'idle' && this.idleFramesByLayer.length > 0) {
+      for (let layerFrames of this.idleFramesByLayer) {
+        let img = layerFrames[this.frameIndex];
+        if (img) image(img, this.x, this.y, this.w, this.h);
+      }
     } else {
       fill(this.col);
       rect(this.x, this.y, this.w, this.h);
     }
 
-    // Mostrar texto con acción
     fill(255);
     textSize(12);
     textAlign(CENTER);
     text(this.action, this.x + this.w / 2, this.y - 10);
   }
 
-  
   handleInput(k, isPressed) {
     if (this.id === 'p1') {
       if (isPressed) {
@@ -126,43 +247,43 @@ class Fighter {
         if (k === 'a' || k === 'd') this.action = 'idle';
       }
     }
-    
+
     if (this.id === 'p2') {
       if (isPressed) {
-        if (kCode === LEFT_ARROW) this.action = 'moveLeft';
-        else if (kCode === RIGHT_ARROW) this.action = 'moveRight';
-        else if (kCode === UP_ARROW) this.punch();
-        else if (kCode === DOWN_ARROW) this.kick();
+        if (keyCode === LEFT_ARROW) this.action = 'moveLeft';
+        else if (keyCode === RIGHT_ARROW) this.action = 'moveRight';
+        else if (keyCode === UP_ARROW) this.punch();
+        else if (keyCode === DOWN_ARROW) this.kick();
         else if (k === 'm') this.shoot();
       } else {
-        if (kCode === LEFT_ARROW || kCode === RIGHT_ARROW) this.action = 'idle';
+        if (keyCode === LEFT_ARROW || keyCode === RIGHT_ARROW) this.action = 'idle';
       }
     }
   }
-  
+
   punch() {
     this.action = 'punch';
     this.dealDamage(1);
   }
-  
+
   kick() {
     this.action = 'kick';
     this.dealDamage(2);
   }
-  
+
   shoot() {
     this.action = 'power';
     let dir = this.id === 'p1' ? 1 : -1;
     projectiles.push(new Projectile(this.x + this.w / 2, this.y + this.h / 2, dir, this.id));
   }
-  
+
   dealDamage(damage) {
     let other = this.id === 'p1' ? player2 : player1;
     if (abs(this.x - other.x) < 60) {
       other.hp -= damage;
     }
   }
-  
+
   hit() {
     this.hp -= 1;
   }
@@ -177,21 +298,21 @@ class Projectile {
     this.size = 10;
     this.from = from;
   }
-  
+
   update() {
     this.x += this.speed * this.dir;
   }
-  
+
   display() {
     fill(255, 200, 0);
     ellipse(this.x, this.y, this.size);
   }
-  
+
   hits(fighter) {
     return this.x > fighter.x && this.x < fighter.x + fighter.w &&
            this.y > fighter.y && this.y < fighter.y + fighter.h;
   }
-  
+
   offscreen() {
     return this.x < 0 || this.x > width;
   }
