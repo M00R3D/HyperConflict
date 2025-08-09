@@ -9,8 +9,9 @@ async function setup() {
 
   const tyemanIdleLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_idle.piskel', resolve));
   const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
+  const tyemanJumpLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_jump.piskel', resolve));
 
-  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers, tyemanWalkLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers, tyemanWalkLayers,tyemanJumpLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2'); // sin animación por ahora
 
   playersReady = true;
@@ -157,7 +158,7 @@ function loadPiskel(jsonPath, callback) {
 }
 
 class Fighter {
-  constructor(x, col, id, idleFramesByLayer = [], walkFramesByLayer = []) {
+  constructor(x, col, id, idleFramesByLayer = [], walkFramesByLayer = [],jumpFramesByLayer = []) {
     this.x = x;
     this.y = height - 72;
     this.w = 32;
@@ -175,81 +176,117 @@ class Fighter {
 
     this.idleFramesByLayer = idleFramesByLayer;
     this.walkFramesByLayer = walkFramesByLayer;
+    this.jumpFramesByLayer = jumpFramesByLayer;
 
     this.frameIndex = 0;
     this.frameDelay = 10;
-
+  
+    this.facing = 1; 
     // control de teclas presionadas
     this.keys = { left: false, right: false, up: false };
   }
 
-  update() {
-    // movimiento horizontal
-    if (this.keys.left) this.x -= this.speed;
-    if (this.keys.right) this.x += this.speed;
-
-    // gravedad y salto
-    this.vy += this.gravity;
-    this.y += this.vy;
-
-    if (this.y >= height - 72) {
-      this.y = height - 72;
-      this.vy = 0;
-      this.onGround = true;
+update() {
+  // movimiento horizontal
+  if (this.keys.left) {
+      this.x -= this.speed;
+      this.facing = -1;
+    }
+    if (this.keys.right) {
+      this.x += this.speed;
+      this.facing = 1;
     }
 
-    // límites de pantalla
-    this.x = constrain(this.x, 0, width - this.w);
+  // gravedad y salto
+  this.vy += this.gravity;
+  this.y += this.vy;
 
-    // animación
+  if (this.y >= height - 72) {
+    this.y = height - 72;
+    this.vy = 0;
+    this.onGround = true;
+  } else {
+    this.onGround = false;
+  }
+
+  // límites de pantalla
+  this.x = constrain(this.x, 0, width - this.w);
+
+  // animación
+  if (!this.onGround) {
+    // Si está en el aire, avanza frames pero para al último
+    if (frameCount % this.frameDelay === 0) {
+      if (this.frameIndex < this.jumpFramesByLayer[0].length - 1) {
+        this.frameIndex++;
+      }
+    }
+  } else {
+    // Si está en el suelo: si se mueve, usa walk, si no idle
     let moving = this.keys.left || this.keys.right;
     let framesByLayer = moving ? this.walkFramesByLayer : this.idleFramesByLayer;
-
     if (framesByLayer.length > 0) {
       if (frameCount % this.frameDelay === 0) {
         this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
       }
     }
   }
+}
 
 display() {
   let stateText;
+  let framesByLayer;
+
   if (!this.onGround) {
     stateText = "jumping";
+    framesByLayer = this.jumpFramesByLayer;
   } else if (this.keys.left) {
     stateText = "moving left";
+    framesByLayer = this.walkFramesByLayer;
   } else if (this.keys.right) {
     stateText = "moving right";
+    framesByLayer = this.walkFramesByLayer;
   } else {
     stateText = "idle";
+    framesByLayer = this.idleFramesByLayer;
   }
 
-  // Animación
-  let moving = this.keys.left || this.keys.right;
-  let framesByLayer = moving ? this.walkFramesByLayer : this.idleFramesByLayer;
+ if (framesByLayer.length > 0) {
+      push();
 
-  if (framesByLayer.length > 0) {
-    for (let i = 1; i < framesByLayer.length; i++) { // saltar capa base
-      let layerFrames = framesByLayer[i];
-      let img = layerFrames[this.frameIndex];
-      if (img) {
-        let frameWidth = img.width / framesByLayer[0].length;
-        image(img, this.x, this.y, this.w, this.h,
-              frameWidth * this.frameIndex, 0,
-              frameWidth, img.height);
+      // Usar this.facing para reflejar si es -1 (izquierda)
+      if (this.facing === -1) {
+        translate(this.x + this.w / 2, 0);
+        scale(-1, 1);
+        translate(-(this.x + this.w / 2), 0);
       }
-    }
-  } else {
+
+      for (let i = 1; i < framesByLayer.length; i++) {
+        let layerFrames = framesByLayer[i];
+        let img = layerFrames[this.frameIndex];
+        if (img) {
+          let frameWidth = img.width / framesByLayer[0].length;
+          image(
+            img,
+            this.x, this.y, this.w, this.h,
+            frameWidth * this.frameIndex, 0,
+            frameWidth, img.height
+          );
+        }
+      }
+
+      pop();
+    } else {
     fill(this.col);
     rect(this.x, this.y, this.w, this.h);
   }
 
-  // Mostrar estado arriba
   fill(255);
   textSize(12);
   textAlign(CENTER);
   text(stateText, this.x + this.w / 2, this.y - 10);
 }
+
+
 
 
   handleInput(k, isPressed) {
