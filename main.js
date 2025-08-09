@@ -1,7 +1,8 @@
 let player1, player2;
 let projectiles = [];
 let playersReady = false;
-
+let camX = 0;
+let camY = 0;
 function preload() {}
 
 async function setup() {
@@ -16,6 +17,7 @@ async function setup() {
   player2 = new Fighter(600, color(100, 100, 255), 'p2'); // sin animación por ahora
 
   playersReady = true;
+  
 }
 
 function draw() {
@@ -28,12 +30,44 @@ function draw() {
     return;
   }
 
+  // Actualizar jugadores
+  player1.update();
+  player2.update();
+
+  // --- Cámara ---
+
+ player1.update();
+  player2.update();
+
+  // Centro X entre jugadores
+  let centerX = (player1.x + player2.x) / 2;
+  let centerY = height - 72; // suelo fijo vertical
+
+  // Distancia horizontal entre jugadores
+  let distX = abs(player1.x - player2.x);
+
+  const minZoom = 0.6;
+  const maxZoom = 1.5;
+  let zoom = map(distX, 0, width * 0.8, maxZoom, minZoom);
+  zoom = constrain(zoom, minZoom, maxZoom);
+
+  let verticalOffset = map(zoom, minZoom, maxZoom, 80, 20);
+
+  // Aplicar suavizado a la cámara
+  const smoothing = 0.1; // 0.05 a 0.2 depende qué tan lento quieres
+  camX += (centerX - camX) * smoothing;
+  camY += ((height - 72) - camY) * smoothing;
+
+  push();
+
+  translate(width / 2, height / 2 + verticalOffset);
+  scale(zoom);
+  translate(-camX, -camY);
+
+  // Dibuja aquí fondo, jugadores y proyectiles igual que antes
   background(50, 180, 50);
   fill(80, 50, 20);
   rect(0, height - 40, width, 40);
-
-  player1.update();
-  player2.update();
 
   player1.display();
   player2.display();
@@ -53,11 +87,15 @@ function draw() {
     }
   }
 
+  pop();
+
   fill(255);
   textSize(20);
   text(`P1 HP: ${player1.hp}`, 20, 30);
   text(`P2 HP: ${player2.hp}`, width - 120, 30);
 }
+
+
 
 function keyPressed() {
   if (!playersReady) return;
@@ -171,8 +209,8 @@ class Fighter {
 
     // físicas
     this.vy = 0;
-    this.gravity = 0.4;
-    this.jumpStrength = -12;
+    this.gravity = 0.1;
+    this.jumpStrength = -6;
     this.onGround = true;
 
     this.idleFramesByLayer = idleFramesByLayer;
