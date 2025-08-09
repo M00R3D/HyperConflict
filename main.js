@@ -10,8 +10,9 @@ async function setup() {
   const tyemanIdleLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_idle.piskel', resolve));
   const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
   const tyemanJumpLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_jump.piskel', resolve));
+  const tyemanFallLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_fall.piskel', resolve));
 
-  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers, tyemanWalkLayers,tyemanJumpLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers, tyemanWalkLayers,tyemanJumpLayers,tyemanFallLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2'); // sin animación por ahora
 
   playersReady = true;
@@ -158,7 +159,7 @@ function loadPiskel(jsonPath, callback) {
 }
 
 class Fighter {
-  constructor(x, col, id, idleFramesByLayer = [], walkFramesByLayer = [],jumpFramesByLayer = []) {
+  constructor(x, col, id, idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [], fallFramesByLayer = []) {
     this.x = x;
     this.y = height - 72;
     this.w = 32;
@@ -170,25 +171,30 @@ class Fighter {
 
     // físicas
     this.vy = 0;
-    this.gravity = 0.8;
-    this.jumpStrength = -22;
+    this.gravity = 0.4;
+    this.jumpStrength = -12;
     this.onGround = true;
 
     this.idleFramesByLayer = idleFramesByLayer;
     this.walkFramesByLayer = walkFramesByLayer;
     this.jumpFramesByLayer = jumpFramesByLayer;
+    this.fallFramesByLayer = fallFramesByLayer;
 
     this.frameIndex = 0;
     this.frameDelay = 10;
-  
+
     this.facing = 1; 
+
     // control de teclas presionadas
     this.keys = { left: false, right: false, up: false };
+
+    // para saber qué animación está activa
+    this.currentFramesByLayer = null;
   }
 
-update() {
-  // movimiento horizontal
-  if (this.keys.left) {
+  update() {
+    // movimiento horizontal
+    if (this.keys.left) {
       this.x -= this.speed;
       this.facing = -1;
     }
@@ -197,63 +203,74 @@ update() {
       this.facing = 1;
     }
 
-  // gravedad y salto
-  this.vy += this.gravity;
-  this.y += this.vy;
+    // gravedad y salto
+    this.vy += this.gravity;
+    this.y += this.vy;
 
-  if (this.y >= height - 72) {
-    this.y = height - 72;
-    this.vy = 0;
-    this.onGround = true;
-  } else {
-    this.onGround = false;
-  }
-
-  // límites de pantalla
-  this.x = constrain(this.x, 0, width - this.w);
-
-  // animación
-  if (!this.onGround) {
-    // Si está en el aire, avanza frames pero para al último
-    if (frameCount % this.frameDelay === 0) {
-      if (this.frameIndex < this.jumpFramesByLayer[0].length - 1) {
-        this.frameIndex++;
-      }
+    if (this.y >= height - 72) {
+      this.y = height - 72;
+      this.vy = 0;
+      this.onGround = true;
+    } else {
+      this.onGround = false;
     }
-  } else {
-    // Si está en el suelo: si se mueve, usa walk, si no idle
-    let moving = this.keys.left || this.keys.right;
-    let framesByLayer = moving ? this.walkFramesByLayer : this.idleFramesByLayer;
-    if (framesByLayer.length > 0) {
+
+    // límites de pantalla
+    this.x = constrain(this.x, 0, width - this.w);
+
+    // Determinar frames actuales según estado
+    let framesByLayer;
+    if (!this.onGround) {
+      framesByLayer = this.vy < 0 ? this.jumpFramesByLayer : this.fallFramesByLayer;
+    } else {
+      framesByLayer = (this.keys.left || this.keys.right) ? this.walkFramesByLayer : this.idleFramesByLayer;
+    }
+
+    // Reiniciar frameIndex si cambia el set de animación
+    if (this.currentFramesByLayer !== framesByLayer) {
+      this.frameIndex = 0;
+      this.currentFramesByLayer = framesByLayer;
+    }
+
+    if (framesByLayer.length > 0 && framesByLayer[0] && framesByLayer[0].length > 0) {
       if (frameCount % this.frameDelay === 0) {
-        this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+        // En salto o caída se detiene en el último frame
+        if (!this.onGround) {
+          if (this.frameIndex < framesByLayer[0].length - 1) {
+            this.frameIndex++;
+          }
+        } else {
+          // Animación en tierra cíclica
+          this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+        }
       }
+    } else {
+      this.frameIndex = 0;
     }
   }
-}
 
-display() {
-  let stateText;
-  let framesByLayer;
+  display() {
+    let stateText;
+    let framesByLayer = this.currentFramesByLayer;
 
-  if (!this.onGround) {
-    stateText = "jumping";
-    framesByLayer = this.jumpFramesByLayer;
-  } else if (this.keys.left) {
-    stateText = "moving left";
-    framesByLayer = this.walkFramesByLayer;
-  } else if (this.keys.right) {
-    stateText = "moving right";
-    framesByLayer = this.walkFramesByLayer;
-  } else {
-    stateText = "idle";
-    framesByLayer = this.idleFramesByLayer;
-  }
+    if (!framesByLayer) {
+      framesByLayer = this.idleFramesByLayer;
+    }
 
- if (framesByLayer.length > 0) {
+    // Texto estado para debug
+    if (!this.onGround) {
+      stateText = this.vy < 0 ? "jumping" : "falling";
+    } else if (this.keys.left) {
+      stateText = "moving left";
+    } else if (this.keys.right) {
+      stateText = "moving right";
+    } else {
+      stateText = "idle";
+    }
+
+    if (framesByLayer.length > 0 && framesByLayer[0] && framesByLayer[0].length > 0) {
       push();
 
-      // Usar this.facing para reflejar si es -1 (izquierda)
       if (this.facing === -1) {
         translate(this.x + this.w / 2, 0);
         scale(-1, 1);
@@ -276,18 +293,15 @@ display() {
 
       pop();
     } else {
-    fill(this.col);
-    rect(this.x, this.y, this.w, this.h);
+      fill(this.col);
+      rect(this.x, this.y, this.w, this.h);
+    }
+
+    fill(255);
+    textSize(12);
+    textAlign(CENTER);
+    text(stateText, this.x + this.w / 2, this.y - 10);
   }
-
-  fill(255);
-  textSize(12);
-  textAlign(CENTER);
-  text(stateText, this.x + this.w / 2, this.y - 10);
-}
-
-
-
 
   handleInput(k, isPressed) {
     if (this.id === 'p1') {
@@ -320,6 +334,7 @@ display() {
     this.hp -= 1;
   }
 }
+
 
 class Projectile {
   constructor(x, y, dir, from) {
