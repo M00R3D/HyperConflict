@@ -2,20 +2,15 @@ let player1, player2;
 let projectiles = [];
 let playersReady = false;
 
-function preload() {
-  // Preload solo para evitar que setup corra antes de que las animaciones estén listas
-  // Pero cargaremos en setup usando await y promesas para mejor control
-}
+function preload() {}
 
 async function setup() {
   createCanvas(800, 400);
 
-  // Cargamos animaciones .piskel para idle y walk (solo uso idle aquí para demo)
   const tyemanIdleLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_idle.piskel', resolve));
-  // Puedes cargar otras animaciones igual, ejemplo:
-  // const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
+  const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
 
-  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers, tyemanWalkLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2'); // sin animación por ahora
 
   playersReady = true;
@@ -27,7 +22,7 @@ function draw() {
     fill(255);
     textSize(24);
     textAlign(CENTER, CENTER);
-    text("Cargando animaciones...", width/2, height/2);
+    text("Cargando animaciones...", width / 2, height / 2);
     return;
   }
 
@@ -41,7 +36,6 @@ function draw() {
   player1.display();
   player2.display();
 
-  // Actualizar y dibujar proyectiles
   for (let i = projectiles.length - 1; i >= 0; i--) {
     projectiles[i].update();
     projectiles[i].display();
@@ -75,208 +69,214 @@ function keyReleased() {
   player2.handleInput(key, false);
 }
 
-// ----------------------------------------
-// Función para cargar .piskel JSON y parsear a array de capas con frames (p5.Image)
-// ----------------------------------------
 function loadPiskel(jsonPath, callback) {
-  loadJSON(jsonPath,
-    (data) => {
-      if (!data || !data.piskel || !data.piskel.layers) {
-        console.error("Archivo .piskel no tiene la estructura esperada:", data);
-        callback([]);
+  loadJSON(jsonPath, (data) => {
+    if (!data || !data.piskel || !data.piskel.layers) {
+      console.error("Archivo .piskel no tiene la estructura esperada:", data);
+      callback([]);
+      return;
+    }
+
+    let layers = data.piskel.layers;
+    if (layers.length === 0) {
+      callback([]);
+      return;
+    }
+
+    if (layers.length === 1) {
+      callback([]);
+      return;
+    }
+
+    let allLayersFrames = [];
+    let layersLoaded = 0;
+
+    layers.forEach((layerStr, idx) => {
+      let layer;
+      try {
+        layer = JSON.parse(layerStr);
+      } catch (e) {
+        console.error("Error parseando layer:", e);
+        layersLoaded++;
+        if (layersLoaded === layers.length) callback(allLayersFrames);
         return;
       }
 
-      let layers = data.piskel.layers;
-      if (layers.length === 0) {
-        callback([]);
+      if (!layer.chunks || layer.chunks.length === 0) {
+        layersLoaded++;
+        if (layersLoaded === layers.length) callback(allLayersFrames);
         return;
       }
 
-      let allLayersFrames = [];
-      let layersLoaded = 0;
+      let frames = [];
+      let chunks = layer.chunks;
+      let loadedCount = 0;
+      let totalFrames = 0;
+      for (let c = 0; c < chunks.length; c++) {
+        totalFrames += chunks[c].layout.flat().length;
+      }
 
-      layers.forEach((layerStr, idx) => {
-        let layer;
-        try {
-          layer = JSON.parse(layerStr);
-        } catch (e) {
-          console.error("Error parseando layer:", e);
-          layersLoaded++;
-          if (layersLoaded === layers.length) callback(allLayersFrames);
-          return;
-        }
-
-        if (!layer.chunks || layer.chunks.length === 0) {
-          console.warn(`No se encontraron 'chunks' en layer ${idx}`);
-          layersLoaded++;
-          if (layersLoaded === layers.length) callback(allLayersFrames);
-          return;
-        }
-
-        let frames = [];
-        let chunks = layer.chunks;
-        let loadedCount = 0;
-        let totalFrames = 0;
-        for (let c = 0; c < chunks.length; c++) {
-          totalFrames += chunks[c].layout.flat().length;
-        }
-
-        chunks.forEach((chunk) => {
-          chunk.layout.forEach((frameIndices) => {
-            frameIndices.forEach((frameIndex) => {
-              let base64 = chunk.base64PNG;
-              if (!base64) {
-                console.warn(`Frame ${frameIndex} no tiene base64PNG`);
-                loadedCount++;
-                if (loadedCount === totalFrames) {
-                  allLayersFrames[idx] = frames;
-                  layersLoaded++;
-                  if (layersLoaded === layers.length) callback(allLayersFrames);
-                }
-                return;
+      chunks.forEach((chunk) => {
+        chunk.layout.forEach((frameIndices) => {
+          frameIndices.forEach((frameIndex) => {
+            let base64 = chunk.base64PNG;
+            if (!base64) {
+              loadedCount++;
+              if (loadedCount === totalFrames) {
+                allLayersFrames[idx] = frames;
+                layersLoaded++;
+                if (layersLoaded === layers.length) callback(allLayersFrames);
               }
+              return;
+            }
 
-              loadImage(base64,
-                (img) => {
-                  frames[frameIndex] = img;
-                  loadedCount++;
-                  if (loadedCount === totalFrames) {
-                    allLayersFrames[idx] = frames;
-                    layersLoaded++;
-                    if (layersLoaded === layers.length) callback(allLayersFrames);
-                  }
-                },
-                (err) => {
-                  console.error("Error cargando frame:", err);
-                  loadedCount++;
-                  if (loadedCount === totalFrames) {
-                    allLayersFrames[idx] = frames;
-                    layersLoaded++;
-                    if (layersLoaded === layers.length) callback(allLayersFrames);
-                  }
-                }
-              );
+            loadImage(base64, (img) => {
+              frames[frameIndex] = img;
+              loadedCount++;
+              if (loadedCount === totalFrames) {
+                allLayersFrames[idx] = frames;
+                layersLoaded++;
+                if (layersLoaded === layers.length) callback(allLayersFrames);
+              }
+            }, () => {
+              loadedCount++;
+              if (loadedCount === totalFrames) {
+                allLayersFrames[idx] = frames;
+                layersLoaded++;
+                if (layersLoaded === layers.length) callback(allLayersFrames);
+              }
             });
           });
         });
       });
-    },
-    (err) => {
-      console.error("Error cargando JSON .piskel:", err);
-      callback([]);
-    }
-  );
+    });
+  }, (err) => {
+    console.error("Error cargando JSON .piskel:", err);
+    callback([]);
+  });
 }
 
-// ----------------------------------------
-// Clases Fighter y Projectile
-// ----------------------------------------
 class Fighter {
-  constructor(x, col, id, idleFramesByLayer = []) {
+  constructor(x, col, id, idleFramesByLayer = [], walkFramesByLayer = []) {
     this.x = x;
-    this.y = height - 52;
+    this.y = height - 72;
     this.w = 32;
     this.h = 32;
     this.col = col;
     this.speed = 5;
     this.hp = 10;
     this.id = id;
-    this.action = 'idle';
 
-    this.idleFramesByLayer = idleFramesByLayer; // array de arrays de frames
+    // físicas
+    this.vy = 0;
+    this.gravity = 0.8;
+    this.jumpStrength = -22;
+    this.onGround = true;
+
+    this.idleFramesByLayer = idleFramesByLayer;
+    this.walkFramesByLayer = walkFramesByLayer;
+
     this.frameIndex = 0;
     this.frameDelay = 10;
+
+    // control de teclas presionadas
+    this.keys = { left: false, right: false, up: false };
   }
 
   update() {
-    if (this.action === 'moveLeft') this.x -= this.speed;
-    else if (this.action === 'moveRight') this.x += this.speed;
+    // movimiento horizontal
+    if (this.keys.left) this.x -= this.speed;
+    if (this.keys.right) this.x += this.speed;
 
+    // gravedad y salto
+    this.vy += this.gravity;
+    this.y += this.vy;
+
+    if (this.y >= height - 72) {
+      this.y = height - 72;
+      this.vy = 0;
+      this.onGround = true;
+    }
+
+    // límites de pantalla
     this.x = constrain(this.x, 0, width - this.w);
 
-    if (this.action === 'idle' && this.idleFramesByLayer.length > 0) {
+    // animación
+    let moving = this.keys.left || this.keys.right;
+    let framesByLayer = moving ? this.walkFramesByLayer : this.idleFramesByLayer;
+
+    if (framesByLayer.length > 0) {
       if (frameCount % this.frameDelay === 0) {
-        this.frameIndex = (this.frameIndex + 1) % this.idleFramesByLayer[0].length;
+        this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
       }
     }
   }
 
-  display() {
-  if (this.idleFramesByLayer.length > 0) {
-    for (let i = 1; i < this.idleFramesByLayer.length; i++) {
-  let layerFrames = this.idleFramesByLayer[i];
-  let img = layerFrames[this.frameIndex];
-  if (img) {
-    let frameWidth = img.width / this.idleFramesByLayer[0].length;
-    image(
-      img,
-      this.x, this.y, this.w, this.h,
-      frameWidth * this.frameIndex, 0,
-      frameWidth, img.height
-    );
+display() {
+  let stateText;
+  if (!this.onGround) {
+    stateText = "jumping";
+  } else if (this.keys.left) {
+    stateText = "moving left";
+  } else if (this.keys.right) {
+    stateText = "moving right";
+  } else {
+    stateText = "idle";
   }
-}
 
+  // Animación
+  let moving = this.keys.left || this.keys.right;
+  let framesByLayer = moving ? this.walkFramesByLayer : this.idleFramesByLayer;
+
+  if (framesByLayer.length > 0) {
+    for (let i = 1; i < framesByLayer.length; i++) { // saltar capa base
+      let layerFrames = framesByLayer[i];
+      let img = layerFrames[this.frameIndex];
+      if (img) {
+        let frameWidth = img.width / framesByLayer[0].length;
+        image(img, this.x, this.y, this.w, this.h,
+              frameWidth * this.frameIndex, 0,
+              frameWidth, img.height);
+      }
+    }
   } else {
     fill(this.col);
     rect(this.x, this.y, this.w, this.h);
   }
 
+  // Mostrar estado arriba
   fill(255);
   textSize(12);
   textAlign(CENTER);
-  text(this.action, this.x + this.w / 2, this.y - 10);
+  text(stateText, this.x + this.w / 2, this.y - 10);
 }
 
 
   handleInput(k, isPressed) {
     if (this.id === 'p1') {
-      if (isPressed) {
-        if (k === 'a') this.action = 'moveLeft';
-        else if (k === 'd') this.action = 'moveRight';
-        else if (k === 'w') this.punch();
-        else if (k === 's') this.kick();
-        else if (k === 'q') this.shoot();
-      } else {
-        if (k === 'a' || k === 'd') this.action = 'idle';
+      if (k === 'a') this.keys.left = isPressed;
+      if (k === 'd') this.keys.right = isPressed;
+      if (k === 'w' && isPressed && this.onGround) {
+        this.vy = this.jumpStrength;
+        this.onGround = false;
       }
+      if (k === 'q' && isPressed) this.shoot();
     }
 
     if (this.id === 'p2') {
-      if (isPressed) {
-        if (keyCode === LEFT_ARROW) this.action = 'moveLeft';
-        else if (keyCode === RIGHT_ARROW) this.action = 'moveRight';
-        else if (keyCode === UP_ARROW) this.punch();
-        else if (keyCode === DOWN_ARROW) this.kick();
-        else if (k === 'm') this.shoot();
-      } else {
-        if (keyCode === LEFT_ARROW || keyCode === RIGHT_ARROW) this.action = 'idle';
+      if (keyCode === LEFT_ARROW) this.keys.left = isPressed;
+      if (keyCode === RIGHT_ARROW) this.keys.right = isPressed;
+      if (keyCode === UP_ARROW && isPressed && this.onGround) {
+        this.vy = this.jumpStrength;
+        this.onGround = false;
       }
+      if (k === 'm' && isPressed) this.shoot();
     }
-  }
-
-  punch() {
-    this.action = 'punch';
-    this.dealDamage(1);
-  }
-
-  kick() {
-    this.action = 'kick';
-    this.dealDamage(2);
   }
 
   shoot() {
-    this.action = 'power';
-    let dir = this.id === 'p1' ? 1 : -1;
+    let dir = this.keys.right ? 1 : (this.keys.left ? -1 : (this.id === 'p1' ? 1 : -1));
     projectiles.push(new Projectile(this.x + this.w / 2, this.y + this.h / 2, dir, this.id));
-  }
-
-  dealDamage(damage) {
-    let other = this.id === 'p1' ? player2 : player1;
-    if (abs(this.x - other.x) < 60) {
-      other.hp -= damage;
-    }
   }
 
   hit() {
@@ -310,39 +310,5 @@ class Projectile {
 
   offscreen() {
     return this.x < 0 || this.x > width;
-  }
-}
-class PiskelSprite {
-  constructor(data, x, y, w, h) {
-    this.data = data;
-    this.x = x;
-    this.y = y;
-    this.w = w;
-    this.h = h;
-    this.frameActual = 0;
-    this.totalFrames = data.frames.length;
-    this.frameRate = 10;
-    this.ultimaAnimacion = millis();
-  }
-
-  actualizarAnimacion() {
-    if (millis() - this.ultimaAnimacion > 1000 / this.frameRate) {
-      this.frameActual = (this.frameActual + 1) % this.totalFrames;
-      this.ultimaAnimacion = millis();
-    }
-  }
-
-  dibujar() {
-    const frame = this.data.frames[this.frameActual];
-    const layers = this.data.layers;
-
-    for (let layer of layers) {
-      const img = layer.image;
-      const sx = frame.x;
-      const sy = frame.y;
-      const sWidth = frame.width;
-      const sHeight = frame.height;
-      image(img, this.x, this.y, this.w, this.h, sx, sy, sWidth, sHeight);
-    }
   }
 }
