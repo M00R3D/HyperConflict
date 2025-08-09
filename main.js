@@ -12,8 +12,9 @@ async function setup() {
   const tyemanWalkLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_walk.piskel', resolve));
   const tyemanJumpLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_jump.piskel', resolve));
   const tyemanFallLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_fall.piskel', resolve));
+  const tyemanRunLayers = await new Promise(resolve => loadPiskel('src/tyeman/tyeman_run.piskel', resolve));
 
-  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers, tyemanWalkLayers,tyemanJumpLayers,tyemanFallLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1', tyemanIdleLayers, tyemanWalkLayers,tyemanJumpLayers,tyemanFallLayers,tyemanRunLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2'); // sin animación por ahora
 
   playersReady = true;
@@ -197,51 +198,85 @@ function loadPiskel(jsonPath, callback) {
 }
 
 class Fighter {
-  constructor(x, col, id, idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [], fallFramesByLayer = []) {
+  constructor(x, col, id, idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [], fallFramesByLayer = [], runFramesByLayer = []) {
     this.x = x;
     this.y = height - 72;
     this.w = 32;
     this.h = 32;
     this.col = col;
-    this.speed = 5;
     this.hp = 10;
     this.id = id;
 
     // físicas
+    this.vx = 0;
     this.vy = 0;
     this.gravity = 0.1;
     this.jumpStrength = -6;
     this.onGround = true;
 
+    // movimiento y derrape
+    this.acceleration = 1;
+    this.runAcceleration = 2.5;
+    this.maxSpeed = 3;
+    this.runMaxSpeed = 6;
+    this.friction = 0.1;
+    this.runFriction = 0.051;
+
+    this.runActive = false;
+
+    // doble tap para correr
+    this.lastTapTime = { left: 0, right: 0 };
+
+    // animaciones
     this.idleFramesByLayer = idleFramesByLayer;
     this.walkFramesByLayer = walkFramesByLayer;
     this.jumpFramesByLayer = jumpFramesByLayer;
     this.fallFramesByLayer = fallFramesByLayer;
+    this.runFramesByLayer = runFramesByLayer;
 
     this.frameIndex = 0;
-    this.frameDelay = 10;
 
-    this.facing = 1; 
+    // velocidad de animación (frameDelay)
+    this.frameDelay = 10;       // para idle y caminar
+    this.runFrameDelay = 5;     // más rápido para correr
 
-    // control de teclas presionadas
+    this.facing = 1;
+
     this.keys = { left: false, right: false, up: false };
 
-    // para saber qué animación está activa
     this.currentFramesByLayer = null;
   }
 
   update() {
-    // movimiento horizontal
+    // Ajustar aceleración, velocidad máxima y fricción según correr o no
+    let acc = this.runActive ? this.runAcceleration : this.acceleration;
+    let maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
+    let friction = this.runActive ? this.runFriction : this.friction;
+
+    // Movimiento horizontal y derrape
     if (this.keys.left) {
-      this.x -= this.speed;
+      this.vx -= acc;
       this.facing = -1;
-    }
-    if (this.keys.right) {
-      this.x += this.speed;
+    } else if (this.keys.right) {
+      this.vx += acc;
       this.facing = 1;
+    } else {
+      if (this.vx > 0) {
+        this.vx -= friction;
+        if (this.vx < 0) this.vx = 0;
+      } else if (this.vx < 0) {
+        this.vx += friction;
+        if (this.vx > 0) this.vx = 0;
+      }
     }
 
-    // gravedad y salto
+    // Limitar velocidad horizontal
+    this.vx = constrain(this.vx, -maxSpd, maxSpd);
+
+    // Aplicar velocidad a posición
+    this.x += this.vx;
+
+    // Gravedad y salto
     this.vy += this.gravity;
     this.y += this.vy;
 
@@ -253,33 +288,44 @@ class Fighter {
       this.onGround = false;
     }
 
-    // límites de pantalla
+    // Limitar dentro de pantalla
     this.x = constrain(this.x, 0, width - this.w);
 
-    // Determinar frames actuales según estado
+    // Selección de animación según estado
     let framesByLayer;
     if (!this.onGround) {
       framesByLayer = this.vy < 0 ? this.jumpFramesByLayer : this.fallFramesByLayer;
+      this.frameDelay = 10;
     } else {
-      framesByLayer = (this.keys.left || this.keys.right) ? this.walkFramesByLayer : this.idleFramesByLayer;
+      if (this.runActive && this.runFramesByLayer.length > 0) {
+        framesByLayer = this.runFramesByLayer;
+        this.frameDelay = this.runFrameDelay; // correr más rápido
+      } else if (this.keys.left || this.keys.right) {
+        framesByLayer = this.walkFramesByLayer;
+        this.frameDelay = 10;
+      } else {
+        framesByLayer = this.idleFramesByLayer;
+        this.frameDelay = 10;
+      }
     }
 
-    // Reiniciar frameIndex si cambia el set de animación
+    // Cambiar animación si es diferente la actual
     if (this.currentFramesByLayer !== framesByLayer) {
       this.frameIndex = 0;
       this.currentFramesByLayer = framesByLayer;
     }
 
+    // Actualizar frameIndex según frameDelay y animación
     if (framesByLayer.length > 0 && framesByLayer[0] && framesByLayer[0].length > 0) {
       if (frameCount % this.frameDelay === 0) {
-        // En salto o caída se detiene en el último frame
-        if (!this.onGround) {
+        if (this.onGround) {
+          // Ciclo continuo en tierra (idle, caminar, correr)
+          this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+        } else {
+          // Avanza hasta último frame en salto o caída
           if (this.frameIndex < framesByLayer[0].length - 1) {
             this.frameIndex++;
           }
-        } else {
-          // Animación en tierra cíclica
-          this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
         }
       }
     } else {
@@ -295,13 +341,12 @@ class Fighter {
       framesByLayer = this.idleFramesByLayer;
     }
 
-    // Texto estado para debug
     if (!this.onGround) {
       stateText = this.vy < 0 ? "jumping" : "falling";
     } else if (this.keys.left) {
-      stateText = "moving left";
+      stateText = this.runActive ? "running left" : "moving left";
     } else if (this.keys.right) {
-      stateText = "moving right";
+      stateText = this.runActive ? "running right" : "moving right";
     } else {
       stateText = "idle";
     }
@@ -342,22 +387,54 @@ class Fighter {
   }
 
   handleInput(k, isPressed) {
+    const now = millis();
+
     if (this.id === 'p1') {
-      if (k === 'a') this.keys.left = isPressed;
-      if (k === 'd') this.keys.right = isPressed;
+      if (k === 'a') {
+        if (isPressed) {
+          if (now - this.lastTapTime.left < 300) this.runActive = true;
+          this.lastTapTime.left = now;
+        }
+        this.keys.left = isPressed;
+        if (!isPressed && !this.keys.right) this.runActive = false;
+      }
+      if (k === 'd') {
+        if (isPressed) {
+          if (now - this.lastTapTime.right < 300) this.runActive = true;
+          this.lastTapTime.right = now;
+        }
+        this.keys.right = isPressed;
+        if (!isPressed && !this.keys.left) this.runActive = false;
+      }
       if (k === 'w' && isPressed && this.onGround) {
         this.vy = this.jumpStrength;
         this.onGround = false;
+        this.runActive = false;
       }
       if (k === 'q' && isPressed) this.shoot();
     }
 
     if (this.id === 'p2') {
-      if (keyCode === LEFT_ARROW) this.keys.left = isPressed;
-      if (keyCode === RIGHT_ARROW) this.keys.right = isPressed;
+      if (keyCode === LEFT_ARROW) {
+        if (isPressed) {
+          if (now - this.lastTapTime.left < 300) this.runActive = true;
+          this.lastTapTime.left = now;
+        }
+        this.keys.left = isPressed;
+        if (!isPressed && !this.keys.right) this.runActive = false;
+      }
+      if (keyCode === RIGHT_ARROW) {
+        if (isPressed) {
+          if (now - this.lastTapTime.right < 300) this.runActive = true;
+          this.lastTapTime.right = now;
+        }
+        this.keys.right = isPressed;
+        if (!isPressed && !this.keys.left) this.runActive = false;
+      }
       if (keyCode === UP_ARROW && isPressed && this.onGround) {
         this.vy = this.jumpStrength;
         this.onGround = false;
+        this.runActive = false;
       }
       if (k === 'm' && isPressed) this.shoot();
     }
@@ -372,6 +449,9 @@ class Fighter {
     this.hp -= 1;
   }
 }
+
+
+
 
 
 class Projectile {
