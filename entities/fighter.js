@@ -5,7 +5,7 @@ class Fighter {
     x, col, id,
     idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [],
     fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [],
-    crouchFramesByLayer = []
+    crouchFramesByLayer = [],crouchWalkFramesByLayer = []
   ) {
     // Posición y físicas
     this.x = x;
@@ -41,6 +41,7 @@ class Fighter {
     this.runFramesByLayer = runFramesByLayer;
     this.punchFramesByLayer = punchFramesByLayer;
     this.crouchFramesByLayer = crouchFramesByLayer;
+    this.crouchWalkFramesByLayer = crouchWalkFramesByLayer;
 
     this.frameIndex = 0;
     this.frameDelay = 10;
@@ -64,7 +65,8 @@ class Fighter {
       jump: { anim: jumpFramesByLayer, frameDelay: 10 },
       fall: { anim: fallFramesByLayer, frameDelay: 10 },
       punch: { anim: punchFramesByLayer, frameDelay: 6, duration: 400 },
-      crouch: { anim: crouchFramesByLayer, frameDelay: 10 }
+      crouch: { anim: crouchFramesByLayer, frameDelay: 10 },
+      crouchwalk :{ anim: crouchWalkFramesByLayer, frameDelay: 10 }
     };
 
     // Ataque
@@ -128,8 +130,10 @@ class Fighter {
       this.setState("punch");
     } else if (!this.onGround) {
       this.setState(this.vy < 0 ? "jump" : "fall");
-    } else if (this.crouching) {
+    } else if (this.crouching && this.vx==0) {
       this.setState("crouch"); // 🆕 agachado tiene prioridad sobre idle
+    } else if(this.crouching && this.vx!=0){
+      this.setState("crouchwalk"); 
     } else if (this.runActive && (this.keys.left || this.keys.right)) {
       this.setState("run");
     } else if (this.keys.left || this.keys.right) {
@@ -146,7 +150,10 @@ class Fighter {
           // Si está agachado, avanzar hasta el último frame y detenerse ahí
           if (this.frameIndex < framesByLayer[0].length - 1) {
             this.frameIndex++;
-          }
+          } else if (this.state.current === "crouchwalk") {
+    // Agachado caminando → loop
+    this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+  } 
         } else if (this.onGround || this.attacking) {
           // Animaciones normales con loop
           this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
