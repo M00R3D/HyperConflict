@@ -1,3 +1,4 @@
+// core\main.js
 import { Fighter } from '../../entities/fighter.js';
 import { Projectile } from '../../entities/projectile.js';
 import { loadPiskel } from './loader.js';
@@ -9,6 +10,16 @@ let playersReady = false;
 let cam = { x: 0, y: 0, zoom: 1 };
 
 function preload() {}
+let keysDown = {};
+export { keysDown }; // 👈 exportar
+
+window.addEventListener("keydown", (e) => {
+  keysDown[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener("keyup", (e) => {
+  keysDown[e.key.toLowerCase()] = false;
+});
 
 async function setup() {
   createCanvas(800, 400);
@@ -37,7 +48,10 @@ function draw() {
     textAlign(CENTER, CENTER);
     text("Cargando animaciones...", width / 2, height / 2);
     return;
+    
   }
+player1.handleInput();
+player2.handleInput();
 
   player1.update();
   player2.update();

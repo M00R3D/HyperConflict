@@ -1,4 +1,5 @@
-import { projectiles } from '../core/main.js';
+// entities\fighter.js
+import { projectiles,keysDown } from '../core/main.js';
 
 class Fighter {
   constructor(
@@ -228,48 +229,49 @@ class Fighter {
     text(stateText, this.x + this.w / 2, this.y - 10);
   }
 
- handleInput(k, isPressed) {
+handleInput() {
   const now = millis();
-  const setRunTap = (dir) => {
-    if (isPressed) {
+  const setRunTap = (dir, keyName) => {
+    if (keysDown[keyName]) {
       if (now - this.lastTapTime[dir] < 300) this.runActive = true;
       this.lastTapTime[dir] = now;
     }
-    this.keys[dir] = isPressed;
+    this.keys[dir] = keysDown[keyName];
     if (!this.keys.left && !this.keys.right) this.runActive = false;
   };
 
   if (this.id === 'p1') {
-    if (k === 'a' || k === 'A') setRunTap('left');
-    if (k === 'd' || k === 'D') setRunTap('right');
-    if ((k === 'w' || k === 'W') && isPressed && this.onGround) {
+    setRunTap('left', 'a');
+    setRunTap('right', 'd');
+
+    if (keysDown['w'] && this.onGround) {
       this.vy = this.jumpStrength;
       this.onGround = false;
       this.runActive = false;
     }
-    if ((k === 's' || k === 'S')) this.crouching = isPressed;
-    if (k === 'i' || k === 'I') {
-      if (isPressed) this.punch();
-    }
-    if (k === 'q' || k === 'Q') {
-      if (isPressed) this.shoot();
-    }
+
+    this.crouching = keysDown['s'];
+
+    if (keysDown['i']) this.punch();
+    if (keysDown['q']) this.shoot();
   }
 
   if (this.id === 'p2') {
-    if (keyCode === LEFT_ARROW) setRunTap('left');
-    if (keyCode === RIGHT_ARROW) setRunTap('right');
-    if (keyCode === UP_ARROW && isPressed && this.onGround) {
+    setRunTap('left', 'arrowleft');
+    setRunTap('right', 'arrowright');
+
+    if (keysDown['arrowup'] && this.onGround) {
       this.vy = this.jumpStrength;
       this.onGround = false;
       this.runActive = false;
     }
-    if (keyCode === DOWN_ARROW) this.crouching = isPressed;
-    if (k === 'm' || k === 'M') {
-      if (isPressed) this.shoot();
-    }
+
+    this.crouching = keysDown['arrowdown'];
+
+    if (keysDown['m']) this.shoot();
   }
 }
+
 
 
   punch() {
