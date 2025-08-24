@@ -101,14 +101,16 @@ class Fighter {
 
     if (this.keys.left) {
       this.vx -= acc;
-      this.facing = -1;
-    } else if (this.keys.right) {
+    }
+    if (this.keys.right) {
       this.vx += acc;
-      this.facing = 1;
-    } else {
+    }
+    if (!this.keys.left && !this.keys.right) {
       if (this.vx > 0) { this.vx -= friction; if (this.vx < 0) this.vx = 0; }
       else if (this.vx < 0) { this.vx += friction; if (this.vx > 0) this.vx = 0; }
     }
+    if (this.keys.left) this.facing = -1;
+    if (this.keys.right) this.facing = 1;
 
     this.vx = constrain(this.vx, -maxSpd, maxSpd);
     this.x += this.vx;
@@ -226,42 +228,49 @@ class Fighter {
     text(stateText, this.x + this.w / 2, this.y - 10);
   }
 
-  handleInput(k, isPressed) {
-    const now = millis();
-    const setRunTap = dir => {
-      if (isPressed) {
-        if (now - this.lastTapTime[dir] < 300) this.runActive = true;
-        this.lastTapTime[dir] = now;
-      }
-      this.keys[dir] = isPressed;
-      if (!isPressed && !this.keys.left && !this.keys.right) this.runActive = false;
-    };
-
-    if (this.id === 'p1') {
-      if (k === 'a') setRunTap('left');
-      if (k === 'd') setRunTap('right');
-      if (k === 'w' && isPressed && this.onGround) {
-        this.vy = this.jumpStrength;
-        this.onGround = false;
-        this.runActive = false;
-      }
-      if (k === 'q' && isPressed) this.shoot();
-      if (k === "s") this.crouching = isPressed;
-      if (k === 'i' && isPressed) this.punch();
+ handleInput(k, isPressed) {
+  const now = millis();
+  const setRunTap = (dir) => {
+    if (isPressed) {
+      if (now - this.lastTapTime[dir] < 300) this.runActive = true;
+      this.lastTapTime[dir] = now;
     }
+    this.keys[dir] = isPressed;
+    if (!this.keys.left && !this.keys.right) this.runActive = false;
+  };
 
-    if (this.id === 'p2') {
-      if (keyCode === LEFT_ARROW) setRunTap('left');
-      if (keyCode === RIGHT_ARROW) setRunTap('right');
-      if (keyCode === UP_ARROW && isPressed && this.onGround) {
-        this.vy = this.jumpStrength;
-        this.onGround = false;
-        this.runActive = false;
-      }
-      if (keyCode === DOWN_ARROW) this.crouching = isPressed;
-      if (k === 'm' && isPressed) this.shoot();
+  if (this.id === 'p1') {
+    if (k === 'a' || k === 'A') setRunTap('left');
+    if (k === 'd' || k === 'D') setRunTap('right');
+    if ((k === 'w' || k === 'W') && isPressed && this.onGround) {
+      this.vy = this.jumpStrength;
+      this.onGround = false;
+      this.runActive = false;
+    }
+    if ((k === 's' || k === 'S')) this.crouching = isPressed;
+    if (k === 'i' || k === 'I') {
+      if (isPressed) this.punch();
+    }
+    if (k === 'q' || k === 'Q') {
+      if (isPressed) this.shoot();
     }
   }
+
+  if (this.id === 'p2') {
+    if (keyCode === LEFT_ARROW) setRunTap('left');
+    if (keyCode === RIGHT_ARROW) setRunTap('right');
+    if (keyCode === UP_ARROW && isPressed && this.onGround) {
+      this.vy = this.jumpStrength;
+      this.onGround = false;
+      this.runActive = false;
+    }
+    if (keyCode === DOWN_ARROW) this.crouching = isPressed;
+    if (k === 'm' || k === 'M') {
+      if (isPressed) this.shoot();
+    }
+  }
+}
+
 
   punch() {
     this.attacking = true;
