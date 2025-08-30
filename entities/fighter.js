@@ -78,6 +78,10 @@ class Fighter {
       kick:   { offsetX: 0, offsetY:1, w: 32, h: 34 },
       hit:    { offsetX: 7, offsetY: 0, w: 22, h: 32 }
     };
+    this.attackHitboxes = {
+    punch: { offsetX: 28, offsetY: 13, w: 10, h: 10 }, 
+    kick:  { offsetX: 25, offsetY: 10, w: 30, h: 15 }
+    };
 
     this.attacking = false;
     this.attackStartTime = 0;
@@ -210,14 +214,13 @@ class Fighter {
 
     // 🔵 Hitbox ataque
     if (this.attacking) {
-      noFill();
-      stroke(0, 200, 255);
-      strokeWeight(2);
-      const attackX = this.facing === 1 ? this.x + this.w : this.x - this.w / 2;
-      const attackY = this.y + this.h * 0.2;
-      const attackW = this.w / 2;
-      const attackH = this.h * 0.6;
-      rect(attackX, attackY, attackW, attackH);
+      const atkHB = this.getAttackHitbox();
+      if (atkHB) {
+        noFill();
+        stroke(0, 200, 255);
+        strokeWeight(2);
+        rect(atkHB.x, atkHB.y, atkHB.w, atkHB.h);
+      }
     }
 
     // Texto estado
@@ -296,23 +299,23 @@ class Fighter {
   }
 }
 
+
   attackHits(opponent) {
-    if (!this.attacking) return false;
+  if (!this.attacking) return false;
 
-    const attackX = this.facing === 1 ? this.x + this.w : this.x - this.w / 2;
-    const attackY = this.y + this.h * 0.2;
-    const attackW = this.w / 2;
-    const attackH = this.h * 0.6;
+  const atkHB = this.getAttackHitbox();
+  if (!atkHB) return false;
 
-    const oppHB = opponent.getCurrentHitbox();
+  const oppHB = opponent.getCurrentHitbox();
 
-    const hit = attackX < oppHB.x + oppHB.w &&
-                attackX + attackW > oppHB.x &&
-                attackY < oppHB.y + oppHB.h &&
-                attackY + attackH > oppHB.y;
+  const hit = atkHB.x < oppHB.x + oppHB.w &&
+              atkHB.x + atkHB.w > oppHB.x &&
+              atkHB.y < oppHB.y + oppHB.h &&
+              atkHB.y + atkHB.h > oppHB.y;
 
-    return hit;
-  }
+  return hit;
+}
+
 
 
   shoot() {
@@ -331,14 +334,33 @@ class Fighter {
   this.vy = -3;
 }
   getCurrentHitbox() {
-    const box = this.hitboxes[this.state.current] || this.hitboxes["idle"];
-    return {
-      x: this.x + box.offsetX,
-      y: this.y + box.offsetY,
-      w: box.w,
-      h: box.h
-    };
-  }
+  const box = this.hitboxes[this.state.current] || this.hitboxes["idle"];
+  return {
+    x: this.facing === 1
+        ? this.x + box.offsetX                           // derecha normal
+        : this.x + this.w - box.offsetX - box.w,         // espejo horizontal
+    y: this.y + box.offsetY,
+    w: box.w,
+    h: box.h
+  };
+}
+
+  getAttackHitbox() {
+  if (!this.attacking || !this.attackType) return null;
+  const box = this.attackHitboxes[this.attackType];
+  if (!box) return null;
+
+  return {
+    x: this.facing === 1
+        ? this.x + box.offsetX
+        : this.x + this.w - box.offsetX - box.w,
+    y: this.y + box.offsetY,
+    w: box.w,
+    h: box.h
+  };
+}
+
+
 
 }
 
