@@ -5,7 +5,7 @@ class Fighter {
   constructor(
     x, col, id,
     idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [],
-    fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [],
+    fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [], kickFramesByLayer = [],
     crouchFramesByLayer = [], crouchWalkFramesByLayer = []
   ) {
     // Posición y físicas
@@ -31,16 +31,16 @@ class Fighter {
     this.runFriction = 0.051;
     this.runActive = false;
 
-    // Doble tap
     this.lastTapTime = { left: 0, right: 0 };
 
-    // Animaciones
+    // Animaciones por capas
     this.idleFramesByLayer = idleFramesByLayer;
     this.walkFramesByLayer = walkFramesByLayer;
     this.jumpFramesByLayer = jumpFramesByLayer;
     this.fallFramesByLayer = fallFramesByLayer;
     this.runFramesByLayer = runFramesByLayer;
     this.punchFramesByLayer = punchFramesByLayer;
+    this.kickFramesByLayer = kickFramesByLayer;
     this.crouchFramesByLayer = crouchFramesByLayer;
     this.crouchWalkFramesByLayer = crouchWalkFramesByLayer;
 
@@ -53,12 +53,7 @@ class Fighter {
     this.crouching = false;
 
     // Estado y ataques
-    this.state = {
-      current: "idle",
-      timer: 0,
-      canCancel: true
-    };
-
+    this.state = { current: "idle", timer: 0, canCancel: true };
     this.actions = {
       idle: { anim: idleFramesByLayer, frameDelay: 10 },
       walk: { anim: walkFramesByLayer, frameDelay: 10 },
@@ -66,14 +61,15 @@ class Fighter {
       jump: { anim: jumpFramesByLayer, frameDelay: 10 },
       fall: { anim: fallFramesByLayer, frameDelay: 10 },
       punch: { anim: punchFramesByLayer, frameDelay: 6, duration: 400 },
+      kick: { anim: kickFramesByLayer, frameDelay: 6, duration: 400 },
       crouch: { anim: crouchFramesByLayer, frameDelay: 10 },
       crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 }
     };
 
-    // Ataque
     this.attacking = false;
     this.attackStartTime = 0;
     this.attackDuration = 400;
+    this.attackType = null; // <-- Tipo de ataque: "punch" o "kick"
   }
 
   setState(newState) {
@@ -90,22 +86,23 @@ class Fighter {
   }
 
   update() {
-    // Ataque termina
+    // Terminar ataque
     if (this.attacking && millis() - this.attackStartTime > this.attackDuration) {
       this.attacking = false;
+      this.attackType = null;
     }
 
     // Movimiento horizontal
-    let acc = this.runActive ? this.runAcceleration : this.acceleration;
-    let maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
-    let friction = this.runActive ? this.runFriction : this.friction;
+    const acc = this.runActive ? this.runAcceleration : this.acceleration;
+    const maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
+    const friction = this.runActive ? this.runFriction : this.friction;
 
     if (this.keys.left) this.vx -= acc;
     if (this.keys.right) this.vx += acc;
 
     if (!this.keys.left && !this.keys.right) {
-      if (this.vx > 0) { this.vx -= friction; if (this.vx < 0) this.vx = 0; }
-      else if (this.vx < 0) { this.vx += friction; if (this.vx > 0) this.vx = 0; }
+      if (this.vx > 0) this.vx = Math.max(0, this.vx - friction);
+      if (this.vx < 0) this.vx = Math.min(0, this.vx + friction);
     }
 
     if (this.keys.left) this.facing = -1;
@@ -117,25 +114,22 @@ class Fighter {
     // Gravedad y salto
     this.vy += this.gravity;
     this.y += this.vy;
-    if (this.y >= height - 72) {
-      this.y = height - 72;
-      this.vy = 0;
-      this.onGround = true;
-    } else this.onGround = false;
+    if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
+    else this.onGround = false;
 
     this.x = constrain(this.x, 0, width - this.w);
 
     // Cambiar estado según situación
-    if (this.attacking) this.setState("punch");
+    if (this.attacking && this.attackType) this.setState(this.attackType);
     else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
-    else if (this.crouching && this.vx == 0) this.setState("crouch");
-    else if (this.crouching && this.vx != 0) this.setState("crouchwalk");
+    else if (this.crouching && this.vx === 0) this.setState("crouch");
+    else if (this.crouching && this.vx !== 0) this.setState("crouchwalk");
     else if (this.runActive && (this.keys.left || this.keys.right)) this.setState("run");
     else if (this.keys.left || this.keys.right) this.setState("walk");
     else this.setState("idle");
 
     // Avanzar animación
-    let framesByLayer = this.currentFramesByLayer || [];
+    const framesByLayer = this.currentFramesByLayer || [];
     if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
       if (frameCount % this.frameDelay === 0) {
         if (this.crouching) {
@@ -152,10 +146,9 @@ class Fighter {
   }
 
   display() {
-    let stateText = this.state.current;
-    let framesByLayer = this.currentFramesByLayer || this.idleFramesByLayer;
+    const stateText = this.state.current;
+    const framesByLayer = this.currentFramesByLayer || this.idleFramesByLayer;
 
-    // Dibujar sprite
     if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
       push();
       if (this.facing === -1) {
@@ -164,10 +157,10 @@ class Fighter {
         translate(-(this.x + this.w / 2), 0);
       }
       for (let i = 1; i < framesByLayer.length; i++) {
-        let layerFrames = framesByLayer[i];
-        let img = layerFrames[this.frameIndex];
+        const layerFrames = framesByLayer[i];
+        const img = layerFrames[this.frameIndex];
         if (img) {
-          let frameWidth = img.width / framesByLayer[0].length;
+          const frameWidth = img.width / framesByLayer[0].length;
           image(
             img, this.x, this.y, this.w, this.h,
             frameWidth * this.frameIndex, 0,
@@ -178,25 +171,25 @@ class Fighter {
       pop();
     } else fill(this.col), rect(this.x, this.y, this.w, this.h);
 
-    // 🔴 Hitbox del personaje
+    // 🔴 Hitbox personaje
     noFill();
     stroke(255, 0, 0);
     strokeWeight(2);
     rect(this.x, this.y, this.w, this.h);
 
-    // 🔵 Hitbox del golpe
+    // 🔵 Hitbox ataque
     if (this.attacking) {
       noFill();
       stroke(0, 200, 255);
       strokeWeight(2);
-      let attackX = this.facing === 1 ? this.x + this.w : this.x - this.w / 2;
-      let attackY = this.y + this.h * 0.2;
-      let attackW = this.w / 2;
-      let attackH = this.h * 0.6;
+      const attackX = this.facing === 1 ? this.x + this.w : this.x - this.w / 2;
+      const attackY = this.y + this.h * 0.2;
+      const attackW = this.w / 2;
+      const attackH = this.h * 0.6;
       rect(attackX, attackY, attackW, attackH);
     }
 
-    // Texto de estado
+    // Texto estado
     fill(255);
     textSize(12);
     textAlign(CENTER);
@@ -204,26 +197,14 @@ class Fighter {
   }
 
   handleInput() {
-    const now = millis();
-
     const setRunTap = (dir, keyName) => {
-      if (keysDown[keyName] && !this.keys[dir]) { // Detecta solo cuando se presiona recién
-        if (millis() - this.lastTapTime[dir] < 400) {
-          this.runActive = true; // doble tap detectado
-        }
+      if (keysDown[keyName] && !this.keys[dir]) {
+        if (millis() - this.lastTapTime[dir] < 400) this.runActive = true;
         this.lastTapTime[dir] = millis();
       }
-
-      // Actualizar estado de tecla
       this.keys[dir] = keysDown[keyName];
-
-      // Detener run si se sueltan ambas teclas
-      if (!this.keys.left && !this.keys.right) {
-        this.runActive = false;
-      }
+      if (!this.keys.left && !this.keys.right) this.runActive = false;
     };
-
-
 
     if (this.id === 'p1') {
       setRunTap('left', 'a');
@@ -238,7 +219,7 @@ class Fighter {
       this.crouching = keysDown['s'];
 
       if (keysDown['i']) this.punch();
-      if (keysDown['q']) this.shoot();
+      if (keysDown['o']) this.kick();
     }
 
     if (this.id === 'p2') {
@@ -260,11 +241,19 @@ class Fighter {
   punch() {
     this.attacking = true;
     this.attackStartTime = millis();
+    this.attackType = "punch";
     this.setState("punch");
   }
 
+  kick() {
+    this.attacking = true;
+    this.attackStartTime = millis();
+    this.attackType = "kick";
+    this.setState("kick");
+  }
+
   shoot() {
-    let dir = this.keys.right ? 1 : (this.keys.left ? -1 : (this.id === 'p1' ? 1 : -1));
+    const dir = this.keys.right ? 1 : (this.keys.left ? -1 : (this.id === 'p1' ? 1 : -1));
     projectiles.push(new Projectile(this.x + this.w / 2, this.y + this.h / 2, dir, this.id));
   }
 

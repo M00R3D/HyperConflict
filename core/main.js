@@ -32,11 +32,12 @@ async function setup() {
   const tyemanFallLayers = await loadPiskel('src/tyeman/tyeman_fall.piskel');
   const tyemanRunLayers = await loadPiskel('src/tyeman/tyeman_run.piskel');
   const tyemanPunchLayers = await loadPiskel('src/tyeman/tyeman_punch.piskel');
+  const tyemanKickLayers = await loadPiskel('src/tyeman/tyeman_kick.piskel');
   const tyemanCrouchLayers = await loadPiskel('src/tyeman/tyeman_crouch.piskel');
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
 
   player1 = new Fighter(100, color(255, 100, 100), 'p1',
-    tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers, tyemanPunchLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers);
+    tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers, tyemanPunchLayers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2');
 
   playersReady = true;
