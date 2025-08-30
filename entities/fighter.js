@@ -214,13 +214,14 @@ class Fighter {
   }
 
   handleInput() {
+    if (this.isHit) return;
     const setRunTap = (dir, keyName) => {
-      if (keysDown[keyName] && !this.keys[dir]) {
+      if (keysDown[keyName] && !this.keys[dir] && !this.isHit) {
         if (millis() - this.lastTapTime[dir] < 400) this.runActive = true;
         this.lastTapTime[dir] = millis();
       }
       this.keys[dir] = keysDown[keyName];
-      if (!this.keys.left && !this.keys.right) this.runActive = false;
+      if (!this.keys.left && !this.keys.right && !this.isHit) this.runActive = false;
     };
 
     if (this.id === 'p1') {
