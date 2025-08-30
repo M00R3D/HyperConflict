@@ -1,3 +1,5 @@
+// core\camera.js
+
 function updateCamera(p1, p2, cam) {
   let centerX = (p1.x + p2.x) / 2;
   let distX = abs(p1.x - p2.x);
