@@ -36,10 +36,12 @@ async function setup() {
   const tyemanCrouchLayers = await loadPiskel('src/tyeman/tyeman_crouch.piskel');
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
 
-  player1 = new Fighter(100, color(255, 100, 100), 'p1',
-    tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers, tyemanPunchLayers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2');
 
+  // 🔹 Asignar oponentes para auto-facing
+  player1.opponent = player2;
+  player2.opponent = player1;
   playersReady = true;
 }
 
@@ -55,6 +57,9 @@ function draw() {
 
   player1.handleInput();
   player2.handleInput();
+  // Checar ataques cuerpo a cuerpo
+  if (player1.attackHits(player2)) player2.hit();
+  if (player2.attackHits(player1)) player1.hit();
 
   player1.update();
   player2.update();

@@ -26,7 +26,7 @@ class Fighter {
     this.acceleration = 1.3;
     this.runAcceleration = 1.1;
     this.maxSpeed = 4;
-    this.runMaxSpeed = 10;
+    this.runMaxSpeed = 6;
     this.friction = 0.1;
     this.runFriction = 0.051;
     this.runActive = false;
@@ -142,6 +142,8 @@ class Fighter {
       }
     } else this.frameIndex = 0;
 
+    if (this.opponent) this.autoFace(this.opponent);
+    
     this.state.timer++;
   }
 
@@ -250,6 +252,32 @@ class Fighter {
     this.attackStartTime = millis();
     this.attackType = "kick";
     this.setState("kick");
+  }
+  autoFace(opponent) {
+  if (!opponent) return;
+  const towardOpponent = (opponent.x > this.x) ? 1 : -1;
+  const runningBackwards =
+    this.runActive &&
+    ((this.keys.right && towardOpponent === -1) || (this.keys.left && towardOpponent === 1));
+  if (!runningBackwards) {
+    this.facing = towardOpponent;
+  }
+}
+
+  attackHits(opponent) {
+    if (!this.attacking) return false;
+
+    const attackX = this.facing === 1 ? this.x + this.w : this.x - this.w / 2;
+    const attackY = this.y + this.h * 0.2;
+    const attackW = this.w / 2;
+    const attackH = this.h * 0.6;
+
+    const hit = attackX < opponent.x + opponent.w &&
+                attackX + attackW > opponent.x &&
+                attackY < opponent.y + opponent.h &&
+                attackY + attackH > opponent.y;
+    
+    return hit;
   }
 
   shoot() {
