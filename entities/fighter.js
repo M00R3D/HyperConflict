@@ -66,6 +66,18 @@ class Fighter {
       crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 },
       hit: { anim: hitFramesByLayer, frameDelay: 10 }
     };
+    this.hitboxes = {
+      idle:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
+      walk:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
+      run:    { offsetX: 7, offsetY: 0, w: 22, h: 32 },
+      jump:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
+      fall:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
+      crouch: { offsetX: 0, offsetY: 16, w: 32, h: 16 },
+      crouchwalk: { offsetX: 0, offsetY: 16, w: 32, h: 16 },
+      punch:  { offsetX: -4, offsetY: 0, w: 32, h: 29 },
+      kick:   { offsetX: 0, offsetY:1, w: 32, h: 34 },
+      hit:    { offsetX: 7, offsetY: 0, w: 22, h: 32 }
+    };
 
     this.attacking = false;
     this.attackStartTime = 0;
@@ -190,10 +202,11 @@ class Fighter {
     } else fill(this.col), rect(this.x, this.y, this.w, this.h);
 
     // 🔴 Hitbox personaje
+    const hb = this.getCurrentHitbox();
     noFill();
     stroke(255, 0, 0);
     strokeWeight(2);
-    rect(this.x, this.y, this.w, this.h);
+    rect(hb.x, hb.y, hb.w, hb.h);
 
     // 🔵 Hitbox ataque
     if (this.attacking) {
@@ -291,13 +304,16 @@ class Fighter {
     const attackW = this.w / 2;
     const attackH = this.h * 0.6;
 
-    const hit = attackX < opponent.x + opponent.w &&
-                attackX + attackW > opponent.x &&
-                attackY < opponent.y + opponent.h &&
-                attackY + attackH > opponent.y;
-    
+    const oppHB = opponent.getCurrentHitbox();
+
+    const hit = attackX < oppHB.x + oppHB.w &&
+                attackX + attackW > oppHB.x &&
+                attackY < oppHB.y + oppHB.h &&
+                attackY + attackH > oppHB.y;
+
     return hit;
   }
+
 
   shoot() {
     const dir = this.keys.right ? 1 : (this.keys.left ? -1 : (this.id === 'p1' ? 1 : -1));
@@ -314,6 +330,15 @@ class Fighter {
   this.vx = -this.facing * 5; 
   this.vy = -3;
 }
+  getCurrentHitbox() {
+    const box = this.hitboxes[this.state.current] || this.hitboxes["idle"];
+    return {
+      x: this.x + box.offsetX,
+      y: this.y + box.offsetY,
+      w: box.w,
+      h: box.h
+    };
+  }
 
 }
 
