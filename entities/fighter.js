@@ -125,7 +125,8 @@ class Fighter {
     this.x = constrain(this.x, 0, width - this.w);
 
     // Cambiar estado según situación
-    if (this.attacking && this.attackType) this.setState(this.attackType);
+    if (this.isHit ) this.setState("hit");
+    else if (this.attacking && this.attackType) this.setState(this.attackType);
     else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
     else if (this.crouching && this.vx === 0) this.setState("crouch");
     else if (this.crouching && this.vx !== 0) this.setState("crouchwalk");
