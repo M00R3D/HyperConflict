@@ -102,10 +102,10 @@ class Fighter {
     const maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
     const friction = this.runActive ? this.runFriction : this.friction;
 
-    if (this.keys.left) this.vx -= acc;
-    if (this.keys.right) this.vx += acc;
+    if (this.keys.left && this.state.current!="fall" && this.state.current!="jump") this.vx -= acc;
+    if (this.keys.right && this.state.current!="fall" && this.state.current!="jump") this.vx += acc;
 
-    if (!this.keys.left && !this.keys.right) {
+    if (!this.keys.left && !this.keys.right && this.state.current!="fall" && this.state.current!="jump") {
       if (this.vx > 0) this.vx = Math.max(0, this.vx - friction);
       if (this.vx < 0) this.vx = Math.min(0, this.vx + friction);
     }
@@ -114,6 +114,7 @@ class Fighter {
     if (this.keys.right) this.facing = 1;
 
     this.vx = constrain(this.vx, -maxSpd, maxSpd);
+    
     this.x += this.vx;
 
     // Gravedad y salto
