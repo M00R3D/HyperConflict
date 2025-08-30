@@ -1,4 +1,3 @@
-// core\main.js
 import { Fighter } from '../../entities/fighter.js';
 import { Projectile } from '../../entities/projectile.js';
 import { loadPiskel } from './loader.js';
@@ -9,16 +8,19 @@ let projectiles = [];
 let playersReady = false;
 let cam = { x: 0, y: 0, zoom: 1 };
 
-function preload() {}
 let keysDown = {};
-export { keysDown }; // 👈 exportar
+let keysUp = {};
+
+export { keysDown, keysUp, projectiles }; // 👈 exportar ambos
 
 window.addEventListener("keydown", (e) => {
   keysDown[e.key.toLowerCase()] = true;
+  keysUp[e.key.toLowerCase()] = false;
 });
 
 window.addEventListener("keyup", (e) => {
   keysDown[e.key.toLowerCase()] = false;
+  keysUp[e.key.toLowerCase()] = true;
 });
 
 async function setup() {
@@ -34,7 +36,7 @@ async function setup() {
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
 
   player1 = new Fighter(100, color(255, 100, 100), 'p1',
-    tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers, tyemanPunchLayers, tyemanCrouchLayers,tyemanCrouchWalkLayers);
+    tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers, tyemanPunchLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2');
 
   playersReady = true;
@@ -48,10 +50,10 @@ function draw() {
     textAlign(CENTER, CENTER);
     text("Cargando animaciones...", width / 2, height / 2);
     return;
-    
   }
-player1.handleInput();
-player2.handleInput();
+
+  player1.handleInput();
+  player2.handleInput();
 
   player1.update();
   player2.update();
@@ -86,17 +88,16 @@ player2.handleInput();
 
 function keyPressed() {
   if (!playersReady) return;
-  player1.handleInput(key, true);
-  player2.handleInput(key, true);
+  player1.handleInput();
+  player2.handleInput();
 }
 
 function keyReleased() {
   if (!playersReady) return;
-  player1.handleInput(key, false);
-  player2.handleInput(key, false);
+  player1.handleInput();
+  player2.handleInput();
 }
 
-export { projectiles };
 window.setup = setup;
 window.draw = draw;
 window.keyPressed = keyPressed;

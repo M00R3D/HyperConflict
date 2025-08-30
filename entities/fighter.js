@@ -1,12 +1,12 @@
 // entities\fighter.js
-import { projectiles,keysDown } from '../core/main.js';
+import { projectiles, keysDown, keysUp } from '../core/main.js';
 
 class Fighter {
   constructor(
     x, col, id,
     idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [],
     fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [],
-    crouchFramesByLayer = [],crouchWalkFramesByLayer = []
+    crouchFramesByLayer = [], crouchWalkFramesByLayer = []
   ) {
     // Posición y físicas
     this.x = x;
@@ -67,7 +67,7 @@ class Fighter {
       fall: { anim: fallFramesByLayer, frameDelay: 10 },
       punch: { anim: punchFramesByLayer, frameDelay: 6, duration: 400 },
       crouch: { anim: crouchFramesByLayer, frameDelay: 10 },
-      crouchwalk :{ anim: crouchWalkFramesByLayer, frameDelay: 10 }
+      crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 }
     };
 
     // Ataque
@@ -100,16 +100,14 @@ class Fighter {
     let maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
     let friction = this.runActive ? this.runFriction : this.friction;
 
-    if (this.keys.left) {
-      this.vx -= acc;
-    }
-    if (this.keys.right) {
-      this.vx += acc;
-    }
+    if (this.keys.left) this.vx -= acc;
+    if (this.keys.right) this.vx += acc;
+
     if (!this.keys.left && !this.keys.right) {
       if (this.vx > 0) { this.vx -= friction; if (this.vx < 0) this.vx = 0; }
       else if (this.vx < 0) { this.vx += friction; if (this.vx > 0) this.vx = 0; }
     }
+
     if (this.keys.left) this.facing = -1;
     if (this.keys.right) this.facing = 1;
 
@@ -123,53 +121,32 @@ class Fighter {
       this.y = height - 72;
       this.vy = 0;
       this.onGround = true;
-    } else {
-      this.onGround = false;
-    }
+    } else this.onGround = false;
+
     this.x = constrain(this.x, 0, width - this.w);
 
     // Cambiar estado según situación
-    if (this.attacking) {
-      this.setState("punch");
-    } else if (!this.onGround) {
-      this.setState(this.vy < 0 ? "jump" : "fall");
-    } else if (this.crouching && this.vx==0) {
-      this.setState("crouch"); // 🆕 agachado tiene prioridad sobre idle
-    } else if(this.crouching && this.vx!=0){
-      this.setState("crouchwalk"); 
-    } else if (this.runActive && (this.keys.left || this.keys.right)) {
-      this.setState("run");
-    } else if (this.keys.left || this.keys.right) {
-      this.setState("walk");
-    } else {
-      this.setState("idle");
-    }
+    if (this.attacking) this.setState("punch");
+    else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
+    else if (this.crouching && this.vx == 0) this.setState("crouch");
+    else if (this.crouching && this.vx != 0) this.setState("crouchwalk");
+    else if (this.runActive && (this.keys.left || this.keys.right)) this.setState("run");
+    else if (this.keys.left || this.keys.right) this.setState("walk");
+    else this.setState("idle");
 
     // Avanzar animación
     let framesByLayer = this.currentFramesByLayer || [];
     if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
       if (frameCount % this.frameDelay === 0) {
         if (this.crouching) {
-          // Si está agachado, avanzar hasta el último frame y detenerse ahí
-          if (this.frameIndex < framesByLayer[0].length - 1) {
-            this.frameIndex++;
-          } else if (this.state.current === "crouchwalk") {
-    // Agachado caminando → loop
-    this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-  } 
+          if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
+          else if (this.state.current === "crouchwalk")
+            this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
         } else if (this.onGround || this.attacking) {
-          // Animaciones normales con loop
           this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-        } else {
-          // En aire, no hacer loop
-          if (this.frameIndex < framesByLayer[0].length - 1) {
-            this.frameIndex++;
-          }
-        }
+        } else if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
       }
-    } else {
-      this.frameIndex = 0;
-    }
+    } else this.frameIndex = 0;
 
     this.state.timer++;
   }
@@ -199,10 +176,7 @@ class Fighter {
         }
       }
       pop();
-    } else {
-      fill(this.col);
-      rect(this.x, this.y, this.w, this.h);
-    }
+    } else fill(this.col), rect(this.x, this.y, this.w, this.h);
 
     // 🔴 Hitbox del personaje
     noFill();
@@ -229,50 +203,59 @@ class Fighter {
     text(stateText, this.x + this.w / 2, this.y - 10);
   }
 
-handleInput() {
-  const now = millis();
-  const setRunTap = (dir, keyName) => {
-    if (keysDown[keyName]) {
-      if (now - this.lastTapTime[dir] < 300) this.runActive = true;
-      this.lastTapTime[dir] = now;
+  handleInput() {
+    const now = millis();
+
+    const setRunTap = (dir, keyName) => {
+      if (keysDown[keyName] && !this.keys[dir]) { // Detecta solo cuando se presiona recién
+        if (millis() - this.lastTapTime[dir] < 400) {
+          this.runActive = true; // doble tap detectado
+        }
+        this.lastTapTime[dir] = millis();
+      }
+
+      // Actualizar estado de tecla
+      this.keys[dir] = keysDown[keyName];
+
+      // Detener run si se sueltan ambas teclas
+      if (!this.keys.left && !this.keys.right) {
+        this.runActive = false;
+      }
+    };
+
+
+
+    if (this.id === 'p1') {
+      setRunTap('left', 'a');
+      setRunTap('right', 'd');
+
+      if (keysDown['w'] && this.onGround) {
+        this.vy = this.jumpStrength;
+        this.onGround = false;
+        this.runActive = false;
+      }
+
+      this.crouching = keysDown['s'];
+
+      if (keysDown['i']) this.punch();
+      if (keysDown['q']) this.shoot();
     }
-    this.keys[dir] = keysDown[keyName];
-    if (!this.keys.left && !this.keys.right) this.runActive = false;
-  };
 
-  if (this.id === 'p1') {
-    setRunTap('left', 'a');
-    setRunTap('right', 'd');
+    if (this.id === 'p2') {
+      setRunTap('left', 'arrowleft');
+      setRunTap('right', 'arrowright');
 
-    if (keysDown['w'] && this.onGround) {
-      this.vy = this.jumpStrength;
-      this.onGround = false;
-      this.runActive = false;
+      if (keysDown['arrowup'] && this.onGround) {
+        this.vy = this.jumpStrength;
+        this.onGround = false;
+        this.runActive = false;
+      }
+
+      this.crouching = keysDown['arrowdown'];
+
+      if (keysDown['m']) this.shoot();
     }
-
-    this.crouching = keysDown['s'];
-
-    if (keysDown['i']) this.punch();
-    if (keysDown['q']) this.shoot();
   }
-
-  if (this.id === 'p2') {
-    setRunTap('left', 'arrowleft');
-    setRunTap('right', 'arrowright');
-
-    if (keysDown['arrowup'] && this.onGround) {
-      this.vy = this.jumpStrength;
-      this.onGround = false;
-      this.runActive = false;
-    }
-
-    this.crouching = keysDown['arrowdown'];
-
-    if (keysDown['m']) this.shoot();
-  }
-}
-
-
 
   punch() {
     this.attacking = true;
