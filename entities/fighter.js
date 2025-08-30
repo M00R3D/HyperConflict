@@ -6,7 +6,7 @@ class Fighter {
     x, col, id,
     idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [],
     fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [], kickFramesByLayer = [],
-    crouchFramesByLayer = [], crouchWalkFramesByLayer = []
+    crouchFramesByLayer = [], crouchWalkFramesByLayer = [], hitFramesByLayer = []
   ) {
     // Posición y físicas
     this.x = x;
@@ -33,7 +33,6 @@ class Fighter {
 
     this.lastTapTime = { left: 0, right: 0 };
 
-    // Animaciones por capas
     this.idleFramesByLayer = idleFramesByLayer;
     this.walkFramesByLayer = walkFramesByLayer;
     this.jumpFramesByLayer = jumpFramesByLayer;
@@ -43,6 +42,7 @@ class Fighter {
     this.kickFramesByLayer = kickFramesByLayer;
     this.crouchFramesByLayer = crouchFramesByLayer;
     this.crouchWalkFramesByLayer = crouchWalkFramesByLayer;
+    this.hitFramesByLayer = hitFramesByLayer;
 
     this.frameIndex = 0;
     this.frameDelay = 10;
@@ -63,13 +63,18 @@ class Fighter {
       punch: { anim: punchFramesByLayer, frameDelay: 6, duration: 400 },
       kick: { anim: kickFramesByLayer, frameDelay: 6, duration: 400 },
       crouch: { anim: crouchFramesByLayer, frameDelay: 10 },
-      crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 }
+      crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 },
+      hit: { anim: hitFramesByLayer, frameDelay: 10 }
     };
 
     this.attacking = false;
     this.attackStartTime = 0;
     this.attackDuration = 400;
     this.attackType = null; // <-- Tipo de ataque: "punch" o "kick"
+    this.isHit = false;      
+    this.hitStartTime = 0;   
+    this.hitDuration = 600; // 0.6 segundos
+
   }
 
   setState(newState) {
@@ -145,6 +150,15 @@ class Fighter {
     if (this.opponent) this.autoFace(this.opponent);
     
     this.state.timer++;
+
+    // Gestionar estado de hit
+    if (this.isHit) {
+      if (millis() - this.hitStartTime >= this.hitDuration) {
+        this.isHit = false;
+        this.setState("idle");
+      }
+    }
+
   }
 
   display() {
@@ -236,7 +250,9 @@ class Fighter {
 
       this.crouching = keysDown['arrowdown'];
 
-      if (keysDown['m']) this.shoot();
+      // if (keysDown['m']) this.shoot();
+      if (keysDown['b']) this.punch();
+      if (keysDown['n']) this.kick();
     }
   }
 
@@ -286,8 +302,16 @@ class Fighter {
   }
 
   hit() {
-    this.hp -= 1;
-  }
+  if (this.isHit) return; 
+  this.hp -= 1;
+  this.isHit = true;
+  this.hitStartTime = millis();
+  this.setState("hit");
+
+  this.vx = -this.facing * 5; 
+  this.vy = -3;
+}
+
 }
 
 export { Fighter };

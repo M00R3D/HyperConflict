@@ -35,8 +35,9 @@ async function setup() {
   const tyemanKickLayers = await loadPiskel('src/tyeman/tyeman_kick.piskel');
   const tyemanCrouchLayers = await loadPiskel('src/tyeman/tyeman_crouch.piskel');
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
+  const tyemanHitLayers = await loadPiskel('src/tyeman/tyeman_hit.piskel');
 
-  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers);
   player2 = new Fighter(600, color(100, 100, 255), 'p2');
 
   // 🔹 Asignar oponentes para auto-facing
