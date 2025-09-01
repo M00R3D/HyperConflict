@@ -23,7 +23,7 @@ class Fighter {
     this.vx = 0;
     this.vy = 0;
     this.gravity = 0.3;
-    this.jumpStrength = -10;
+    this.jumpStrength = -5.67;
     this.onGround = true;
 
     this.acceleration = 1.3;
@@ -156,92 +156,120 @@ class Fighter {
     }
   }
 
-  update() {
-    // terminar ataque basado en attackDuration actual
-    if (this.attacking) {
-      if (millis() - this.attackStartTime > this.attackDuration) {
-        this.attacking = false;
-        this.attackType = null;
-      }
-    }
-
-    // desbloquear inputs por tecla si la animación terminó
-    for (const key in this.inputLockedByKey) {
-      if (this.inputLockedByKey[key]) {
-        // si no estamos atacando con esa acción o el tiempo pasó, desbloquear
-        const last = this.lastAttackTimeByKey[key] || 0;
-        if (!this.attacking || (millis() - last > this.attackDuration + 10)) {
-          this.inputLockedByKey[key] = false;
-        }
-      }
-    }
-
-    // reset combos vencidos
-    for (const key in this.lastAttackTimeByKey) {
-      if (this.lastAttackTimeByKey[key] && (millis() - this.lastAttackTimeByKey[key] > this.comboWindow)) {
-        this.comboStepByKey[key] = 0;
-      }
-    }
-
-    // Movimiento horizontal
-    const acc = this.runActive ? this.runAcceleration : this.acceleration;
-    const maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
-    const friction = this.runActive ? this.runFriction : this.friction;
-
-    if (this.keys.left && this.state.current !== "fall" && this.state.current !== "jump") this.vx -= acc;
-    if (this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") this.vx += acc;
-
-    if (!this.keys.left && !this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") {
-      if (this.vx > 0) this.vx = Math.max(0, this.vx - friction);
-      if (this.vx < 0) this.vx = Math.min(0, this.vx + friction);
-    }
-
-    if (this.keys.left) this.facing = -1;
-    if (this.keys.right) this.facing = 1;
-
-    this.vx = constrain(this.vx, -maxSpd, maxSpd);
-    this.x += this.vx;
-
-    // gravedad y salto
-    this.vy += this.gravity;
-    this.y += this.vy;
-    if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
-    else this.onGround = false;
-
-    this.x = constrain(this.x, 0, width - this.w);
-
-    // cambiar estado visual según prioridad
-    if (this.isHit) this.setState("hit");
-    else if (this.attacking && this.attackType) this.setState(this.attackType);
-    else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
-    else if (this.crouching && this.vx === 0) this.setState("crouch");
-    else if (this.crouching && this.vx !== 0) this.setState("crouchwalk");
-    else if (this.runActive && (this.keys.left || this.keys.right)) this.setState("run");
-    else if (this.keys.left || this.keys.right) this.setState("walk");
-    else this.setState("idle");
-
-    // animación por frames
-    const framesByLayer = this.currentFramesByLayer || [];
-    if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
-      if (frameCount % this.frameDelay === 0) {
-        if (this.crouching) {
-          if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
-          else if (this.state.current === "crouchwalk") this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-        } else if (this.onGround || this.attacking) {
-          this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-        } else if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
-      }
-    } else this.frameIndex = 0;
-
-    if (this.opponent) this.autoFace(this.opponent);
-    this.state.timer++;
-
-    // salir de hit
-    if (this.isHit && millis() - this.hitStartTime >= this.hitDuration) {
-      this.isHit = false;
-      this.setState("idle");
+ update() {
+  // terminar ataque basado en attackDuration actual
+  if (this.attacking) {
+    if (millis() - this.attackStartTime > this.attackDuration) {
+      this.attacking = false;
+      this.attackType = null;
     }
   }
+
+  // desbloquear inputs por tecla si la animación terminó
+  for (const key in this.inputLockedByKey) {
+    if (this.inputLockedByKey[key]) {
+      const last = this.lastAttackTimeByKey[key] || 0;
+      if (!this.attacking || (millis() - last > this.attackDuration + 10)) {
+        this.inputLockedByKey[key] = false;
+      }
+    }
+  }
+
+  // reset combos vencidos
+  for (const key in this.lastAttackTimeByKey) {
+    if (this.lastAttackTimeByKey[key] && (millis() - this.lastAttackTimeByKey[key] > this.comboWindow)) {
+      this.comboStepByKey[key] = 0;
+    }
+  }
+
+  // Movimiento horizontal
+  const acc = this.runActive ? this.runAcceleration : this.acceleration;
+  const maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
+  const friction = this.runActive ? this.runFriction : this.friction;
+
+  if (this.keys.left && this.state.current !== "fall" && this.state.current !== "jump") this.vx -= acc;
+  if (this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") this.vx += acc;
+
+  if (!this.keys.left && !this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") {
+    if (this.vx > 0) this.vx = Math.max(0, this.vx - friction);
+    if (this.vx < 0) this.vx = Math.min(0, this.vx + friction);
+  }
+
+  if (this.keys.left) this.facing = -1;
+  if (this.keys.right) this.facing = 1;
+
+  this.vx = constrain(this.vx, -maxSpd, maxSpd);
+  this.x += this.vx;
+
+  // push para evitar superposición con oponente
+  if (this.opponent) {
+    const myHB = this.getCurrentHitbox();
+    const oppHB = this.opponent.getCurrentHitbox();
+
+    if (
+      myHB.x < oppHB.x + oppHB.w &&
+      myHB.x + myHB.w > oppHB.x &&
+      myHB.y < oppHB.y + oppHB.h &&
+      myHB.y + myHB.h > oppHB.y
+    ) {
+      // calcular centro y overlap horizontal
+      const myCenter = myHB.x + myHB.w / 2;
+      const oppCenter = oppHB.x + oppHB.w / 2;
+      const overlap = (myHB.w / 2 + oppHB.w / 2) - Math.abs(myCenter - oppCenter);
+
+      if (myCenter < oppCenter) {
+        // estoy a la izquierda del oponente
+        this.x -= overlap / 2;
+        this.opponent.x += overlap / 2;
+      } else {
+        // estoy a la derecha del oponente
+        this.x += overlap / 2;
+        this.opponent.x -= overlap / 2;
+      }
+    }
+  }
+
+  // gravedad y salto
+  this.vy += this.gravity;
+  this.y += this.vy;
+  if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
+  else this.onGround = false;
+
+  this.x = constrain(this.x, 0, width - this.w);
+
+  // cambiar estado visual según prioridad
+  if (this.isHit) this.setState("hit");
+  else if (this.attacking && this.attackType) this.setState(this.attackType);
+  else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
+  else if (this.crouching && this.vx === 0) this.setState("crouch");
+  else if (this.crouching && this.vx !== 0) this.setState("crouchwalk");
+  else if (this.runActive && (this.keys.left || this.keys.right)) this.setState("run");
+  else if (this.keys.left || this.keys.right) this.setState("walk");
+  else this.setState("idle");
+
+  // animación por frames
+  const framesByLayer = this.currentFramesByLayer || [];
+  if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
+    if (frameCount % this.frameDelay === 0) {
+      if (this.crouching) {
+        if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
+        else if (this.state.current === "crouchwalk") this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+      } else if (this.onGround || this.attacking) {
+        this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+      } else if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
+    }
+  } else this.frameIndex = 0;
+
+  if (this.opponent) this.autoFace(this.opponent);
+  this.state.timer++;
+
+  // salir de hit
+  if (this.isHit && millis() - this.hitStartTime >= this.hitDuration) {
+    this.isHit = false;
+    this.setState("idle");
+  }
+}
+
 
   display() {
     const stateText = this.state.current;
