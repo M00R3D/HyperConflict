@@ -39,6 +39,7 @@ async function setup() {
   const tyemanRunLayers = await loadPiskel('src/tyeman/tyeman_run.piskel');
   const tyemanPunchLayers = await loadPiskel('src/tyeman/tyeman_punch.piskel');
   const tyemanPunch2Layers = await loadPiskel('src/tyeman/tyeman_punch_2.piskel');
+  const tyemanPunch3Layers = await loadPiskel('src/tyeman/tyeman_punch_3.piskel');
   const tyemanKickLayers = await loadPiskel('src/tyeman/tyeman_kick.piskel');
   const tyemanCrouchLayers = await loadPiskel('src/tyeman/tyeman_crouch.piskel');
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
@@ -51,13 +52,14 @@ async function setup() {
   const sbluerRunLayers = await loadPiskel('src/sbluer/sbluer_run.piskel');
   const sbluerPunchLayers = await loadPiskel('src/sbluer/sbluer_punch.piskel');
   const sbluerPunch2Layers = await loadPiskel('src/sbluer/sbluer_punch_2.piskel');
+  const sbluerPunch3Layers = await loadPiskel('src/sbluer/sbluer_punch_3.piskel');
   const sbluerKickLayers = await loadPiskel('src/sbluer/sbluer_kick.piskel');
   const sbluerCrouchLayers = await loadPiskel('src/sbluer/sbluer_crouch.piskel');
   const sbluerCrouchWalkLayers = await loadPiskel('src/sbluer/sbluer_crouch_walk.piskel');
   const sbluerHitLayers = await loadPiskel('src/sbluer/sbluer_hit.piskel');
   
-  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers,tyemanPunch2Layers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers);
-  player2 = new Fighter(600, color(100, 100, 255), 'p2',sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers,sbluerRunLayers, sbluerPunchLayers,sbluerPunch2Layers, sbluerKickLayers, sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers,tyemanPunch2Layers,tyemanPunch3Layers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers);
+  player2 = new Fighter(600, color(100, 100, 255), 'p2',sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers,sbluerRunLayers, sbluerPunchLayers,sbluerPunch2Layers,sbluerPunch3Layers, sbluerKickLayers, sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers);
 
   // 🔹 Asignar oponentes para auto-facing
   player1.opponent = player2;

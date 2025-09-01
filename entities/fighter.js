@@ -6,7 +6,7 @@ class Fighter {
     x, col, id,
     idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [],
     fallFramesByLayer = [], runFramesByLayer = [],
-    punchFramesByLayer = [], punch2FramesByLayer = [], kickFramesByLayer = [],
+    punchFramesByLayer = [], punch2FramesByLayer = [], punch3FramesByLayer = [], kickFramesByLayer = [],
     crouchFramesByLayer = [], crouchWalkFramesByLayer = [], hitFramesByLayer = []
   ) {
     // Posición y físicas
@@ -41,6 +41,7 @@ class Fighter {
     this.runFramesByLayer = runFramesByLayer;
     this.punchFramesByLayer = punchFramesByLayer;
     this.punch2FramesByLayer = punch2FramesByLayer;
+    this.punch3FramesByLayer = punch3FramesByLayer;
     this.kickFramesByLayer = kickFramesByLayer;
     this.crouchFramesByLayer = crouchFramesByLayer;
     this.crouchWalkFramesByLayer = crouchWalkFramesByLayer;
@@ -77,7 +78,7 @@ class Fighter {
       fall: { anim: fallFramesByLayer, frameDelay: 10 },
       punch: { anim: punchFramesByLayer, frameDelay: 6, duration: 400 },
       punch2: { anim: punch2FramesByLayer, frameDelay: 6, duration: 400 },
-      punch3: { anim: punch2FramesByLayer, frameDelay: 6, duration: 400 }, // usa punch2 hasta que tengas sprites
+      punch3: { anim: punch3FramesByLayer, frameDelay: 3, duration: 800 }, // usa punch2 hasta que tengas sprites
       kick: { anim: kickFramesByLayer, frameDelay: 6, duration: 400 },
       crouch: { anim: crouchFramesByLayer, frameDelay: 10 },
       crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 },
