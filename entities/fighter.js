@@ -54,12 +54,15 @@ class Fighter {
     this.currentFramesByLayer = idleFramesByLayer;
     this.crouching = false;
 
-    // 🔹 Combos
     this.comboChains = {
-      punch: ["punch2", "punch3"],
-      punch2: ["punch3"],
-      kick: ["kick2"], // si más adelante quieres patada doble
-    };
+  punch: ["punch2", "punch3"],
+  punch2: ["punch3"],
+  punch3: [], // fin del combo
+  kick: ["kick2"],
+  kick2: [],
+};
+
+
     this.comboStep = 0;
     this.comboWindow = 250; // ms
     this.lastAttackTime = 0;
@@ -126,11 +129,18 @@ class Fighter {
 
   update() {
     // Terminar ataque
-    if (this.attacking && millis() - this.attackStartTime > this.attackDuration) {
+    if (this.attacking) {
+    if (millis() - this.attackStartTime > this.attackDuration) {
+      // Termina animación de golpe, pero no resetea comboStep todavía
       this.attacking = false;
       this.attackType = null;
+    }
+
+    // Si pasó demasiado tiempo desde el último ataque → resetea combo
+    if (millis() - this.attackStartTime > this.comboWindow) {
       this.comboStep = 0;
     }
+  }
 
     // Movimiento horizontal
     const acc = this.runActive ? this.runAcceleration : this.acceleration;
@@ -244,77 +254,95 @@ class Fighter {
   }
 
   handleInput() {
-    if (this.isHit) return;
-    const setRunTap = (dir, keyName) => {
-      if (keysDown[keyName] && !this.keys[dir] && !this.isHit) {
-        if (millis() - this.lastTapTime[dir] < 400) this.runActive = true;
-        this.lastTapTime[dir] = millis();
-      }
-      this.keys[dir] = keysDown[keyName];
-      if (!this.keys.left && !this.keys.right && !this.isHit) this.runActive = false;
-    };
-
-    if (this.id === 'p1') {
-  setRunTap('left', 'a');
-  setRunTap('right', 'd');
-
-  if (keysDown['w'] && this.onGround) {
-    this.vy = this.jumpStrength;
-    this.onGround = false;
-    this.runActive = false;
-  }
-  this.crouching = keysDown['s'];
-
-  if (keysPressed['i']) this.attack("punch"); // 👈 ahora con keysPressed
-  if (keysPressed['o']) this.attack("kick");
+  if (this.isHit) return;
+  const setRunTap = (dir, keyName) => {
+    if (keysDown[keyName] && !this.keys[dir] && !this.isHit) {
+      if (millis() - this.lastTapTime[dir] < 400) this.runActive = true;
+      this.lastTapTime[dir] = millis();
     }
+    this.keys[dir] = keysDown[keyName];
+    if (!this.keys.left && !this.keys.right && !this.isHit) this.runActive = false;
+  };
 
-    if (this.id === 'p2') {
-      setRunTap('left', 'arrowleft');
-      setRunTap('right', 'arrowright');
+  if (this.id === 'p1') {
+    setRunTap('left', 'a');
+    setRunTap('right', 'd');
 
-      if (keysDown['arrowup'] && this.onGround) {
-        this.vy = this.jumpStrength;
-        this.onGround = false;
-        this.runActive = false;
-      }
-      this.crouching = keysDown['arrowdown'];
-
-      if (keysPressed['b']) this.attack("punch"); // 👈 ahora con keysPressed
-      if (keysPressed['n']) this.attack("kick");
+    if (keysDown['w'] && this.onGround) {
+      this.vy = this.jumpStrength;
+      this.onGround = false;
+      this.runActive = false;
     }
+    this.crouching = keysDown['s'];
 
+    // 🔹 ataque
+    if (keysPressed['i']) this.attack("punch");
+    if (keysPressed['o']) this.attack("kick");
+
+    // 🔹 liberar input cuando se suelta
+    if (keysUp['i'] || keysUp['o']) this.inputLocked = false;
   }
+
+  if (this.id === 'p2') {
+    setRunTap('left', 'arrowleft');
+    setRunTap('right', 'arrowright');
+
+    if (keysDown['arrowup'] && this.onGround) {
+      this.vy = this.jumpStrength;
+      this.onGround = false;
+      this.runActive = false;
+    }
+    this.crouching = keysDown['arrowdown'];
+
+    // 🔹 ataque
+    if (keysPressed['b']) this.attack("punch");
+    if (keysPressed['n']) this.attack("kick");
+
+    // 🔹 liberar input cuando se suelta
+    if (keysUp['b'] || keysUp['n']) this.inputLocked = false;
+  }
+}
+
 
   // 🔹 Nuevo sistema de combos
-  attack(type) {
+attack(type) {
   const now = millis();
 
-  // Cooldown mínimo entre ataques
-  if (now - this.attackStartTime < 20) return; // 100ms
+  if (this.inputLocked) return;
 
-  // Si ya estamos atacando y existe un combo posible
-  if (this.attacking && this.comboChains[this.attackType]) {
-    const chain = this.comboChains[this.attackType];
-    if (now - this.attackStartTime <= this.comboWindow) {
-      const next = chain[this.comboStep];
-      if (next) {
-        this.attackType = next;
-        this.setState(next);
-        this.attackStartTime = now;
-        this.comboStep++;
-        return;
-      }
+  const chain = this.comboChains[this.attackType] || [];
+
+  // Si estamos en combo y dentro de la ventana
+  if (this.attacking && chain.length > 0 && now - this.attackStartTime <= this.comboWindow) {
+    const nextAttack = chain[0]; // siempre toma el primer elemento de la nueva cadena
+    if (nextAttack) {
+      this.attackType = nextAttack;
+      this.setState(nextAttack);
+      this.attackStartTime = now;
+      this.comboStep = 0; // resetea para el siguiente combo
+      this.inputLocked = true;
+      return;
     }
   }
 
-  // Ataque nuevo
+  // Ataque inicial o combo expirado
+  this.attackType = type;
+  this.setState(type);
   this.attacking = true;
   this.attackStartTime = now;
-  this.attackType = type;
-  this.comboStep = 0;
-  this.setState(type);
+  this.comboStep = 0; // listo para encadenar
+  this.inputLocked = true;
 }
+
+
+
+
+
+// En update() o donde proceses input
+handleInputRelease(type) {
+  this.inputLocked = false; // 👈 ya se puede volver a atacar
+}
+
 
 
   autoFace(opponent) {
