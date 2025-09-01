@@ -11,19 +11,24 @@ let cam = { x: 0, y: 0, zoom: 1 };
 
 let keysDown = {};
 let keysUp = {};
+let keysPressed = {}; // 👈 nuevo
 
-export { keysDown, keysUp, projectiles }; // 👈 exportar ambos
+export { keysDown, keysUp, keysPressed, projectiles };
 
 window.addEventListener("keydown", (e) => {
-  keysDown[e.key.toLowerCase()] = true;
-  keysUp[e.key.toLowerCase()] = false;
+  const key = e.key.toLowerCase();
+  if (!keysDown[key]) {     // 👈 solo si estaba en false
+    keysPressed[key] = true; // marcar como "just pressed"
+  }
+  keysDown[key] = true;
+  keysUp[key] = false;
 });
 
 window.addEventListener("keyup", (e) => {
-  keysDown[e.key.toLowerCase()] = false;
-  keysUp[e.key.toLowerCase()] = true;
+  const key = e.key.toLowerCase();
+  keysDown[key] = false;
+  keysUp[key] = true;
 });
-
 async function setup() {
   createCanvas(800, 400);
 
@@ -33,6 +38,7 @@ async function setup() {
   const tyemanFallLayers = await loadPiskel('src/tyeman/tyeman_fall.piskel');
   const tyemanRunLayers = await loadPiskel('src/tyeman/tyeman_run.piskel');
   const tyemanPunchLayers = await loadPiskel('src/tyeman/tyeman_punch.piskel');
+  const tyemanPunch2Layers = await loadPiskel('src/tyeman/tyeman_punch_2.piskel');
   const tyemanKickLayers = await loadPiskel('src/tyeman/tyeman_kick.piskel');
   const tyemanCrouchLayers = await loadPiskel('src/tyeman/tyeman_crouch.piskel');
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
@@ -44,13 +50,14 @@ async function setup() {
   const sbluerFallLayers = await loadPiskel('src/sbluer/sbluer_fall.piskel');
   const sbluerRunLayers = await loadPiskel('src/sbluer/sbluer_run.piskel');
   const sbluerPunchLayers = await loadPiskel('src/sbluer/sbluer_punch.piskel');
+  const sbluerPunch2Layers = await loadPiskel('src/sbluer/sbluer_punch_2.piskel');
   const sbluerKickLayers = await loadPiskel('src/sbluer/sbluer_kick.piskel');
   const sbluerCrouchLayers = await loadPiskel('src/sbluer/sbluer_crouch.piskel');
   const sbluerCrouchWalkLayers = await loadPiskel('src/sbluer/sbluer_crouch_walk.piskel');
   const sbluerHitLayers = await loadPiskel('src/sbluer/sbluer_hit.piskel');
   
-  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers);
-  player2 = new Fighter(600, color(100, 100, 255), 'p2',sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers,sbluerRunLayers, sbluerPunchLayers, sbluerKickLayers, sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers);
+  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers,tyemanPunch2Layers, tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers);
+  player2 = new Fighter(600, color(100, 100, 255), 'p2',sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers,sbluerRunLayers, sbluerPunchLayers,sbluerPunch2Layers, sbluerKickLayers, sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers);
 
   // 🔹 Asignar oponentes para auto-facing
   player1.opponent = player2;
@@ -110,6 +117,13 @@ function draw() {
   fill(255);
   textSize(20);
   drawHealthBars(player1, player2);
+  for (let k in keysPressed) {
+    keysPressed[k] = false;
+  }
+  for (let k in keysUp) {
+    keysUp[k] = false;
+  }
+
 }
 
 
