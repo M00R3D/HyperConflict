@@ -26,8 +26,8 @@ class Fighter {
     this.jumpStrength = -5.67;
     this.onGround = true;
 
-    this.acceleration = 1.3;
-    this.runAcceleration = 1.1;
+    this.acceleration = 1.1;
+    this.runAcceleration = 1.01;
     this.maxSpeed = 4;
     this.runMaxSpeed = 6;
     this.friction = 0.1;
