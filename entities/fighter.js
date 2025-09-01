@@ -6,8 +6,8 @@ class Fighter {
   constructor(
     x, col, id,
     idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [],
-    fallFramesByLayer = [], runFramesByLayer = [], 
-    punchFramesByLayer = [], punch2FramesByLayer = [], punch3FramesByLayer = [], 
+    fallFramesByLayer = [], runFramesByLayer = [],
+    punchFramesByLayer = [], punch2FramesByLayer = [], punch3FramesByLayer = [],
     kickFramesByLayer = [], kick2FramesByLayer = [], kick3FramesByLayer = [],
     crouchFramesByLayer = [], crouchWalkFramesByLayer = [], hitFramesByLayer = []
   ) {
@@ -46,7 +46,7 @@ class Fighter {
     this.punch2FramesByLayer = punch2FramesByLayer;
     this.punch3FramesByLayer = punch3FramesByLayer;
     this.kickFramesByLayer = kickFramesByLayer;
-    this.kick2FramesByLayer = kick2FramesByLayer || kickFramesByLayer; // fallback si no pasas frames
+    this.kick2FramesByLayer = kick2FramesByLayer || kickFramesByLayer;
     this.kick3FramesByLayer = kick3FramesByLayer || kickFramesByLayer;
     this.crouchFramesByLayer = crouchFramesByLayer;
     this.crouchWalkFramesByLayer = crouchWalkFramesByLayer;
@@ -62,19 +62,16 @@ class Fighter {
 
     // combos por tecla (cada entrada es el nombre de la acción en this.actions)
     this.comboChainsByKey = {
-      // p1
       i: ['punch', 'punch2', 'punch3'],
       o: ['kick', 'kick2', 'kick3'],
-      // p2 (mapeo a las mismas acciones)
       b: ['punch', 'punch2', 'punch3'],
       n: ['kick', 'kick2', 'kick3']
     };
 
     // estado de combo por tecla
-    this.comboStepByKey = {};          // ejemplo { i: 0, o: 0, b:0, n:0 } (llena dinámicamente)
-    this.lastAttackTimeByKey = {};     // último timestamp por tecla
-    this.inputLockedByKey = {};        // bloqueo por tecla (espera que termine animación)
-    // inicializar keys
+    this.comboStepByKey = {};
+    this.lastAttackTimeByKey = {};
+    this.inputLockedByKey = {};
     for (const k in this.comboChainsByKey) {
       this.comboStepByKey[k] = 0;
       this.lastAttackTimeByKey[k] = 0;
@@ -91,22 +88,19 @@ class Fighter {
       run:     { anim: runFramesByLayer, frameDelay: this.runFrameDelay },
       jump:    { anim: jumpFramesByLayer, frameDelay: 10 },
       fall:    { anim: fallFramesByLayer, frameDelay: 10 },
-      // punches
       punch:   { anim: punchFramesByLayer, frameDelay: 6, duration: 400 },
       punch2:  { anim: punch2FramesByLayer, frameDelay: 6, duration: 400 },
       punch3:  { anim: punch3FramesByLayer, frameDelay: 5, duration: 800 },
-      // kicks (aseguro que existen kick2/kick3)
       kick:    { anim: kickFramesByLayer, frameDelay: 6, duration: 400 },
       kick2:   { anim: this.kick2FramesByLayer, frameDelay: 6, duration: 400 },
       kick3:   { anim: this.kick3FramesByLayer, frameDelay: 6, duration: 600 },
-      // otros
       crouch:  { anim: crouchFramesByLayer, frameDelay: 10 },
       crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 },
       hit:     { anim: hitFramesByLayer, frameDelay: 10 },
       hadouken: { anim: [], frameDelay: 6, duration: 600 }
     };
 
-    // hitboxes (igual que tenías)
+    // hitboxes
     this.hitboxes = {
       idle:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
       walk:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
@@ -137,6 +131,14 @@ class Fighter {
     this.isHit = false;
     this.hitStartTime = 0;
     this.hitDuration = 600;
+
+    // Input buffer (cola) para detectar movimientos
+    this.inputBuffer = []; // { symbol: '↓'|'↘'|'P'..., time: millis() }
+    this.inputBufferDuration = 1400; // ms
+    this.inputBufferMax = 20;
+
+    // ventana para detectar diagonales y near-simultaneous
+    this.diagonalWindow = 160; // ms
   }
 
   setState(newState) {
@@ -149,127 +151,297 @@ class Fighter {
         this.frameIndex = 0;
         this.frameDelay = action.frameDelay || 10;
       } else {
-        // si no hay animación por capas usamos rect de color
         this.currentFramesByLayer = [];
         this.frameIndex = 0;
       }
     }
   }
 
- update() {
-  // terminar ataque basado en attackDuration actual
-  if (this.attacking) {
-    if (millis() - this.attackStartTime > this.attackDuration) {
-      this.attacking = false;
-      this.attackType = null;
+  addInput(symbol) {
+    if (!symbol) return;
+    const now = millis();
+    this.inputBuffer.push({ symbol, time: now });
+    this.trimBuffer();
+  }
+
+  trimBuffer() {
+    const now = millis();
+    this.inputBuffer = this.inputBuffer.filter(i => now - i.time <= this.inputBufferDuration);
+    if (this.inputBuffer.length > this.inputBufferMax) {
+      this.inputBuffer.splice(0, this.inputBuffer.length - this.inputBufferMax);
     }
   }
 
-  // desbloquear inputs por tecla si la animación terminó
-  for (const key in this.inputLockedByKey) {
-    if (this.inputLockedByKey[key]) {
-      const last = this.lastAttackTimeByKey[key] || 0;
-      if (!this.attacking || (millis() - last > this.attackDuration + 10)) {
-        this.inputLockedByKey[key] = false;
+  // Nuevo comportamiento: insertar diagonal ANTES de la dirección nueva (si aplica),
+  // manteniendo las direcciones individuales.
+  addInputFromKey(keyName) {
+    const now = millis();
+
+    const dirMapP1 = { 'w': '↑', 's': '↓', 'a': '←', 'd': '→' };
+    const dirMapP2 = { 'arrowup': '↑', 'arrowdown': '↓', 'arrowleft': '←', 'arrowright': '→' };
+
+    // botones ataque
+    if (this.id === 'p1') {
+      if (keyName === 'i') { this.addInput('P'); return; }
+      if (keyName === 'o') { this.addInput('K'); return; }
+    } else {
+      if (keyName === 'b') { this.addInput('P'); return; }
+      if (keyName === 'n') { this.addInput('K'); return; }
+    }
+
+    const thisSym = (this.id === 'p1') ? dirMapP1[keyName] : dirMapP2[keyName];
+    if (!thisSym) return;
+
+    // Buscar otra direccional mantenida (keysDown) distinta a la actual
+    const otherDirKeys = (this.id === 'p1')
+      ? ['w','s','a','d'].filter(k => k !== keyName)
+      : ['arrowup','arrowdown','arrowleft','arrowright'].filter(k => k !== keyName);
+
+    let foundOther = null;
+    for (const k of otherDirKeys) {
+      if (keysDown[k]) {
+        const otherSym = (this.id === 'p1') ? dirMapP1[k] : dirMapP2[k];
+        foundOther = otherSym;
+        break;
+      }
+    }
+
+    // Si no hay otra tecla mantenida, buscar en buffer la última direccional dentro de diagonalWindow
+    if (!foundOther) {
+      const buf = this.inputBuffer;
+      for (let i = buf.length - 1; i >= 0; i--) {
+        const s = buf[i].symbol;
+        if (['↑','↓','←','→','↗','↖','↘','↙'].includes(s)) {
+          if (now - buf[i].time <= this.diagonalWindow) {
+            foundOther = s;
+          }
+          break;
+        }
+      }
+    }
+
+    // Si encontramos otra direccional candidata, combinamos y añadimos DIAGONAL antes de la dirección nueva.
+    if (foundOther) {
+      const diag = Fighter.combineDirections(foundOther, thisSym);
+      if (diag) {
+        // evitar duplicados inmediatos de la misma diagonal
+        const alreadyRecent = this.inputBuffer.some(i => i.symbol === diag && (now - i.time) <= 120);
+        if (!alreadyRecent) {
+          // insertar diagonal (antes de la dirección nueva)
+          this.inputBuffer.push({ symbol: diag, time: now });
+        }
+        // siempre añadir la dirección simple (tras la diagonal) — mantiene el orden ↓,↘,→
+        this.inputBuffer.push({ symbol: thisSym, time: now + 1 }); // +1 para que aparezca justo después
+        this.trimBuffer();
+        return;
+      }
+    }
+
+    // si no hay diagonal, comportamiento normal: añadir la dirección
+    this.addInput(thisSym);
+  }
+
+  static combineDirections(a, b) {
+    const partsOf = sym => {
+      if (sym === '↘') return ['↓','→'];
+      if (sym === '↙') return ['↓','←'];
+      if (sym === '↗') return ['↑','→'];
+      if (sym === '↖') return ['↑','←'];
+      return [sym];
+    };
+    const A = partsOf(a);
+    const B = partsOf(b);
+
+    for (const ca of A) {
+      for (const cb of B) {
+        if ((ca === '↓' && cb === '→') || (ca === '→' && cb === '↓')) return '↘';
+        if ((ca === '↓' && cb === '←') || (ca === '←' && cb === '↓')) return '↙';
+        if ((ca === '↑' && cb === '→') || (ca === '→' && cb === '↑')) return '↗';
+        if ((ca === '↑' && cb === '←') || (ca === '←' && cb === '↑')) return '↖';
+      }
+    }
+    return null;
+  }
+
+  bufferEndsWith(sequence) {
+    if (!sequence || sequence.length === 0) return false;
+    const buf = this.inputBuffer.map(i => i.symbol);
+    if (buf.length < sequence.length) return false;
+    for (let i = 0; i < sequence.length; i++) {
+      if (buf[buf.length - sequence.length + i] !== sequence[i]) return false;
+    }
+    return true;
+  }
+
+  bufferConsumeLast(n) {
+    if (n <= 0) return;
+    this.inputBuffer.splice(Math.max(0, this.inputBuffer.length - n), n);
+  }
+
+  specialMoves = {
+    hadouken: ['↓','↘','→','P'],
+    shoryuken: ['→','↓','↘','P'],
+    tatsumaki: ['↓','↙','←','K']
+  };
+
+  checkSpecialMoves() {
+    for (const moveName in this.specialMoves) {
+      const seq = this.specialMoves[moveName];
+      if (this.bufferEndsWith(seq)) {
+        this.doSpecial(moveName);
+        this.bufferConsumeLast(seq.length);
+        break;
       }
     }
   }
 
-  // reset combos vencidos
-  for (const key in this.lastAttackTimeByKey) {
-    if (this.lastAttackTimeByKey[key] && (millis() - this.lastAttackTimeByKey[key] > this.comboWindow)) {
-      this.comboStepByKey[key] = 0;
+  doSpecial(moveName) {
+    if (moveName === 'hadouken') {
+      this.setState('hadouken');
+      this.attackType = 'hadouken';
+      this.attacking = true;
+      this.attackStartTime = millis();
+      this.attackDuration = this.actions.hadouken.duration || 600;
+      const dir = this.facing === 1 ? 1 : -1;
+      const px = Math.round(this.x + (dir === 1 ? this.w : 0));
+      const py = Math.round(this.y + this.h / 2);
+      projectiles.push(new Projectile(px, py, dir, this.id));
+    } else if (moveName === 'shoryuken') {
+      this.setState('punch3');
+      this.attackType = 'punch3';
+      this.attacking = true;
+      this.attackStartTime = millis();
+      this.attackDuration = this.actions.punch3.duration || 800;
+    } else if (moveName === 'tatsumaki') {
+      this.setState('kick3');
+      this.attackType = 'kick3';
+      this.attacking = true;
+      this.attackStartTime = millis();
+      this.attackDuration = this.actions.kick3.duration || 600;
     }
   }
 
-  // Movimiento horizontal
-  const acc = this.runActive ? this.runAcceleration : this.acceleration;
-  const maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
-  const friction = this.runActive ? this.runFriction : this.friction;
+  update() {
+    const now = millis();
+    this.trimBuffer();
 
-  if (this.keys.left && this.state.current !== "fall" && this.state.current !== "jump") this.vx -= acc;
-  if (this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") this.vx += acc;
-
-  if (!this.keys.left && !this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") {
-    if (this.vx > 0) this.vx = Math.max(0, this.vx - friction);
-    if (this.vx < 0) this.vx = Math.min(0, this.vx + friction);
-  }
-
-  if (this.keys.left) this.facing = -1;
-  if (this.keys.right) this.facing = 1;
-
-  this.vx = constrain(this.vx, -maxSpd, maxSpd);
-  this.x += this.vx;
-
-  // push para evitar superposición con oponente
-  if (this.opponent) {
-    const myHB = this.getCurrentHitbox();
-    const oppHB = this.opponent.getCurrentHitbox();
-
-    if (
-      myHB.x < oppHB.x + oppHB.w &&
-      myHB.x + myHB.w > oppHB.x &&
-      myHB.y < oppHB.y + oppHB.h &&
-      myHB.y + myHB.h > oppHB.y
-    ) {
-      // calcular centro y overlap horizontal
-      const myCenter = myHB.x + myHB.w / 2;
-      const oppCenter = oppHB.x + oppHB.w / 2;
-      const overlap = (myHB.w / 2 + oppHB.w / 2) - Math.abs(myCenter - oppCenter);
-
-      if (myCenter < oppCenter) {
-        // estoy a la izquierda del oponente
-        this.x -= overlap / 2;
-        this.opponent.x += overlap / 2;
-      } else {
-        // estoy a la derecha del oponente
-        this.x += overlap / 2;
-        this.opponent.x -= overlap / 2;
+    // terminar ataque
+    if (this.attacking) {
+      if (now - this.attackStartTime > this.attackDuration) {
+        this.attacking = false;
+        this.attackType = null;
       }
     }
-  }
 
-  // gravedad y salto
-  this.vy += this.gravity;
-  this.y += this.vy;
-  if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
-  else this.onGround = false;
-
-  this.x = constrain(this.x, 0, width - this.w);
-
-  // cambiar estado visual según prioridad
-  if (this.isHit) this.setState("hit");
-  else if (this.attacking && this.attackType) this.setState(this.attackType);
-  else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
-  else if (this.crouching && this.vx === 0) this.setState("crouch");
-  else if (this.crouching && this.vx !== 0) this.setState("crouchwalk");
-  else if (this.runActive && (this.keys.left || this.keys.right)) this.setState("run");
-  else if (this.keys.left || this.keys.right) this.setState("walk");
-  else this.setState("idle");
-
-  // animación por frames
-  const framesByLayer = this.currentFramesByLayer || [];
-  if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
-    if (frameCount % this.frameDelay === 0) {
-      if (this.crouching) {
-        if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
-        else if (this.state.current === "crouchwalk") this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-      } else if (this.onGround || this.attacking) {
-        this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-      } else if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
+    // desbloquear inputs por tecla si la animación terminó
+    for (const key in this.inputLockedByKey) {
+      if (this.inputLockedByKey[key]) {
+        const last = this.lastAttackTimeByKey[key] || 0;
+        if (!this.attacking || (now - last > this.attackDuration + 10)) {
+          this.inputLockedByKey[key] = false;
+        }
+      }
     }
-  } else this.frameIndex = 0;
 
-  if (this.opponent) this.autoFace(this.opponent);
-  this.state.timer++;
+    // reset combos vencidos
+    for (const key in this.lastAttackTimeByKey) {
+      if (this.lastAttackTimeByKey[key] && (now - this.lastAttackTimeByKey[key] > this.comboWindow)) {
+        this.comboStepByKey[key] = 0;
+      }
+    }
 
-  // salir de hit
-  if (this.isHit && millis() - this.hitStartTime >= this.hitDuration) {
-    this.isHit = false;
-    this.setState("idle");
+    // Movimiento horizontal
+    const acc = this.runActive ? this.runAcceleration : this.acceleration;
+    const maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
+    const friction = this.runActive ? this.runFriction : this.friction;
+
+    if (this.keys.left && this.state.current !== "fall" && this.state.current !== "jump") this.vx -= acc;
+    if (this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") this.vx += acc;
+
+    if (!this.keys.left && !this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") {
+      if (this.vx > 0) this.vx = Math.max(0, this.vx - friction);
+      if (this.vx < 0) this.vx = Math.min(0, this.vx + friction);
+    }
+
+    if (this.keys.left) this.facing = -1;
+    if (this.keys.right) this.facing = 1;
+
+    this.vx = constrain(this.vx, -maxSpd, maxSpd);
+    this.x += this.vx;
+
+    // push para evitar superposición con oponente
+    if (this.opponent) {
+      const myHB = this.getCurrentHitbox();
+      const oppHB = this.opponent.getCurrentHitbox();
+
+      if (
+        myHB.x < oppHB.x + oppHB.w &&
+        myHB.x + myHB.w > oppHB.x &&
+        myHB.y < oppHB.y + oppHB.h &&
+        myHB.y + myHB.h > oppHB.y
+      ) {
+        const myCenter = myHB.x + myHB.w / 2;
+        const oppCenter = oppHB.x + oppHB.w / 2;
+        const halfSum = myHB.w / 2 + oppHB.w / 2;
+        const dist = Math.abs(myCenter - oppCenter);
+        const overlap = Math.max(0, halfSum - dist);
+
+        if (overlap > 0.0001) {
+          const pushAmount = overlap / 2 + 0.5;
+          if (myCenter < oppCenter) {
+            this.x = constrain(this.x - pushAmount, 0, width - this.w);
+            this.opponent.x = constrain(this.opponent.x + pushAmount, 0, width - this.opponent.w);
+          } else {
+            this.x = constrain(this.x + pushAmount, 0, width - this.w);
+            this.opponent.x = constrain(this.opponent.x - pushAmount, 0, width - this.opponent.w);
+          }
+        }
+      }
+    }
+
+    // gravedad y salto
+    this.vy += this.gravity;
+    this.y += this.vy;
+    if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
+    else this.onGround = false;
+
+    this.x = constrain(this.x, 0, width - this.w);
+
+    // revisar especiales
+    this.checkSpecialMoves();
+
+    // cambiar estado visual según prioridad
+    if (this.isHit) this.setState("hit");
+    else if (this.attacking && this.attackType) this.setState(this.attackType);
+    else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
+    else if (this.crouching && this.vx === 0) this.setState("crouch");
+    else if (this.crouching && this.vx !== 0) this.setState("crouchwalk");
+    else if (this.runActive && (this.keys.left || this.keys.right)) this.setState("run");
+    else if (this.keys.left || this.keys.right) this.setState("walk");
+    else this.setState("idle");
+
+    // animación por frames
+    const framesByLayer = this.currentFramesByLayer || [];
+    if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
+      if (frameCount % this.frameDelay === 0) {
+        if (this.crouching) {
+          if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
+          else if (this.state.current === "crouchwalk") this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+        } else if (this.onGround || this.attacking) {
+          this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
+        } else if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
+      }
+    } else this.frameIndex = 0;
+
+    if (this.opponent) this.autoFace(this.opponent);
+    this.state.timer++;
+
+    // salir de hit
+    if (this.isHit && millis() - this.hitStartTime >= this.hitDuration) {
+      this.isHit = false;
+      this.setState("idle");
+    }
   }
-}
-
 
   display() {
     const stateText = this.state.current;
@@ -329,14 +501,13 @@ class Fighter {
 
     const setRunTap = (dir, keyName) => {
       if (keysDown[keyName] && !this.keys[dir] && !this.isHit) {
-        if (millis() - this.lastTapTime[dir] < 400) this.runActive = true;
+        if (millis() - this.lastTapTime[dir] < 250) this.runActive = true;
         this.lastTapTime[dir] = millis();
       }
       this.keys[dir] = keysDown[keyName];
       if (!this.keys.left && !this.keys.right && !this.isHit) this.runActive = false;
     };
 
-    // P1
     if (this.id === 'p1') {
       setRunTap('left', 'a');
       setRunTap('right', 'd');
@@ -348,17 +519,15 @@ class Fighter {
       }
       this.crouching = keysDown['s'];
 
-      if (keysPressed['i']) this.attack('i'); // combo punch p1
-      if (keysPressed['o']) this.attack('o'); // combo kick p1
+      if (keysPressed['i']) this.attack('i');
+      if (keysPressed['o']) this.attack('o');
 
       if (keysUp['i'] || keysUp['o']) {
-        // liberar bloqueos por soltado (seguro)
         this.inputLockedByKey['i'] = false;
         this.inputLockedByKey['o'] = false;
       }
     }
 
-    // P2
     if (this.id === 'p2') {
       setRunTap('left', 'arrowleft');
       setRunTap('right', 'arrowright');
@@ -370,8 +539,8 @@ class Fighter {
       }
       this.crouching = keysDown['arrowdown'];
 
-      if (keysPressed['b']) this.attack('b'); // punch p2 mapped to same chain
-      if (keysPressed['n']) this.attack('n'); // kick p2 mapped
+      if (keysPressed['b']) this.attack('b');
+      if (keysPressed['n']) this.attack('n');
 
       if (keysUp['b'] || keysUp['n']) {
         this.inputLockedByKey['b'] = false;
@@ -380,52 +549,34 @@ class Fighter {
     }
   }
 
-  // attack invoked with key identifier: 'i','o','b','n'
   attack(key) {
     const now = millis();
     const chain = this.comboChainsByKey[key];
     if (!chain || chain.length === 0) return;
-
-    // si input bloqueado por esa tecla, ignorar
     if (this.inputLockedByKey[key]) return;
 
-    // comprobar si estamos dentro de ventana para encadenar
     const last = this.lastAttackTimeByKey[key] || 0;
     let step = this.comboStepByKey[key] || 0;
-    if (now - last > this.comboWindow) {
-      // expiró -> empezar desde 0
-      step = 0;
-    }
+    if (now - last > this.comboWindow) step = 0;
 
-    // seleccionar ataque actual
     const attackName = chain[step] || chain[0];
     const action = this.actions[attackName];
     if (!action) {
-      // seguridad: si acción no definida, no hacemos nada
       console.warn('Acción no definida en actions:', attackName);
       return;
     }
 
-    // aplicar ataque
     this.attackType = attackName;
     this.setState(attackName);
     this.attacking = true;
     this.attackStartTime = now;
-    this.attackDuration = action.duration || 400; // importante: evita undefined
+    this.attackDuration = action.duration || 400;
     this.lastAttackTimeByKey[key] = now;
-
-    // bloquear input para esa tecla hasta que termine animación
     this.inputLockedByKey[key] = true;
-
-    // avanzar paso de combo para la próxima vez
     this.comboStepByKey[key] = (step + 1);
-    // Si llegó al final, dejar listo para reiniciar (no modificado hasta que expira la ventana)
-    if (this.comboStepByKey[key] >= chain.length) {
-      this.comboStepByKey[key] = 0;
-    }
+    if (this.comboStepByKey[key] >= chain.length) this.comboStepByKey[key] = 0;
   }
 
-  // permitir liberar bloqueo manual (si lo necesitas)
   handleInputRelease(type) {
     if (this.inputLockedByKey[type] !== undefined) this.inputLockedByKey[type] = false;
   }
@@ -480,7 +631,6 @@ class Fighter {
   getAttackHitbox() {
     if (!this.attacking || !this.attackType) return null;
     const box = this.attackHitboxes[this.attackType] || this.attackHitboxes[this.attackType.replace(/\d+$/, '')];
-    // si no hay uno específico, intenta devolver el base (punch/kick)
     if (!box) return null;
     return {
       x: this.facing === 1 ? this.x + box.offsetX : this.x + this.w - box.offsetX - box.w,

@@ -1,4 +1,4 @@
-// core\main.js
+// core/main.js
 import { Fighter } from '../../entities/fighter.js';
 import { Projectile } from '../../entities/projectile.js';
 import { loadPiskel } from './loader.js';
@@ -15,13 +15,23 @@ let keysPressed = {}; // 👈 nuevo
 
 export { keysDown, keysUp, keysPressed, projectiles };
 
+// Control sets (para filtrar qué keys interesan a cada jugador)
+const p1ControlKeys = new Set(['w','a','s','d','i','o']);
+const p2ControlKeys = new Set(['arrowup','arrowleft','arrowdown','arrowright','b','n']);
+
 window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
-  if (!keysDown[key]) {     // 👈 solo si estaba en false
-    keysPressed[key] = true; // marcar como "just pressed"
+  if (!keysDown[key]) {
+    keysPressed[key] = true; // just pressed
   }
   keysDown[key] = true;
   keysUp[key] = false;
+
+  // enviar al buffer del fighter correspondiente (si ya cargados)
+  if (playersReady) {
+    if (player1 && p1ControlKeys.has(key)) player1.addInputFromKey(key);
+    if (player2 && p2ControlKeys.has(key)) player2.addInputFromKey(key);
+  }
 });
 
 window.addEventListener("keyup", (e) => {
@@ -29,6 +39,7 @@ window.addEventListener("keyup", (e) => {
   keysDown[key] = false;
   keysUp[key] = true;
 });
+
 async function setup() {
   createCanvas(800, 400);
 
@@ -57,11 +68,22 @@ async function setup() {
   const sbluerCrouchLayers = await loadPiskel('src/sbluer/sbluer_crouch.piskel');
   const sbluerCrouchWalkLayers = await loadPiskel('src/sbluer/sbluer_crouch_walk.piskel');
   const sbluerHitLayers = await loadPiskel('src/sbluer/sbluer_hit.piskel');
-  
-  player1 = new Fighter(100, color(255, 100, 100), 'p1',tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers,tyemanRunLayers, tyemanPunchLayers,tyemanPunch2Layers,tyemanPunch3Layers, tyemanKickLayers,tyemanKickLayers,tyemanKickLayers, tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers);
-  player2 = new Fighter(600, color(100, 100, 255), 'p2',sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers,sbluerRunLayers, sbluerPunchLayers,sbluerPunch2Layers,sbluerPunch3Layers, sbluerKickLayers, sbluerCrouchLayers,sbluerCrouchLayers,sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers);
 
-  // 🔹 Asignar oponentes para auto-facing
+  player1 = new Fighter(100, color(255, 100, 100), 'p1',
+    tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers,
+    tyemanPunchLayers, tyemanPunch2Layers, tyemanPunch3Layers,
+    tyemanKickLayers, tyemanKickLayers, tyemanKickLayers,
+    tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers
+  );
+
+  player2 = new Fighter(600, color(100, 100, 255), 'p2',
+    sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers, sbluerRunLayers,
+    sbluerPunchLayers, sbluerPunch2Layers, sbluerPunch3Layers,
+    sbluerKickLayers, sbluerKickLayers, sbluerKickLayers,
+    sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers
+  );
+
+  // asignar oponentes para auto-facing
   player1.opponent = player2;
   player2.opponent = player1;
   playersReady = true;
@@ -119,15 +141,12 @@ function draw() {
   fill(255);
   textSize(20);
   drawHealthBars(player1, player2);
-  for (let k in keysPressed) {
-    keysPressed[k] = false;
-  }
-  for (let k in keysUp) {
-    keysUp[k] = false;
-  }
+  drawInputQueues(player1, player2);
 
+  // limpiar flags one-frame
+  for (let k in keysPressed) keysPressed[k] = false;
+  for (let k in keysUp) keysUp[k] = false;
 }
-
 
 function keyPressed() {
   if (!playersReady) return;
@@ -140,13 +159,40 @@ function keyReleased() {
   player1.handleInput();
   player2.handleInput();
 }
+
+// Dibuja las colas de inputs en el HUD, entre las barras de vida
+function drawInputQueues(p1, p2) {
+  const centerX = width / 2;
+  const y = 40;
+  const spacing = 22;
+  textSize(14);
+  textAlign(CENTER, CENTER);
+
+  // helper para dibujar buffer de un jugador
+  const drawBuffer = (buf, x) => {
+    // limitar visibles por bufferDuration (ya hecho en Fighter)
+    for (let i = 0; i < buf.length; i++) {
+      const entry = buf[i];
+      const age = millis() - entry.time;
+      const alpha = map(age, 0, (p1.inputBufferDuration || 1400), 255, 0);
+      fill(255, alpha);
+      noStroke();
+      text(entry.symbol, x + i * spacing - (buf.length - 1) * spacing / 2, y);
+    }
+  };
+
+  // player1 left of center, player2 right of center
+  drawBuffer(p1.inputBuffer, centerX - 140);
+  drawBuffer(p2.inputBuffer, centerX + 140);
+}
+
+// copia de tus utilidades visuales
 function drawHealthBars(p1, p2) {
   const barWidth = 200;
   const barHeight = 20;
   const xOffset = 20;
   const yOffset = 10;
 
-  // ---- Función auxiliar para contorno wavy ----
   function drawWavyBorder(x, y, w, h) {
     noFill();
     stroke(0);
@@ -233,31 +279,20 @@ function drawHealthBars(p1, p2) {
 }
 
 function drawBackground() {
-  // Definir colores clave
   const skyColors = [
-    color(135, 206, 235), // celeste
-    color(255, 140, 0),   // naranja atardecer
-    color(0, 0, 0),       // negro
-    color(25, 25, 112)    // azul oscuro
+    color(135, 206, 235),
+    color(255, 140, 0),
+    color(0, 0, 0),
+    color(25, 25, 112)
   ];
-
-  // Velocidad de transición
-  const speed = 0.00002; // más pequeño = más lento
-  const t = (frameCount * speed) % 1; // ciclo 0-1
+  const speed = 0.00002;
+  const t = (frameCount * speed) % 1;
   const total = skyColors.length;
-
-  // Determinar los dos colores a interpolar
   const index1 = floor(frameCount * speed) % total;
   const index2 = (index1 + 1) % total;
-
-  // Interpolar colores
   const c = lerpColor(skyColors[index1], skyColors[index2], t);
-
   background(c);
 }
-
-
-
 
 window.setup = setup;
 window.draw = draw;
