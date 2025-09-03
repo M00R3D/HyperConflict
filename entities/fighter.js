@@ -68,6 +68,9 @@ class Fighter {
     this.pendingSimpleTime = 0;
     this.pendingSimpleTimeout = 500;
 
+    // ventana para insertar ↓ entre diagonales opuestas (ms)
+    this.oppositeDiagInsertWindow = 200; // ajusta aquí
+
     // combos por tecla
     this.comboChainsByKey = {
       i: ['punch', 'punch2', 'punch3'],
@@ -165,6 +168,88 @@ class Fighter {
     }
   }
 
+  // helpers para tipos de símbolo
+  static isDiagonal(sym) {
+    return sym === '↘' || sym === '↙' || sym === '↗' || sym === '↖';
+  }
+  static oppositeDiag(a, b) {
+    return (a === '↙' && b === '↘') || (a === '↘' && b === '↙') ||
+           (a === '↖' && b === '↗') || (a === '↗' && b === '↖');
+  }
+
+  // devuelve componente horizontal/vertical de una diagonal (o null)
+  static horizontalOf(sym) {
+    if (sym === '↘') return '→';
+    if (sym === '↗') return '→';
+    if (sym === '↙') return '←';
+    if (sym === '↖') return '←';
+    return null;
+  }
+  static verticalOf(sym) {
+    if (sym === '↘') return '↓';
+    if (sym === '↙') return '↓';
+    if (sym === '↗') return '↑';
+    if (sym === '↖') return '↑';
+    return null;
+  }
+
+  // Normaliza el buffer para convertir secuencias de diagonales opuestas próximas
+  // en diag1, ↓, diag2 (si están dentro de oppositeDiagInsertWindow).
+  normalizeDiagonals() {
+    const now = millis();
+    const maxGap = this.oppositeDiagInsertWindow || 200;
+    const buf = this.inputBuffer;
+    if (buf.length < 2) return;
+
+    // Recorremos el buffer buscando pares (i,j) donde buf[i] y buf[j] son diagonales opuestas
+    // y j-i <= 3 (permitir un pequeño número de símbolos intermedios). Reemplazamos lo que haya
+    // entre i y j por un único '↓' (si no hay ya).
+    let i = 0;
+    while (i < buf.length - 1) {
+      const s_i = buf[i].symbol;
+      if (!Fighter.isDiagonal(s_i)) { i++; continue; }
+
+      let found = false;
+      const maxJ = Math.min(buf.length - 1, i + 3); // limitamos la ventana de búsqueda
+      for (let j = i + 1; j <= maxJ; j++) {
+        const s_j = buf[j].symbol;
+        if (!Fighter.isDiagonal(s_j)) continue;
+        if (!Fighter.oppositeDiag(s_i, s_j)) continue;
+
+        // comprobar tiempo entre primera y segunda diagonal
+        const timeDiff = Math.abs(buf[j].time - buf[i].time);
+        if (timeDiff <= maxGap) {
+          // si ya existe un '↓' entre i y j, no hacemos nada
+          let hasDown = false;
+          for (let k = i + 1; k < j; k++) {
+            if (buf[k].symbol === '↓') { hasDown = true; break; }
+          }
+          if (!hasDown) {
+            // reemplazar el rango (i+1 .. j-1) por un único '↓'
+            const downTime = Math.round((buf[i].time + buf[j].time) / 2);
+            // borrar entre i+1 y j-1 (cantidad j-i-1)
+            const removeCount = Math.max(0, j - i - 1);
+            // splice para dejar: [.., buf[i], {↓}, buf[j], ..]
+            buf.splice(i + 1, removeCount, { symbol: '↓', time: downTime });
+            // ajustar índices: después de la operación seguimos después de buf[j] (que ahora es i+2)
+            i = i + 2;
+            found = true;
+            break;
+          } else {
+            // si ya había ↓ en medio, no hace falta reemplazar: saltamos j
+            i = j;
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) i++;
+    }
+
+    // acotar tamaño y tiempos por si acaso
+    this.trimBuffer();
+  }
+
   // addInput evita repeticiones consecutivas iguales
   addInput(symbol) {
     if (!symbol) return;
@@ -175,7 +260,11 @@ class Fighter {
       return;
     }
 
+    // inserción normal
     this.inputBuffer.push({ symbol, time: now });
+
+    // tras cada inserción intentamos normalizar diagonales opuestas cercanas
+    this.normalizeDiagonals();
     this.trimBuffer();
   }
 
@@ -207,17 +296,20 @@ class Fighter {
     const thisSym = (this.id === 'p1') ? dirMapP1[keyName] : dirMapP2[keyName];
     if (!thisSym) return;
 
-    // tolerancias
-    const diagCombineWindow = this.diagonalWindow || 160;
-    const releaseTolerance = this.releaseTolerance || 180;
-    const recentDuplicateWindow = 40;
+    // parámetros de tolerancia (si los usas más adelante)
+    const diagCombineWindow = this.diagonalWindow || 160; // ms, para buffer
+    const releaseTolerance = this.releaseTolerance || 180; // ms, tolerancia tras soltar tecla
+    const recentDuplicateWindow = 40; // ms, ventana corta para detectar entradas recién añadidas
 
+    // helper: obtener lista de keys para other dirs
     const otherDirKeys = (this.id === 'p1') ? ['w','s','a','d'].filter(k => k !== keyName)
                                            : ['arrowup','arrowdown','arrowleft','arrowright'].filter(k => k !== keyName);
 
+    // hallar candidate foundOther (primero prefiero teclas mantenidas, luego buffer dentro de diagCombineWindow)
     let foundOther = null;
     let foundOtherKey = null;
 
+    // 1) ¿hay otra tecla físicamente mantenida? (prioritario)
     for (const k of otherDirKeys) {
       if (keysDown[k]) {
         const otherSym = (this.id === 'p1') ? ({w:'↑', s:'↓', a:'←', d:'→'})[k] : ({arrowup:'↑', arrowdown:'↓', arrowleft:'←', arrowright:'→'})[k];
@@ -227,6 +319,7 @@ class Fighter {
       }
     }
 
+    // 2) si no, buscar en buffer la última direccional dentro de diagCombineWindow
     if (!foundOther) {
       const buf = this.inputBuffer;
       for (let i = buf.length - 1; i >= 0; i--) {
@@ -240,17 +333,20 @@ class Fighter {
       }
     }
 
+    // Si hay candidata, intentar formar diagonal con tolerancia a gaps (releaseTolerance)
     if (foundOther) {
       const diag = Fighter.combineDirections(foundOther, thisSym);
       if (diag) {
         const vertical = ['↑','↓'];
         const horizontal = ['←','→'];
 
+        // ¿vino foundOther desde tecla mantenida reciente?
         let fromHeldRecent = false;
         if (foundOtherKey) {
           const downTime = keysDownTime[foundOtherKey] || 0;
           fromHeldRecent = (now - downTime) <= releaseTolerance;
         } else {
+          // si no vino desde held, intentar ver si hubo un keyUp reciente para alguna key que corresponda
           const candidateKeys = (this.id === 'p1') ? {'w':'↑','s':'↓','a':'←','d':'→'} : {'arrowup':'↑','arrowdown':'↓','arrowleft':'←','arrowright':'→'};
           for (const k in candidateKeys) {
             if (candidateKeys[k] === foundOther) {
@@ -260,6 +356,7 @@ class Fighter {
           }
         }
 
+        // o bien vino del buffer dentro de diagCombineWindow
         let fromBufferRecent = false;
         for (let i = this.inputBuffer.length - 1; i >= 0; i--) {
           if (this.inputBuffer[i].symbol === foundOther && (now - this.inputBuffer[i].time) <= diagCombineWindow) {
@@ -268,12 +365,15 @@ class Fighter {
           }
         }
 
+        // Si alguna condición de tolerancia se cumple, formamos diagonal
         if (fromHeldRecent || fromBufferRecent) {
+          // limpieza: si el último símbolo del buffer es precisamente thisSym y es muy reciente,
+          // lo eliminamos para reinsertarlo en el orden correcto (evitar ...→,↘,→)
           const buf = this.inputBuffer;
           if (buf.length > 0) {
             const last = buf[buf.length - 1];
             if (last.symbol === thisSym && (now - last.time) <= recentDuplicateWindow) {
-              buf.splice(buf.length - 1, 1);
+              buf.splice(buf.length - 1, 1); // quitarlo
             }
           }
 
@@ -281,6 +381,8 @@ class Fighter {
           const isDiagHeld = (diagKeys.length === 2) && diagKeys.every(k => keysDown[k]);
 
           if (isDiagHeld) {
+            // si la diagonal está mantenida, añadimos la diagonal ahora y dejamos la componente lateral
+            // pendiente hasta que suelte la diagonal (esto evita que se intercale componente lateral antes).
             this.addInput(diag);
 
             if (vertical.includes(thisSym) && horizontal.includes(foundOther)) {
@@ -294,9 +396,12 @@ class Fighter {
             this.pendingDiag = diag;
             this.pendingSimpleTime = now;
             this.waitingForDiagRelease = true;
+            // normalizamos por si al añadir la diagonal se creó un patrón que debe convertirse en ↓
+            this.normalizeDiagonals();
             this.trimBuffer();
             return;
           } else {
+            // no está mantenida la diagonal: añadimos diag + componentes ahora
             if (vertical.includes(thisSym) && horizontal.includes(foundOther)) {
               this.addInput(thisSym);
               this.addInput(diag);
@@ -310,13 +415,17 @@ class Fighter {
               this.addInput(thisSym);
             }
 
+            // normalizar por si corresponde insertar '↓'
+            this.normalizeDiagonals();
             this.trimBuffer();
-            return;
+            return; // ya añadimos la diagonal + orden
           }
         }
+        // si no cumple tolerancia, no formamos diagonal y caemos abajo a addInput(thisSym)
       }
     }
 
+    // si no hay diagonal o no se formó por tolerancia, añadir la dirección simple
     this.addInput(thisSym);
   }
 
@@ -352,6 +461,36 @@ class Fighter {
     return true;
   }
 
+  // flexibleEndsWith: compara el final del buffer con seq PERMITIENDO que una diagonal
+  // en el buffer satisfaga una componente vertical/horizontal de la secuencia.
+  flexibleEndsWith(bufferSymbols, seq) {
+    if (!seq || seq.length === 0) return false;
+    if (bufferSymbols.length < seq.length) return false;
+
+    // helper: devuelve true si 'actual' puede contar como 'required'
+    const symbolMatches = (required, actual) => {
+      if (required === actual) return true;
+      // vertical/horizontal component checks
+      const diagVerticalMap = { '↘': '↓', '↙': '↓', '↗': '↑', '↖': '↑' };
+      const diagHorizontalMap = { '↘': '→', '↙': '←', '↗': '→', '↖': '←' };
+
+      if ((required === '↓' || required === '↑') && diagVerticalMap[actual] === required) return true;
+      if ((required === '→' || required === '←') && diagHorizontalMap[actual] === required) return true;
+
+      return false;
+    };
+
+    const startIdx = bufferSymbols.length - seq.length;
+    for (let i = 0; i < seq.length; i++) {
+      const b = bufferSymbols[startIdx + i];
+      const s = seq[i];
+      if (!symbolMatches(s, b)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   bufferConsumeLast(n) {
     if (n <= 0) return;
     this.inputBuffer.splice(Math.max(0, this.inputBuffer.length - n), n);
@@ -364,28 +503,40 @@ class Fighter {
     tatsumaki: ['↓','↙','←','K']
   };
 
-  // Devuelve la secuencia espejada horizontalmente (→<->←, ↘<->↙, ↗<->↖)
-  mirrorSequence(seq) {
+  // espejo de un símbolo individual (horizontal flip)
+  mirrorSymbol(sym) {
     const map = {
       '→': '←', '←': '→',
       '↘': '↙', '↙': '↘',
       '↗': '↖', '↖': '↗'
     };
-    return seq.map(s => map[s] || s);
+    return map[sym] || sym;
   }
 
-  // Comprueba especiales teniendo en cuenta el facing:
-  // si facing === -1 usamos la secuencia espejada.
+  // Comprueba especiales usando flexibleEndsWith y teniendo en cuenta facing:
   checkSpecialMoves() {
+    const bufSymbols = this.inputBuffer.map(i => i.symbol);
+
     for (const moveName in this.specialMoves) {
       let seq = this.specialMoves[moveName];
+
+      // si estamos volteados, mirrorizamos la secuencia para comprobarla directamente
       if (this.facing === -1) {
-        seq = this.mirrorSequence(seq);
+        seq = seq.map(s => this.mirrorSymbol(s));
       }
+
+      // 1) comprobación flexible (permite que diagonales contengan componentes)
+      if (this.flexibleEndsWith(bufSymbols, seq)) {
+        this.doSpecial(moveName);
+        this.bufferConsumeLast(seq.length);
+        return;
+      }
+
+      // 2) fallback: comprobación literal por si quieres que diag exactos entren también
       if (this.bufferEndsWith(seq)) {
         this.doSpecial(moveName);
         this.bufferConsumeLast(seq.length);
-        break;
+        return;
       }
     }
   }
