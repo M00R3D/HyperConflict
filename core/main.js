@@ -9,11 +9,14 @@ let projectiles = [];
 let playersReady = false;
 let cam = { x: 0, y: 0, zoom: 1 };
 
+// arriba, con las otras variables
 let keysDown = {};
 let keysUp = {};
-let keysPressed = {}; // 👈 nuevo
+let keysPressed = {};
+let keysDownTime = {};
+let keysUpTime = {}; // <-- NUEVO
 
-export { keysDown, keysUp, keysPressed, projectiles };
+export { keysDown, keysUp, keysPressed, projectiles, keysDownTime, keysUpTime };
 
 // Control sets (para filtrar qué keys interesan a cada jugador)
 const p1ControlKeys = new Set(['w','a','s','d','i','o']);
@@ -23,6 +26,7 @@ window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   if (!keysDown[key]) {
     keysPressed[key] = true; // just pressed
+    keysDownTime[key] = millis(); // <-- guardar tiempo del keydown
   }
   keysDown[key] = true;
   keysUp[key] = false;
@@ -38,7 +42,12 @@ window.addEventListener("keyup", (e) => {
   const key = e.key.toLowerCase();
   keysDown[key] = false;
   keysUp[key] = true;
+  keysUpTime[key] = millis(); // <-- registramos cuándo se soltó
+  // opcional: borrar keysDownTime si quieres
+  delete keysDownTime[key];
 });
+
+
 
 async function setup() {
   createCanvas(800, 400);
@@ -55,6 +64,7 @@ async function setup() {
   const tyemanCrouchLayers = await loadPiskel('src/tyeman/tyeman_crouch.piskel');
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
   const tyemanHitLayers = await loadPiskel('src/tyeman/tyeman_hit.piskel');
+  const tyemanShootLayers = await loadPiskel('src/tyeman/tyeman_shoot.piskel');
 
   const sbluerIdleLayers = await loadPiskel('src/sbluer/sbluer_idle.piskel');
   const sbluerWalkLayers = await loadPiskel('src/sbluer/sbluer_walk.piskel');
@@ -73,14 +83,14 @@ async function setup() {
     tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers,
     tyemanPunchLayers, tyemanPunch2Layers, tyemanPunch3Layers,
     tyemanKickLayers, tyemanKickLayers, tyemanKickLayers,
-    tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers
+    tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers,tyemanShootLayers
   );
 
   player2 = new Fighter(600, color(100, 100, 255), 'p2',
     sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers, sbluerRunLayers,
     sbluerPunchLayers, sbluerPunch2Layers, sbluerPunch3Layers,
     sbluerKickLayers, sbluerKickLayers, sbluerKickLayers,
-    sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers
+    sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers,tyemanShootLayers
   );
 
   // asignar oponentes para auto-facing
