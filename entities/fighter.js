@@ -62,13 +62,13 @@ class Fighter {
     this.crouching = false;
 
     // Pendientes para manejo de diagonales mantenidas
-    this.waitingForDiagRelease = false; // indicador de que hay una simple pendiente
-    this.pendingSimple = null;         // símbolo que añadiremos cuando se suelte la diagonal
-    this.pendingDiag = null;           // símbolo diagonal que estamos "vigileando"
-    this.pendingSimpleTime = 0;        // timestamp de cuando quedó pendiente
-    this.pendingSimpleTimeout = 500;   // ms: timeout de seguridad para no quedar pendiente para siempre
+    this.waitingForDiagRelease = false;
+    this.pendingSimple = null;
+    this.pendingDiag = null;
+    this.pendingSimpleTime = 0;
+    this.pendingSimpleTimeout = 500;
 
-    // combos por tecla (cada entrada es el nombre de la acción en this.actions)
+    // combos por tecla
     this.comboChainsByKey = {
       i: ['punch', 'punch2', 'punch3'],
       o: ['kick', 'kick2', 'kick3'],
@@ -86,7 +86,7 @@ class Fighter {
       this.inputLockedByKey[k] = false;
     }
 
-    this.comboWindow = 250; // ms para encadenar
+    this.comboWindow = 250; // ms
 
     // Estado y ataques
     this.state = { current: "idle", timer: 0, canCancel: true };
@@ -140,16 +140,13 @@ class Fighter {
     this.hitStartTime = 0;
     this.hitDuration = 600;
 
-    // Input buffer (cola) para detectar movimientos
-    this.inputBuffer = []; // { symbol: '↓'|'↘'|'P'..., time: millis() }
+    // Input buffer
+    this.inputBuffer = [];
     this.inputBufferDuration = 1400; // ms
     this.inputBufferMax = 20;
 
-    // ventana para detectar diagonales y near-simultaneous
-    // ventana para detectar diagonales (desde buffer)
-    this.diagonalWindow = 120; // ms — si la otra dirección está en buffer dentro de este tiempo, permite diagonal
-    // ventana para detectar diagonales cuando la otra tecla está actualmente mantenida (keysDown)
-    this.diagonalHoldWindow = 120; // ms — si la otra tecla fue presionada hace MÁS tiempo que esto, NO formaremos diagonal
+    this.diagonalWindow = 120;
+    this.diagonalHoldWindow = 120;
   }
 
   setState(newState) {
@@ -173,7 +170,6 @@ class Fighter {
     if (!symbol) return;
     const now = millis();
 
-    // si el último símbolo es igual al que vamos a añadir, ignorar (no permitir repeticiones consecutivas)
     const last = this.inputBuffer.length > 0 ? this.inputBuffer[this.inputBuffer.length - 1] : null;
     if (last && last.symbol === symbol) {
       return;
@@ -211,20 +207,17 @@ class Fighter {
     const thisSym = (this.id === 'p1') ? dirMapP1[keyName] : dirMapP2[keyName];
     if (!thisSym) return;
 
-    // parámetros de tolerancia (si los usas más adelante)
-    const diagCombineWindow = this.diagonalWindow || 160; // ms, para buffer
-    const releaseTolerance = this.releaseTolerance || 180; // ms, tolerancia tras soltar tecla
-    const recentDuplicateWindow = 40; // ms, ventana corta para detectar entradas recién añadidas
+    // tolerancias
+    const diagCombineWindow = this.diagonalWindow || 160;
+    const releaseTolerance = this.releaseTolerance || 180;
+    const recentDuplicateWindow = 40;
 
-    // helper: obtener lista de keys para other dirs
     const otherDirKeys = (this.id === 'p1') ? ['w','s','a','d'].filter(k => k !== keyName)
                                            : ['arrowup','arrowdown','arrowleft','arrowright'].filter(k => k !== keyName);
 
-    // hallar candidate foundOther (primero prefiero teclas mantenidas, luego buffer dentro de diagCombineWindow)
     let foundOther = null;
     let foundOtherKey = null;
 
-    // 1) ¿hay otra tecla físicamente mantenida? (prioritario)
     for (const k of otherDirKeys) {
       if (keysDown[k]) {
         const otherSym = (this.id === 'p1') ? ({w:'↑', s:'↓', a:'←', d:'→'})[k] : ({arrowup:'↑', arrowdown:'↓', arrowleft:'←', arrowright:'→'})[k];
@@ -234,7 +227,6 @@ class Fighter {
       }
     }
 
-    // 2) si no, buscar en buffer la última direccional dentro de diagCombineWindow
     if (!foundOther) {
       const buf = this.inputBuffer;
       for (let i = buf.length - 1; i >= 0; i--) {
@@ -248,20 +240,17 @@ class Fighter {
       }
     }
 
-    // Si hay candidata, intentar formar diagonal con tolerancia a gaps (releaseTolerance)
     if (foundOther) {
       const diag = Fighter.combineDirections(foundOther, thisSym);
       if (diag) {
         const vertical = ['↑','↓'];
         const horizontal = ['←','→'];
 
-        // ¿vino foundOther desde tecla mantenida reciente?
         let fromHeldRecent = false;
         if (foundOtherKey) {
           const downTime = keysDownTime[foundOtherKey] || 0;
           fromHeldRecent = (now - downTime) <= releaseTolerance;
         } else {
-          // si no vino desde held, intentar ver si hubo un keyUp reciente para alguna key que corresponda
           const candidateKeys = (this.id === 'p1') ? {'w':'↑','s':'↓','a':'←','d':'→'} : {'arrowup':'↑','arrowdown':'↓','arrowleft':'←','arrowright':'→'};
           for (const k in candidateKeys) {
             if (candidateKeys[k] === foundOther) {
@@ -271,7 +260,6 @@ class Fighter {
           }
         }
 
-        // o bien vino del buffer dentro de diagCombineWindow
         let fromBufferRecent = false;
         for (let i = this.inputBuffer.length - 1; i >= 0; i--) {
           if (this.inputBuffer[i].symbol === foundOther && (now - this.inputBuffer[i].time) <= diagCombineWindow) {
@@ -280,37 +268,26 @@ class Fighter {
           }
         }
 
-        // Si alguna condición de tolerancia se cumple, formamos diagonal
         if (fromHeldRecent || fromBufferRecent) {
-          // limpieza: si el último símbolo del buffer es precisamente thisSym y es muy reciente,
-          // lo eliminamos para reinsertarlo en el orden correcto (evitar ...→,↘,→)
           const buf = this.inputBuffer;
           if (buf.length > 0) {
             const last = buf[buf.length - 1];
             if (last.symbol === thisSym && (now - last.time) <= recentDuplicateWindow) {
-              buf.splice(buf.length - 1, 1); // quitarlo
+              buf.splice(buf.length - 1, 1);
             }
           }
 
-          // Insertar en orden que favorezca hadouken/shoryuken usando this.addInput (evita duplicados consecutivos)
-          // PERO: si la diagonal está siendo realmente mantenida por las dos teclas,
-          // añadimos la diagonal ahora y dejamos la componente lateral PENDIENTE hasta que se suelte la diagonal.
           const diagKeys = this.getKeysForSymbol(diag);
           const isDiagHeld = (diagKeys.length === 2) && diagKeys.every(k => keysDown[k]);
 
           if (isDiagHeld) {
-            // añadimos la diagonal ya
             this.addInput(diag);
 
-            // decidir cuál es la simple que queremos añadir después (normalmente la componente horizontal)
             if (vertical.includes(thisSym) && horizontal.includes(foundOther)) {
-              // caso: ↓ (thisSym) + → (foundOther) -> la simple lateral es foundOther
               this.pendingSimple = foundOther;
             } else if (horizontal.includes(thisSym) && vertical.includes(foundOther)) {
-              // caso: → (thisSym) + ↓ (foundOther) -> la simple lateral es thisSym
               this.pendingSimple = thisSym;
             } else {
-              // caso genérico: preferimos añadir la componente horizontal si existe
               this.pendingSimple = horizontal.includes(foundOther) ? foundOther : thisSym;
             }
 
@@ -320,32 +297,26 @@ class Fighter {
             this.trimBuffer();
             return;
           } else {
-            // no está mantenida la diagonal, añadimos diag + componentes ahora
             if (vertical.includes(thisSym) && horizontal.includes(foundOther)) {
-              // ejemplo: ↓ (thisSym) + → (foundOther) -> ↓, ↘, →
               this.addInput(thisSym);
               this.addInput(diag);
               this.addInput(foundOther);
             } else if (horizontal.includes(thisSym) && vertical.includes(foundOther)) {
-              // ejemplo: → (thisSym) + ↓ (foundOther) -> preferimos: ↓, ↘, →
               this.addInput(foundOther);
               this.addInput(diag);
               this.addInput(thisSym);
             } else {
-              // caso genérico: diag en medio
               this.addInput(diag);
               this.addInput(thisSym);
             }
 
             this.trimBuffer();
-            return; // ya añadimos la diagonal + orden
+            return;
           }
         }
-        // si no cumple tolerancia, no formamos diagonal y caemos abajo a addInput(thisSym)
       }
     }
 
-    // si no hay diagonal o no se formó por tolerancia, añadir la dirección simple
     this.addInput(thisSym);
   }
 
@@ -386,15 +357,31 @@ class Fighter {
     this.inputBuffer.splice(Math.max(0, this.inputBuffer.length - n), n);
   }
 
+  // Secuencias base de especiales (siempre definidas mirando hacia la derecha lógica)
   specialMoves = {
     hadouken: ['↓','↘','→','P'],
     shoryuken: ['→','↓','↘','P'],
     tatsumaki: ['↓','↙','←','K']
   };
 
+  // Devuelve la secuencia espejada horizontalmente (→<->←, ↘<->↙, ↗<->↖)
+  mirrorSequence(seq) {
+    const map = {
+      '→': '←', '←': '→',
+      '↘': '↙', '↙': '↘',
+      '↗': '↖', '↖': '↗'
+    };
+    return seq.map(s => map[s] || s);
+  }
+
+  // Comprueba especiales teniendo en cuenta el facing:
+  // si facing === -1 usamos la secuencia espejada.
   checkSpecialMoves() {
     for (const moveName in this.specialMoves) {
-      const seq = this.specialMoves[moveName];
+      let seq = this.specialMoves[moveName];
+      if (this.facing === -1) {
+        seq = this.mirrorSequence(seq);
+      }
       if (this.bufferEndsWith(seq)) {
         this.doSpecial(moveName);
         this.bufferConsumeLast(seq.length);
@@ -437,10 +424,8 @@ class Fighter {
       const diagKeys = this.getKeysForSymbol(this.pendingDiag);
       const stillHeld = (diagKeys.length === 2) && diagKeys.every(k => keysDown[k]);
 
-      // si la diagonal ya no está mantenida, o expiró el timeout, añadimos la simple pendiente
       if (!stillHeld || (now - this.pendingSimpleTime) > this.pendingSimpleTimeout) {
         if (this.pendingSimple) this.addInput(this.pendingSimple);
-        // limpiar estado pendiente
         this.waitingForDiagRelease = false;
         this.pendingSimple = null;
         this.pendingDiag = null;
