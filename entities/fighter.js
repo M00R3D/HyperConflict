@@ -9,7 +9,7 @@ class Fighter {
     fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [],
     punch2FramesByLayer = [], punch3FramesByLayer = [], kickFramesByLayer = [],
     kick2FramesByLayer = [], kick3FramesByLayer = [], crouchFramesByLayer = [],
-    crouchWalkFramesByLayer = [], hitFramesByLayer = [], shootFramesByLayer = []
+    crouchWalkFramesByLayer = [], hitFramesByLayer = [], shootFramesByLayer = [], projectileFramesByLayer = []
   ) {
     // Posición y físicas
     this.x = x;
@@ -52,6 +52,7 @@ class Fighter {
     this.crouchWalkFramesByLayer = crouchWalkFramesByLayer;
     this.hitFramesByLayer = hitFramesByLayer;
     this.shootFramesByLayer = shootFramesByLayer;
+    this.projectileFramesByLayer = projectileFramesByLayer;
 
     this.frameIndex = 0;
     this.frameDelay = 10;
@@ -542,6 +543,7 @@ class Fighter {
   }
 
   doSpecial(moveName) {
+    // dentro de doSpecial, caso hadouken:
     if (moveName === 'hadouken') {
       this.setState('hadouken');
       this.attackType = 'hadouken';
@@ -551,8 +553,16 @@ class Fighter {
       const dir = this.facing === 1 ? 1 : -1;
       const px = Math.round(this.x + (dir === 1 ? this.w : 0));
       const py = Math.round(this.y + this.h / 2);
-      projectiles.push(new Projectile(px, py, dir, this.id));
-    } else if (moveName === 'shoryuken') {
+
+      // <- PASAMOS this.shootFramesByLayer al constructor
+      projectiles.push(new Projectile(px, py, dir, this.id, this.projectileFramesByLayer, {
+        w: 20,            // ancho dibujo del proyectil (ajusta)
+        h: 12,            // alto
+        speed: 8,         // velocidad si quieres distinta
+        frameDelay: 6     // sincronía de animación
+      }));
+    }
+    else if (moveName === 'shoryuken') {
       this.setState('punch3');
       this.attackType = 'punch3';
       this.attacking = true;
@@ -734,22 +744,22 @@ class Fighter {
     }
 
     // hitbox personaje
-    const hb = this.getCurrentHitbox();
-    noFill();
-    stroke(255, 0, 0);
-    strokeWeight(2);
-    rect(hb.x, hb.y, hb.w, hb.h);
+    // const hb = this.getCurrentHitbox();
+    // noFill();
+    // stroke(255, 0, 0);
+    // strokeWeight(2);
+    // rect(hb.x, hb.y, hb.w, hb.h);
 
     // hitbox ataque
-    if (this.attacking) {
-      const atkHB = this.getAttackHitbox();
-      if (atkHB) {
-        noFill();
-        stroke(0, 200, 255);
-        strokeWeight(2);
-        rect(atkHB.x, atkHB.y, atkHB.w, atkHB.h);
-      }
-    }
+    // if (this.attacking) {
+    //   const atkHB = this.getAttackHitbox();
+    //   if (atkHB) {
+    //     noFill();
+    //     stroke(0, 200, 255);
+    //     strokeWeight(2);
+    //     rect(atkHB.x, atkHB.y, atkHB.w, atkHB.h);
+    //   }
+    // }
 
     fill(255);
     textSize(12);

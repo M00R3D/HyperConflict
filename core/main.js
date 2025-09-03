@@ -65,6 +65,7 @@ async function setup() {
   const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
   const tyemanHitLayers = await loadPiskel('src/tyeman/tyeman_hit.piskel');
   const tyemanShootLayers = await loadPiskel('src/tyeman/tyeman_shoot.piskel');
+  const tyemanProjectileLayers = await loadPiskel('src/tyeman/tyeman_projectile.piskel');
 
   const sbluerIdleLayers = await loadPiskel('src/sbluer/sbluer_idle.piskel');
   const sbluerWalkLayers = await loadPiskel('src/sbluer/sbluer_walk.piskel');
@@ -83,14 +84,14 @@ async function setup() {
     tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers,
     tyemanPunchLayers, tyemanPunch2Layers, tyemanPunch3Layers,
     tyemanKickLayers, tyemanKickLayers, tyemanKickLayers,
-    tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers,tyemanShootLayers
+    tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers,tyemanShootLayers,tyemanProjectileLayers
   );
 
   player2 = new Fighter(600, color(100, 100, 255), 'p2',
     sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers, sbluerRunLayers,
     sbluerPunchLayers, sbluerPunch2Layers, sbluerPunch3Layers,
     sbluerKickLayers, sbluerKickLayers, sbluerKickLayers,
-    sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers,tyemanShootLayers
+    sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers,tyemanShootLayers,tyemanProjectileLayers
   );
 
   // asignar oponentes para auto-facing
