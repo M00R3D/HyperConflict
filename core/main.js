@@ -1,102 +1,42 @@
-// core/main.js
 import { Fighter } from '../../entities/fighter.js';
 import { Projectile } from '../../entities/projectile.js';
-import { loadPiskel } from './loader.js';
 import { updateCamera, applyCamera } from './camera.js';
+import { initInput, clearFrameFlags } from './input.js';
+import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';
+import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
+import { drawBackground } from '../ui/background.js';
 
 let player1, player2;
 let projectiles = [];
 let playersReady = false;
 let cam = { x: 0, y: 0, zoom: 1 };
 
-// arriba, con las otras variables
-let keysDown = {};
-let keysUp = {};
-let keysPressed = {};
-let keysDownTime = {};
-let keysUpTime = {}; // <-- NUEVO
-
-export { keysDown, keysUp, keysPressed, projectiles, keysDownTime, keysUpTime };
-
-// Control sets (para filtrar qué keys interesan a cada jugador)
-const p1ControlKeys = new Set(['w','a','s','d','i','o']);
-const p2ControlKeys = new Set(['arrowup','arrowleft','arrowdown','arrowright','b','n']);
-
-window.addEventListener("keydown", (e) => {
-  const key = e.key.toLowerCase();
-  if (!keysDown[key]) {
-    keysPressed[key] = true; // just pressed
-    keysDownTime[key] = millis(); // <-- guardar tiempo del keydown
-  }
-  keysDown[key] = true;
-  keysUp[key] = false;
-
-  // enviar al buffer del fighter correspondiente (si ya cargados)
-  if (playersReady) {
-    if (player1 && p1ControlKeys.has(key)) player1.addInputFromKey(key);
-    if (player2 && p2ControlKeys.has(key)) player2.addInputFromKey(key);
-  }
-});
-
-window.addEventListener("keyup", (e) => {
-  const key = e.key.toLowerCase();
-  keysDown[key] = false;
-  keysUp[key] = true;
-  keysUpTime[key] = millis(); // <-- registramos cuándo se soltó
-  // opcional: borrar keysDownTime si quieres
-  delete keysDownTime[key];
-});
-
-
-
 async function setup() {
   createCanvas(800, 400);
 
-  const tyemanIdleLayers = await loadPiskel('src/tyeman/tyeman_idle.piskel');
-  const tyemanWalkLayers = await loadPiskel('src/tyeman/tyeman_walk.piskel');
-  const tyemanJumpLayers = await loadPiskel('src/tyeman/tyeman_jump.piskel');
-  const tyemanFallLayers = await loadPiskel('src/tyeman/tyeman_fall.piskel');
-  const tyemanRunLayers = await loadPiskel('src/tyeman/tyeman_run.piskel');
-  const tyemanPunchLayers = await loadPiskel('src/tyeman/tyeman_punch.piskel');
-  const tyemanPunch2Layers = await loadPiskel('src/tyeman/tyeman_punch_2.piskel');
-  const tyemanPunch3Layers = await loadPiskel('src/tyeman/tyeman_punch_3.piskel');
-  const tyemanKickLayers = await loadPiskel('src/tyeman/tyeman_kick.piskel');
-  const tyemanCrouchLayers = await loadPiskel('src/tyeman/tyeman_crouch.piskel');
-  const tyemanCrouchWalkLayers = await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel');
-  const tyemanHitLayers = await loadPiskel('src/tyeman/tyeman_hit.piskel');
-  const tyemanShootLayers = await loadPiskel('src/tyeman/tyeman_shoot.piskel');
-  const tyemanProjectileLayers = await loadPiskel('src/tyeman/tyeman_projectile.piskel');
-
-  const sbluerIdleLayers = await loadPiskel('src/sbluer/sbluer_idle.piskel');
-  const sbluerWalkLayers = await loadPiskel('src/sbluer/sbluer_walk.piskel');
-  const sbluerJumpLayers = await loadPiskel('src/sbluer/sbluer_jump.piskel');
-  const sbluerFallLayers = await loadPiskel('src/sbluer/sbluer_fall.piskel');
-  const sbluerRunLayers = await loadPiskel('src/sbluer/sbluer_run.piskel');
-  const sbluerPunchLayers = await loadPiskel('src/sbluer/sbluer_punch.piskel');
-  const sbluerPunch2Layers = await loadPiskel('src/sbluer/sbluer_punch_2.piskel');
-  const sbluerPunch3Layers = await loadPiskel('src/sbluer/sbluer_punch_3.piskel');
-  const sbluerKickLayers = await loadPiskel('src/sbluer/sbluer_kick.piskel');
-  const sbluerCrouchLayers = await loadPiskel('src/sbluer/sbluer_crouch.piskel');
-  const sbluerCrouchWalkLayers = await loadPiskel('src/sbluer/sbluer_crouch_walk.piskel');
-  const sbluerHitLayers = await loadPiskel('src/sbluer/sbluer_hit.piskel');
+  const tyeman = await loadTyemanAssets();
+  const sbluer = await loadSbluerAssets();
 
   player1 = new Fighter(100, color(255, 100, 100), 'p1',
-    tyemanIdleLayers, tyemanWalkLayers, tyemanJumpLayers, tyemanFallLayers, tyemanRunLayers,
-    tyemanPunchLayers, tyemanPunch2Layers, tyemanPunch3Layers,
-    tyemanKickLayers, tyemanKickLayers, tyemanKickLayers,
-    tyemanCrouchLayers, tyemanCrouchWalkLayers, tyemanHitLayers,tyemanShootLayers,tyemanProjectileLayers
+    tyeman.idle, tyeman.walk, tyeman.jump, tyeman.fall, tyeman.run,
+    tyeman.punch, tyeman.punch2, tyeman.punch3,
+    tyeman.kick, tyeman.kick, tyeman.kick,
+    tyeman.crouch, tyeman.crouchWalk, tyeman.hit,
+    tyeman.shoot, tyeman.projectile
   );
 
   player2 = new Fighter(600, color(100, 100, 255), 'p2',
-    sbluerIdleLayers, sbluerWalkLayers, sbluerJumpLayers, sbluerFallLayers, sbluerRunLayers,
-    sbluerPunchLayers, sbluerPunch2Layers, sbluerPunch3Layers,
-    sbluerKickLayers, sbluerKickLayers, sbluerKickLayers,
-    sbluerCrouchLayers, sbluerCrouchWalkLayers, sbluerHitLayers,tyemanShootLayers,tyemanProjectileLayers
+    sbluer.idle, sbluer.walk, sbluer.jump, sbluer.fall, sbluer.run,
+    sbluer.punch, sbluer.punch2, sbluer.punch3,
+    sbluer.kick, sbluer.kick, sbluer.kick,
+    sbluer.crouch, sbluer.crouchWalk, sbluer.hit,
+    tyeman.shoot, tyeman.projectile
   );
 
-  // asignar oponentes para auto-facing
   player1.opponent = player2;
   player2.opponent = player1;
+
+  initInput({ p1: player1, p2: player2, ready: true });
   playersReady = true;
 }
 
@@ -110,7 +50,6 @@ function draw() {
     return;
   }
 
-  // Actualizar input y física
   player1.handleInput();
   player2.handleInput();
 
@@ -121,191 +60,48 @@ function draw() {
   player2.update();
   projectiles.forEach(p => p.update());
 
-  // Actualizar cámara
   cam = updateCamera(player1, player2, cam);
 
-  // ------------------- MUNDO -------------------
   push();
-  applyCamera(cam);  // Todo lo que se dibuja aquí se mueve con la cámara
-
+  applyCamera(cam);
   drawBackground();
 
-  // Piso del mundo
   fill(80, 50, 20);
   rect(0, height - 40, width, 40);
 
-  // Personajes
   player1.display();
   player2.display();
+  // actualizar y dibujar proyectiles
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    p.update();
+    p.display();
 
-  // Proyectiles
+    if (p.offscreen()) {
+      projectiles.splice(i, 1);
+    } else if (p.hits(player1) && p.ownerId !== player1.id) {
+      player1.hp -= 1;
+      projectiles.splice(i, 1);
+    } else if (p.hits(player2) && p.ownerId !== player2.id) {
+      player2.hp -= 1;
+      projectiles.splice(i, 1);
+    }
+  }
+
   for (let i = projectiles.length - 1; i >= 0; i--) {
     projectiles[i].display();
     if (projectiles[i].hits(player2)) player2.hit();
     if (projectiles[i].hits(player1)) player1.hit();
     if (projectiles[i].offscreen()) projectiles.splice(i, 1);
   }
-  pop();  // FIN MUNDO
+  pop();
 
-  // ------------------- HUD -------------------
-  // Health bars y cualquier info en pantalla fija
-  fill(255);
-  textSize(20);
   drawHealthBars(player1, player2);
   drawInputQueues(player1, player2);
 
-  // limpiar flags one-frame
-  for (let k in keysPressed) keysPressed[k] = false;
-  for (let k in keysUp) keysUp[k] = false;
-}
-
-function keyPressed() {
-  if (!playersReady) return;
-  player1.handleInput();
-  player2.handleInput();
-}
-
-function keyReleased() {
-  if (!playersReady) return;
-  player1.handleInput();
-  player2.handleInput();
-}
-
-// Dibuja las colas de inputs en el HUD, entre las barras de vida
-function drawInputQueues(p1, p2) {
-  const centerX = width / 2;
-  const y = 40;
-  const spacing = 22;
-  textSize(14);
-  textAlign(CENTER, CENTER);
-
-  // helper para dibujar buffer de un jugador
-  const drawBuffer = (buf, x) => {
-    // limitar visibles por bufferDuration (ya hecho en Fighter)
-    for (let i = 0; i < buf.length; i++) {
-      const entry = buf[i];
-      const age = millis() - entry.time;
-      const alpha = map(age, 0, (p1.inputBufferDuration || 1400), 255, 0);
-      fill(255, alpha);
-      noStroke();
-      text(entry.symbol, x + i * spacing - (buf.length - 1) * spacing / 2, y);
-    }
-  };
-
-  // player1 left of center, player2 right of center
-  drawBuffer(p1.inputBuffer, centerX - 140);
-  drawBuffer(p2.inputBuffer, centerX + 140);
-}
-
-// copia de tus utilidades visuales
-function drawHealthBars(p1, p2) {
-  const barWidth = 200;
-  const barHeight = 20;
-  const xOffset = 20;
-  const yOffset = 10;
-
-  function drawWavyBorder(x, y, w, h) {
-    noFill();
-    stroke(0);
-    strokeWeight(6);
-    beginShape();
-    for (let i = 0; i <= w; i += 5) {
-      let offset = sin((i + frameCount * 5) * 0.2) * 2;
-      vertex(x + i, y + offset); // borde superior
-    }
-    for (let i = 0; i <= h; i += 5) {
-      let offset = cos((i + frameCount * 5) * 0.2) * 2;
-      vertex(x + w + offset, y + i); // borde derecho
-    }
-    for (let i = w; i >= 0; i -= 5) {
-      let offset = sin((i + frameCount * 5) * 0.2) * 2;
-      vertex(x + i, y + h + offset); // borde inferior
-    }
-    for (let i = h; i >= 0; i -= 5) {
-      let offset = cos((i + frameCount * 5) * 0.2) * 2;
-      vertex(x + offset, y + i); // borde izquierdo
-    }
-    endShape(CLOSE);
-  }
-
-  // ---- Player 1 ----
-  push();
-  translate(xOffset, yOffset);
-  noStroke();
-
-  // Fondo infernal con gradiente dinámico
-  for (let i = 0; i < barHeight; i++) {
-    let fade = map(i, 0, barHeight, 0, 255);
-    let r = 200 + 55 * sin(frameCount * 0.1 + i * 0.3);
-    let g = 30 + 150 * sin(frameCount * 0.2 + i * 0.5);
-    let b = 0 + 100 * cos(frameCount * 0.15 + i * 0.4);
-    fill(r, g, b, fade);
-    rect(0, i, barWidth, 1);
-  }
-
-  // Vida actual con llamas
-  const p1HealthWidth = map(p1.hp, 0, 10, 0, barWidth);
-  for (let i = 0; i < barHeight; i++) {
-    let wave = sin(frameCount * 0.3 + i) * 2;
-    let r = 255;
-    let g = 50 + 205 * sin(frameCount * 0.1 + i);
-    let b = 0;
-    fill(r, g, b);
-    rect(0, i + wave, p1HealthWidth, 1);
-  }
-
-  // Contorno wavy
-  drawWavyBorder(0, 0, barWidth, barHeight);
-  pop();
-
-  // ---- Player 2 ----
-  push();
-  translate(width - xOffset - barWidth, yOffset);
-  noStroke();
-
-  // Fondo infernal dinámico invertido
-  for (let i = 0; i < barHeight; i++) {
-    let fade = map(i, 0, barHeight, 0, 255);
-    let r = 180 + 75 * cos(frameCount * 0.1 + i * 0.2);
-    let g = 0 + 180 * sin(frameCount * 0.15 + i * 0.4);
-    let b = 20 + 100 * cos(frameCount * 0.2 + i * 0.3);
-    fill(r, g, b, fade);
-    rect(0, i, barWidth, 1);
-  }
-
-  // Vida actual
-  const p2HealthWidth = map(p2.hp, 0, 10, 0, barWidth);
-  for (let i = 0; i < barHeight; i++) {
-    let wave = cos(frameCount * 0.25 + i) * 2;
-    let r = 255;
-    let g = 50 + 205 * cos(frameCount * 0.1 + i);
-    let b = 0;
-    fill(r, g, b);
-    rect(barWidth - p2HealthWidth, i + wave, p2HealthWidth, 1);
-  }
-
-  // Contorno wavy
-  drawWavyBorder(0, 0, barWidth, barHeight);
-  pop();
-}
-
-function drawBackground() {
-  const skyColors = [
-    color(135, 206, 235),
-    color(255, 140, 0),
-    color(0, 0, 0),
-    color(25, 25, 112)
-  ];
-  const speed = 0.00002;
-  const t = (frameCount * speed) % 1;
-  const total = skyColors.length;
-  const index1 = floor(frameCount * speed) % total;
-  const index2 = (index1 + 1) % total;
-  const c = lerpColor(skyColors[index1], skyColors[index2], t);
-  background(c);
+  clearFrameFlags();
 }
 
 window.setup = setup;
 window.draw = draw;
-window.keyPressed = keyPressed;
-window.keyReleased = keyReleased;
+export { projectiles };

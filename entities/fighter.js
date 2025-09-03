@@ -1,6 +1,8 @@
 // entities/fighter.js
 import { Projectile } from './projectile.js';
-import { projectiles, keysDown, keysUp, keysPressed, keysDownTime, keysUpTime } from '../core/main.js';
+import { projectiles } from '../core/main.js';
+import { initInput, clearFrameFlags, keysDown, keysPressed,keysUp ,keysDownTime  } from '../core/input.js';
+
 
 class Fighter {
   constructor(
@@ -552,7 +554,8 @@ class Fighter {
       this.attackDuration = this.actions.hadouken.duration || 600;
       const dir = this.facing === 1 ? 1 : -1;
       const px = Math.round(this.x + (dir === 1 ? this.w : 0));
-      const py = Math.round(this.y + this.h / 2);
+      // const py = Math.round(this.y + this.h / 2);
+const py = Math.round(this.y + this.h / 2 - 12); // ajusta -12 o lo que quede bien
 
       // <- PASAMOS this.shootFramesByLayer al constructor
       projectiles.push(new Projectile(px, py, dir, this.id, this.projectileFramesByLayer, {
