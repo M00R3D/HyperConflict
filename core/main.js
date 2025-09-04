@@ -31,7 +31,7 @@ async function setup() {
     sbluer.punch, sbluer.punch2, sbluer.punch3,
     sbluer.kick, sbluer.kick, sbluer.kick,
     sbluer.crouch, sbluer.crouchWalk, sbluer.hit,
-    tyeman.shoot, tyeman.projectile
+    sbluer.shoot, sbluer.projectile
   );
 
   player1.opponent = player2;
