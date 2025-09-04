@@ -1,8 +1,12 @@
 // entities/fighter.js
-import { Projectile } from './projectile.js';
-import { projectiles } from '../core/main.js';
-import { initInput, clearFrameFlags, keysDown, keysPressed,keysUp ,keysDownTime  } from '../core/input.js';
-
+import * as Init from './fighter/init.js';
+import * as Buffer from './fighter/buffer.js';
+import * as Specials from './fighter/specials.js';
+import * as Movement from './fighter/movement.js';
+import * as Attacks from './fighter/attacks.js';
+import * as Hitbox from './fighter/hitbox.js';
+import * as Anim from './fighter/animation.js';
+import * as Display from './fighter/display.js';
 
 class Fighter {
   constructor(
@@ -13,677 +17,85 @@ class Fighter {
     kick2FramesByLayer = [], kick3FramesByLayer = [], crouchFramesByLayer = [],
     crouchWalkFramesByLayer = [], hitFramesByLayer = [], shootFramesByLayer = [], projectileFramesByLayer = []
   ) {
-    // Posición y físicas
-    this.x = x;
-    this.y = height - 72;
-    this.w = 32;
-    this.h = 32;
-    this.col = col;
-    this.hp = 10;
-    this.id = id;
+    // delegar inicialización
+    Init.initBase(this, x, col, id);
+    Init.initFrames(this, {
+      idleFramesByLayer, walkFramesByLayer, jumpFramesByLayer,
+      fallFramesByLayer, runFramesByLayer, punchFramesByLayer,
+      punch2FramesByLayer, punch3FramesByLayer, kickFramesByLayer,
+      kick2FramesByLayer, kick3FramesByLayer, crouchFramesByLayer,
+      crouchWalkFramesByLayer, hitFramesByLayer, shootFramesByLayer, projectileFramesByLayer
+    });
+    Init.initComboAndInput(this);
+    Init.initHitboxes(this);
 
-    this.vx = 0;
-    this.vy = 0;
-    this.gravity = 0.3;
-    this.jumpStrength = -5.67;
-    this.onGround = true;
-
-    this.acceleration = 1.1;
-    this.runAcceleration = 1.01;
-    this.maxSpeed = 4;
-    this.runMaxSpeed = 6;
-    this.friction = 0.1;
-    this.runFriction = 0.051;
-    this.runActive = false;
-
-    this.lastTapTime = { left: 0, right: 0 };
-
-    // frames por acción (por capas)
-    this.idleFramesByLayer = idleFramesByLayer;
-    this.walkFramesByLayer = walkFramesByLayer;
-    this.jumpFramesByLayer = jumpFramesByLayer;
-    this.fallFramesByLayer = fallFramesByLayer;
-    this.runFramesByLayer = runFramesByLayer;
-    this.punchFramesByLayer = punchFramesByLayer;
-    this.punch2FramesByLayer = punch2FramesByLayer;
-    this.punch3FramesByLayer = punch3FramesByLayer;
-    this.kickFramesByLayer = kickFramesByLayer;
-    this.kick2FramesByLayer = kick2FramesByLayer || kickFramesByLayer;
-    this.kick3FramesByLayer = kick3FramesByLayer || kickFramesByLayer;
-    this.crouchFramesByLayer = crouchFramesByLayer;
-    this.crouchWalkFramesByLayer = crouchWalkFramesByLayer;
-    this.hitFramesByLayer = hitFramesByLayer;
-    this.shootFramesByLayer = shootFramesByLayer;
-    this.projectileFramesByLayer = projectileFramesByLayer;
-
-    this.frameIndex = 0;
-    this.frameDelay = 10;
-    this.runFrameDelay = 5;
-    this.facing = 1;
-    this.keys = { left: false, right: false, up: false };
-    this.currentFramesByLayer = idleFramesByLayer;
-    this.crouching = false;
-
-    // Pendientes para manejo de diagonales mantenidas
-    this.waitingForDiagRelease = false;
-    this.pendingSimple = null;
-    this.pendingDiag = null;
-    this.pendingSimpleTime = 0;
-    this.pendingSimpleTimeout = 500;
-
-    // ventana para insertar ↓ entre diagonales opuestas (ms)
-    this.oppositeDiagInsertWindow = 200; // ajusta aquí
-
-    // combos por tecla
-    this.comboChainsByKey = {
-      i: ['punch', 'punch2', 'punch3'],
-      o: ['kick', 'kick2', 'kick3'],
-      b: ['punch', 'punch2', 'punch3'],
-      n: ['kick', 'kick2', 'kick3']
-    };
-
-    // estado de combo por tecla
-    this.comboStepByKey = {};
-    this.lastAttackTimeByKey = {};
-    this.inputLockedByKey = {};
-    for (const k in this.comboChainsByKey) {
-      this.comboStepByKey[k] = 0;
-      this.lastAttackTimeByKey[k] = 0;
-      this.inputLockedByKey[k] = false;
-    }
-
-    this.comboWindow = 250; // ms
-
-    // Estado y ataques
-    this.state = { current: "idle", timer: 0, canCancel: true };
+    // actions (puedes ajustar frameDelay aquí si quieres)
     this.actions = {
-      idle:    { anim: idleFramesByLayer, frameDelay: 10 },
-      walk:    { anim: walkFramesByLayer, frameDelay: 10 },
-      run:     { anim: runFramesByLayer, frameDelay: this.runFrameDelay },
-      jump:    { anim: jumpFramesByLayer, frameDelay: 10 },
-      fall:    { anim: fallFramesByLayer, frameDelay: 10 },
-      punch:   { anim: punchFramesByLayer, frameDelay: 6, duration: 400 },
-      punch2:  { anim: punch2FramesByLayer, frameDelay: 6, duration: 400 },
-      punch3:  { anim: punch3FramesByLayer, frameDelay: 5, duration: 800 },
-      kick:    { anim: kickFramesByLayer, frameDelay: 6, duration: 400 },
+      idle:    { anim: this.idleFramesByLayer, frameDelay: 10 },
+      walk:    { anim: this.walkFramesByLayer, frameDelay: 10 },
+      run:     { anim: this.runFramesByLayer, frameDelay: this.runFrameDelay },
+      jump:    { anim: this.jumpFramesByLayer, frameDelay: 10 },
+      fall:    { anim: this.fallFramesByLayer, frameDelay: 10 },
+      punch:   { anim: this.punchFramesByLayer, frameDelay: 6, duration: 400 },
+      punch2:  { anim: this.punch2FramesByLayer, frameDelay: 6, duration: 400 },
+      punch3:  { anim: this.punch3FramesByLayer, frameDelay: 5, duration: 800 },
+      kick:    { anim: this.kickFramesByLayer, frameDelay: 6, duration: 400 },
       kick2:   { anim: this.kick2FramesByLayer, frameDelay: 6, duration: 400 },
       kick3:   { anim: this.kick3FramesByLayer, frameDelay: 6, duration: 600 },
-      crouch:  { anim: crouchFramesByLayer, frameDelay: 10 },
-      crouchwalk: { anim: crouchWalkFramesByLayer, frameDelay: 10 },
-      hit:     { anim: hitFramesByLayer, frameDelay: 10 },
-      hadouken: { anim: shootFramesByLayer, frameDelay: 6, duration: 600 }
+      crouch:  { anim: this.crouchFramesByLayer, frameDelay: 10 },
+      crouchwalk: { anim: this.crouchWalkFramesByLayer, frameDelay: 10 },
+      hit:     { anim: this.hitFramesByLayer, frameDelay: 10 },
+      hadouken: { anim: this.shootFramesByLayer, frameDelay: 6, duration: 600 }
     };
 
-    // hitboxes
-    this.hitboxes = {
-      idle:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
-      walk:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
-      run:    { offsetX: 7, offsetY: 0, w: 22, h: 32 },
-      jump:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
-      fall:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
-      crouch: { offsetX: 0, offsetY: 16, w: 32, h: 16 },
-      crouchwalk: { offsetX: 0, offsetY: 16, w: 32, h: 16 },
-      punch:  { offsetX: -4, offsetY: 0, w: 32, h: 29 },
-      punch2: { offsetX: -4, offsetY: 0, w: 32, h: 29 },
-      punch3: { offsetX: -4, offsetY: 0, w: 32, h: 29 },
-      kick:   { offsetX: 0, offsetY: 1, w: 32, h: 34 },
-      hit:    { offsetX: 7, offsetY: 0, w: 22, h: 32 },
-      hadouken: { offsetX: 10, offsetY: 10, w: 12, h: 12 }
-    };
-    this.attackHitboxes = {
-      punch: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
-      punch2: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
-      punch3: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
-      kick:  { offsetX: 25, offsetY: 10, w: 30, h: 15 },
-      hadouken: { offsetX: 0, offsetY: 0, w: 20, h: 20 }
-    };
+    // estado inicial
+    this.state = { current: "idle", timer: 0, canCancel: true };
 
-    this.attacking = false;
-    this.attackStartTime = 0;
-    this.attackDuration = 400;
-    this.attackType = null;
-    this.isHit = false;
-    this.hitStartTime = 0;
-    this.hitDuration = 600;
-
-    // Input buffer
-    this.inputBuffer = [];
-    this.inputBufferDuration = 1400; // ms
-    this.inputBufferMax = 20;
-
-    this.diagonalWindow = 120;
-    this.diagonalHoldWindow = 120;
-  }
-
-  setState(newState) {
-    if (this.state.current !== newState) {
-      this.state.current = newState;
-      this.state.timer = 0;
-      const action = this.actions[newState];
-      if (action && action.anim && action.anim.length > 0) {
-        this.currentFramesByLayer = action.anim;
-        this.frameIndex = 0;
-        this.frameDelay = action.frameDelay || 10;
-      } else {
-        this.currentFramesByLayer = [];
-        this.frameIndex = 0;
-      }
+    this.setState('idle');
+    if (!this.currentFramesByLayer.length) {
+    // usa crouch si existe o cualquier anim cargada
+    if (this.crouchFramesByLayer?.length) {
+        this.setState('crouch');
+    } else if (this.idleFramesByLayer?.length) {
+        this.setState('idle');
     }
+}
   }
 
-  // helpers para tipos de símbolo
-  static isDiagonal(sym) {
-    return sym === '↘' || sym === '↙' || sym === '↗' || sym === '↖';
-  }
-  static oppositeDiag(a, b) {
-    return (a === '↙' && b === '↘') || (a === '↘' && b === '↙') ||
-           (a === '↖' && b === '↗') || (a === '↗' && b === '↖');
-  }
+  // delegados
+  setState(newState) { Anim.setState(this, newState); }
+  addInput(symbol) { Buffer.addInput(this, symbol); }
+  addInputFromKey(keyName) { Buffer.addInputFromKey(this, keyName); }
+  trimBuffer() { Buffer.trimBuffer(this); }
+  normalizeDiagonals() { Buffer.normalizeDiagonals(this); }
 
-  // devuelve componente horizontal/vertical de una diagonal (o null)
-  static horizontalOf(sym) {
-    if (sym === '↘') return '→';
-    if (sym === '↗') return '→';
-    if (sym === '↙') return '←';
-    if (sym === '↖') return '←';
-    return null;
-  }
-  static verticalOf(sym) {
-    if (sym === '↘') return '↓';
-    if (sym === '↙') return '↓';
-    if (sym === '↗') return '↑';
-    if (sym === '↖') return '↑';
-    return null;
-  }
+  checkSpecialMoves() { Specials.checkSpecialMoves(this); }
 
-  // Normaliza el buffer para convertir secuencias de diagonales opuestas próximas
-  // en diag1, ↓, diag2 (si están dentro de oppositeDiagInsertWindow).
-  normalizeDiagonals() {
-    const now = millis();
-    const maxGap = this.oppositeDiagInsertWindow || 200;
-    const buf = this.inputBuffer;
-    if (buf.length < 2) return;
+  attack(key) { Attacks.attack(this, key); }
+  attackHits(opponent) { return Attacks.attackHits(this, opponent); }
+  shoot() { Attacks.shoot(this); }
+  hit() { Attacks.hit(this); }
 
-    // Recorremos el buffer buscando pares (i,j) donde buf[i] y buf[j] son diagonales opuestas
-    // y j-i <= 3 (permitir un pequeño número de símbolos intermedios). Reemplazamos lo que haya
-    // entre i y j por un único '↓' (si no hay ya).
-    let i = 0;
-    while (i < buf.length - 1) {
-      const s_i = buf[i].symbol;
-      if (!Fighter.isDiagonal(s_i)) { i++; continue; }
+  getCurrentHitbox() { return Hitbox.getCurrentHitbox(this); }
+  getAttackHitbox() { return Hitbox.getAttackHitbox(this); }
+  getKeysForSymbol(sym) { return Hitbox.getKeysForSymbol(this, sym); }
 
-      let found = false;
-      const maxJ = Math.min(buf.length - 1, i + 3); // limitamos la ventana de búsqueda
-      for (let j = i + 1; j <= maxJ; j++) {
-        const s_j = buf[j].symbol;
-        if (!Fighter.isDiagonal(s_j)) continue;
-        if (!Fighter.oppositeDiag(s_i, s_j)) continue;
-
-        // comprobar tiempo entre primera y segunda diagonal
-        const timeDiff = Math.abs(buf[j].time - buf[i].time);
-        if (timeDiff <= maxGap) {
-          // si ya existe un '↓' entre i y j, no hacemos nada
-          let hasDown = false;
-          for (let k = i + 1; k < j; k++) {
-            if (buf[k].symbol === '↓') { hasDown = true; break; }
-          }
-          if (!hasDown) {
-            // reemplazar el rango (i+1 .. j-1) por un único '↓'
-            const downTime = Math.round((buf[i].time + buf[j].time) / 2);
-            // borrar entre i+1 y j-1 (cantidad j-i-1)
-            const removeCount = Math.max(0, j - i - 1);
-            // splice para dejar: [.., buf[i], {↓}, buf[j], ..]
-            buf.splice(i + 1, removeCount, { symbol: '↓', time: downTime });
-            // ajustar índices: después de la operación seguimos después de buf[j] (que ahora es i+2)
-            i = i + 2;
-            found = true;
-            break;
-          } else {
-            // si ya había ↓ en medio, no hace falta reemplazar: saltamos j
-            i = j;
-            found = true;
-            break;
-          }
-        }
-      }
-      if (!found) i++;
-    }
-
-    // acotar tamaño y tiempos por si acaso
-    this.trimBuffer();
-  }
-
-  // addInput evita repeticiones consecutivas iguales
-  addInput(symbol) {
-    if (!symbol) return;
-    const now = millis();
-
-    const last = this.inputBuffer.length > 0 ? this.inputBuffer[this.inputBuffer.length - 1] : null;
-    if (last && last.symbol === symbol) {
-      return;
-    }
-
-    // inserción normal
-    this.inputBuffer.push({ symbol, time: now });
-
-    // tras cada inserción intentamos normalizar diagonales opuestas cercanas
-    this.normalizeDiagonals();
-    this.trimBuffer();
-  }
-
-  trimBuffer() {
-    const now = millis();
-    this.inputBuffer = this.inputBuffer.filter(i => now - i.time <= this.inputBufferDuration);
-    if (this.inputBuffer.length > this.inputBufferMax) {
-      this.inputBuffer.splice(0, this.inputBuffer.length - this.inputBufferMax);
-    }
-  }
-
-  // Nuevo comportamiento: insertar diagonal ANTES de la dirección nueva (si aplica),
-  // manteniendo las direcciones individuales.
-  addInputFromKey(keyName) {
-    const now = millis();
-
-    const dirMapP1 = { 'w': '↑', 's': '↓', 'a': '←', 'd': '→' };
-    const dirMapP2 = { 'arrowup': '↑', 'arrowdown': '↓', 'arrowleft': '←', 'arrowright': '→' };
-
-    // botones ataque
-    if (this.id === 'p1') {
-      if (keyName === 'i') { this.addInput('P'); return; }
-      if (keyName === 'o') { this.addInput('K'); return; }
-    } else {
-      if (keyName === 'b') { this.addInput('P'); return; }
-      if (keyName === 'n') { this.addInput('K'); return; }
-    }
-
-    const thisSym = (this.id === 'p1') ? dirMapP1[keyName] : dirMapP2[keyName];
-    if (!thisSym) return;
-
-    // parámetros de tolerancia (si los usas más adelante)
-    const diagCombineWindow = this.diagonalWindow || 160; // ms, para buffer
-    const releaseTolerance = this.releaseTolerance || 180; // ms, tolerancia tras soltar tecla
-    const recentDuplicateWindow = 40; // ms, ventana corta para detectar entradas recién añadidas
-
-    // helper: obtener lista de keys para other dirs
-    const otherDirKeys = (this.id === 'p1') ? ['w','s','a','d'].filter(k => k !== keyName)
-                                           : ['arrowup','arrowdown','arrowleft','arrowright'].filter(k => k !== keyName);
-
-    // hallar candidate foundOther (primero prefiero teclas mantenidas, luego buffer dentro de diagCombineWindow)
-    let foundOther = null;
-    let foundOtherKey = null;
-
-    // 1) ¿hay otra tecla físicamente mantenida? (prioritario)
-    for (const k of otherDirKeys) {
-      if (keysDown[k]) {
-        const otherSym = (this.id === 'p1') ? ({w:'↑', s:'↓', a:'←', d:'→'})[k] : ({arrowup:'↑', arrowdown:'↓', arrowleft:'←', arrowright:'→'})[k];
-        foundOther = otherSym;
-        foundOtherKey = k;
-        break;
-      }
-    }
-
-    // 2) si no, buscar en buffer la última direccional dentro de diagCombineWindow
-    if (!foundOther) {
-      const buf = this.inputBuffer;
-      for (let i = buf.length - 1; i >= 0; i--) {
-        const s = buf[i].symbol;
-        if (['↑','↓','←','→','↗','↖','↘','↙'].includes(s)) {
-          if (now - buf[i].time <= diagCombineWindow) {
-            foundOther = s;
-          }
-          break;
-        }
-      }
-    }
-
-    // Si hay candidata, intentar formar diagonal con tolerancia a gaps (releaseTolerance)
-    if (foundOther) {
-      const diag = Fighter.combineDirections(foundOther, thisSym);
-      if (diag) {
-        const vertical = ['↑','↓'];
-        const horizontal = ['←','→'];
-
-        // ¿vino foundOther desde tecla mantenida reciente?
-        let fromHeldRecent = false;
-        if (foundOtherKey) {
-          const downTime = keysDownTime[foundOtherKey] || 0;
-          fromHeldRecent = (now - downTime) <= releaseTolerance;
-        } else {
-          // si no vino desde held, intentar ver si hubo un keyUp reciente para alguna key que corresponda
-          const candidateKeys = (this.id === 'p1') ? {'w':'↑','s':'↓','a':'←','d':'→'} : {'arrowup':'↑','arrowdown':'↓','arrowleft':'←','arrowright':'→'};
-          for (const k in candidateKeys) {
-            if (candidateKeys[k] === foundOther) {
-              const upT = keysUpTime[k] || 0;
-              if (now - upT <= releaseTolerance) { fromHeldRecent = true; foundOtherKey = k; break; }
-            }
-          }
-        }
-
-        // o bien vino del buffer dentro de diagCombineWindow
-        let fromBufferRecent = false;
-        for (let i = this.inputBuffer.length - 1; i >= 0; i--) {
-          if (this.inputBuffer[i].symbol === foundOther && (now - this.inputBuffer[i].time) <= diagCombineWindow) {
-            fromBufferRecent = true;
-            break;
-          }
-        }
-
-        // Si alguna condición de tolerancia se cumple, formamos diagonal
-        if (fromHeldRecent || fromBufferRecent) {
-          // limpieza: si el último símbolo del buffer es precisamente thisSym y es muy reciente,
-          // lo eliminamos para reinsertarlo en el orden correcto (evitar ...→,↘,→)
-          const buf = this.inputBuffer;
-          if (buf.length > 0) {
-            const last = buf[buf.length - 1];
-            if (last.symbol === thisSym && (now - last.time) <= recentDuplicateWindow) {
-              buf.splice(buf.length - 1, 1); // quitarlo
-            }
-          }
-
-          const diagKeys = this.getKeysForSymbol(diag);
-          const isDiagHeld = (diagKeys.length === 2) && diagKeys.every(k => keysDown[k]);
-
-          if (isDiagHeld) {
-            // si la diagonal está mantenida, añadimos la diagonal ahora y dejamos la componente lateral
-            // pendiente hasta que suelte la diagonal (esto evita que se intercale componente lateral antes).
-            this.addInput(diag);
-
-            if (vertical.includes(thisSym) && horizontal.includes(foundOther)) {
-              this.pendingSimple = foundOther;
-            } else if (horizontal.includes(thisSym) && vertical.includes(foundOther)) {
-              this.pendingSimple = thisSym;
-            } else {
-              this.pendingSimple = horizontal.includes(foundOther) ? foundOther : thisSym;
-            }
-
-            this.pendingDiag = diag;
-            this.pendingSimpleTime = now;
-            this.waitingForDiagRelease = true;
-            // normalizamos por si al añadir la diagonal se creó un patrón que debe convertirse en ↓
-            this.normalizeDiagonals();
-            this.trimBuffer();
-            return;
-          } else {
-            // no está mantenida la diagonal: añadimos diag + componentes ahora
-            if (vertical.includes(thisSym) && horizontal.includes(foundOther)) {
-              this.addInput(thisSym);
-              this.addInput(diag);
-              this.addInput(foundOther);
-            } else if (horizontal.includes(thisSym) && vertical.includes(foundOther)) {
-              this.addInput(foundOther);
-              this.addInput(diag);
-              this.addInput(thisSym);
-            } else {
-              this.addInput(diag);
-              this.addInput(thisSym);
-            }
-
-            // normalizar por si corresponde insertar '↓'
-            this.normalizeDiagonals();
-            this.trimBuffer();
-            return; // ya añadimos la diagonal + orden
-          }
-        }
-        // si no cumple tolerancia, no formamos diagonal y caemos abajo a addInput(thisSym)
-      }
-    }
-
-    // si no hay diagonal o no se formó por tolerancia, añadir la dirección simple
-    this.addInput(thisSym);
-  }
-
-  static combineDirections(a, b) {
-    const partsOf = sym => {
-      if (sym === '↘') return ['↓','→'];
-      if (sym === '↙') return ['↓','←'];
-      if (sym === '↗') return ['↑','→'];
-      if (sym === '↖') return ['↑','←'];
-      return [sym];
-    };
-    const A = partsOf(a);
-    const B = partsOf(b);
-
-    for (const ca of A) {
-      for (const cb of B) {
-        if ((ca === '↓' && cb === '→') || (ca === '→' && cb === '↓')) return '↘';
-        if ((ca === '↓' && cb === '←') || (ca === '←' && cb === '↓')) return '↙';
-        if ((ca === '↑' && cb === '→') || (ca === '→' && cb === '↑')) return '↗';
-        if ((ca === '↑' && cb === '←') || (ca === '←' && cb === '↑')) return '↖';
-      }
-    }
-    return null;
-  }
-
-  bufferEndsWith(sequence) {
-    if (!sequence || sequence.length === 0) return false;
-    const buf = this.inputBuffer.map(i => i.symbol);
-    if (buf.length < sequence.length) return false;
-    for (let i = 0; i < sequence.length; i++) {
-      if (buf[buf.length - sequence.length + i] !== sequence[i]) return false;
-    }
-    return true;
-  }
-
-  // flexibleEndsWith: compara el final del buffer con seq PERMITIENDO que una diagonal
-  // en el buffer satisfaga una componente vertical/horizontal de la secuencia.
-  flexibleEndsWith(bufferSymbols, seq) {
-    if (!seq || seq.length === 0) return false;
-    if (bufferSymbols.length < seq.length) return false;
-
-    // helper: devuelve true si 'actual' puede contar como 'required'
-    const symbolMatches = (required, actual) => {
-      if (required === actual) return true;
-      // vertical/horizontal component checks
-      const diagVerticalMap = { '↘': '↓', '↙': '↓', '↗': '↑', '↖': '↑' };
-      const diagHorizontalMap = { '↘': '→', '↙': '←', '↗': '→', '↖': '←' };
-
-      if ((required === '↓' || required === '↑') && diagVerticalMap[actual] === required) return true;
-      if ((required === '→' || required === '←') && diagHorizontalMap[actual] === required) return true;
-
-      return false;
-    };
-
-    const startIdx = bufferSymbols.length - seq.length;
-    for (let i = 0; i < seq.length; i++) {
-      const b = bufferSymbols[startIdx + i];
-      const s = seq[i];
-      if (!symbolMatches(s, b)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  bufferConsumeLast(n) {
-    if (n <= 0) return;
-    this.inputBuffer.splice(Math.max(0, this.inputBuffer.length - n), n);
-  }
-
-  // Secuencias base de especiales (siempre definidas mirando hacia la derecha lógica)
-  specialMoves = {
-    hadouken: ['↓','↘','→','P'],
-    shoryuken: ['→','↓','↘','P'],
-    tatsumaki: ['↓','↙','←','K']
-  };
-
-  // espejo de un símbolo individual (horizontal flip)
-  mirrorSymbol(sym) {
-    const map = {
-      '→': '←', '←': '→',
-      '↘': '↙', '↙': '↘',
-      '↗': '↖', '↖': '↗'
-    };
-    return map[sym] || sym;
-  }
-
-  // Comprueba especiales usando flexibleEndsWith y teniendo en cuenta facing:
-  checkSpecialMoves() {
-    const bufSymbols = this.inputBuffer.map(i => i.symbol);
-
-    for (const moveName in this.specialMoves) {
-      let seq = this.specialMoves[moveName];
-
-      // si estamos volteados, mirrorizamos la secuencia para comprobarla directamente
-      if (this.facing === -1) {
-        seq = seq.map(s => this.mirrorSymbol(s));
-      }
-
-      // 1) comprobación flexible (permite que diagonales contengan componentes)
-      if (this.flexibleEndsWith(bufSymbols, seq)) {
-        this.doSpecial(moveName);
-        this.bufferConsumeLast(seq.length);
-        return;
-      }
-
-      // 2) fallback: comprobación literal por si quieres que diag exactos entren también
-      if (this.bufferEndsWith(seq)) {
-        this.doSpecial(moveName);
-        this.bufferConsumeLast(seq.length);
-        return;
-      }
-    }
-  }
-
-    doSpecial(moveName) {
-      // dentro de doSpecial, caso hadouken:
-      if (moveName === 'hadouken') {
-        this.setState('hadouken');
-        this.attackType = 'hadouken';
-        this.attacking = true;
-        this.attackStartTime = millis();
-        this.attackDuration = this.actions.hadouken.duration || 600;
-
-        const dir = this.facing === 1 ? 1 : -1;
-        // posición inicial del proyectil, ajustar para que salga desde frente del personaje
-        const px = Math.round(this.x + (dir === 1 ? this.w + 4 : -4));
-        const py = Math.round(this.y + this.h / 2 - 6); // ajuste vertical fino
-
-        // <-- USAR los frames de proyectil que llegaron al Fighter (this.projectileFramesByLayer)
-        // Llamamos al constructor pasando: x,y,dir,typeId,ownerId,resources(opts null),opts(empty),framesByLayer
-        const p = new Projectile(px, py, dir, 1 /*typeId*/, this.id /*ownerId*/, null /*resources*/, {}, this.projectileFramesByLayer);
-        projectiles.push(p);
-      }
-      else if (moveName === 'shoryuken') {
-        this.setState('punch3');
-        this.attackType = 'punch3';
-        this.attacking = true;
-        this.attackStartTime = millis();
-        this.attackDuration = this.actions.punch3.duration || 800;
-      } else if (moveName === 'tatsumaki') {
-        this.setState('kick3');
-        this.attackType = 'kick3';
-        this.attacking = true;
-        this.attackStartTime = millis();
-        this.attackDuration = this.actions.kick3.duration || 600;
-      }
-    }
-
+  handleInput() { return Buffer.handleInput(this); }
+  handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
 
   update() {
-    const now = millis();
-
-    // --- Manejo de simple pendiente tras diagonal mantenida ---
-    if (this.waitingForDiagRelease && this.pendingDiag) {
-      const diagKeys = this.getKeysForSymbol(this.pendingDiag);
-      const stillHeld = (diagKeys.length === 2) && diagKeys.every(k => keysDown[k]);
-
-      if (!stillHeld || (now - this.pendingSimpleTime) > this.pendingSimpleTimeout) {
-        if (this.pendingSimple) this.addInput(this.pendingSimple);
-        this.waitingForDiagRelease = false;
-        this.pendingSimple = null;
-        this.pendingDiag = null;
-        this.pendingSimpleTime = 0;
-      }
-    }
-
+    // pequeñas responsabilidades delegadas:
+    Buffer.handlePendingDiagRelease(this);
     this.trimBuffer();
+    Attacks.updateAttackState(this);
+    Buffer.unlockInputsIfNeeded(this);
+    Buffer.resetCombosIfExpired(this);
 
-    // terminar ataque
-    if (this.attacking) {
-      if (now - this.attackStartTime > this.attackDuration) {
-        this.attacking = false;
-        this.attackType = null;
-      }
-    }
+    Movement.updateMovement(this);
 
-    // desbloquear inputs por tecla si la animación terminó
-    for (const key in this.inputLockedByKey) {
-      if (this.inputLockedByKey[key]) {
-        const last = this.lastAttackTimeByKey[key] || 0;
-        if (!this.attacking || (now - last > this.attackDuration + 10)) {
-          this.inputLockedByKey[key] = false;
-        }
-      }
-    }
-
-    // reset combos vencidos
-    for (const key in this.lastAttackTimeByKey) {
-      if (this.lastAttackTimeByKey[key] && (now - this.lastAttackTimeByKey[key] > this.comboWindow)) {
-        this.comboStepByKey[key] = 0;
-      }
-    }
-
-    // Movimiento horizontal
-    const acc = this.runActive ? this.runAcceleration : this.acceleration;
-    const maxSpd = this.runActive ? this.runMaxSpeed : this.maxSpeed;
-    const friction = this.runActive ? this.runFriction : this.friction;
-
-    if (this.keys.left && this.state.current !== "fall" && this.state.current !== "jump") this.vx -= acc;
-    if (this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") this.vx += acc;
-
-    if (!this.keys.left && !this.keys.right && this.state.current !== "fall" && this.state.current !== "jump") {
-      if (this.vx > 0) this.vx = Math.max(0, this.vx - friction);
-      if (this.vx < 0) this.vx = Math.min(0, this.vx + friction);
-    }
-
-    if (this.keys.left) this.facing = -1;
-    if (this.keys.right) this.facing = 1;
-
-    this.vx = constrain(this.vx, -maxSpd, maxSpd);
-    this.x += this.vx;
-
-    // push para evitar superposición con oponente
-    if (this.opponent) {
-      const myHB = this.getCurrentHitbox();
-      const oppHB = this.opponent.getCurrentHitbox();
-
-      if (
-        myHB.x < oppHB.x + oppHB.w &&
-        myHB.x + myHB.w > oppHB.x &&
-        myHB.y < oppHB.y + oppHB.h &&
-        myHB.y + myHB.h > oppHB.y
-      ) {
-        const myCenter = myHB.x + myHB.w / 2;
-        const oppCenter = oppHB.x + oppHB.w / 2;
-        const halfSum = myHB.w / 2 + oppHB.w / 2;
-        const dist = Math.abs(myCenter - oppCenter);
-        const overlap = Math.max(0, halfSum - dist);
-
-        if (overlap > 0.0001) {
-          const pushAmount = overlap / 2 + 0.5;
-          if (myCenter < oppCenter) {
-            this.x = constrain(this.x - pushAmount, 0, width - this.w);
-            this.opponent.x = constrain(this.opponent.x + pushAmount, 0, width - this.opponent.w);
-          } else {
-            this.x = constrain(this.x + pushAmount, 0, width - this.w);
-            this.opponent.x = constrain(this.opponent.x - pushAmount, 0, width - this.opponent.w);
-          }
-        }
-      }
-    }
-
-    // gravedad y salto
-    this.vy += this.gravity;
-    this.y += this.vy;
-    if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
-    else this.onGround = false;
-
-    this.x = constrain(this.x, 0, width - this.w);
-
-    // revisar especiales
     this.checkSpecialMoves();
 
-    // cambiar estado visual según prioridad
+    // prioridad de estados + anim
     if (this.isHit) this.setState("hit");
     else if (this.attacking && this.attackType) this.setState(this.attackType);
     else if (!this.onGround) this.setState(this.vy < 0 ? "jump" : "fall");
@@ -693,239 +105,15 @@ class Fighter {
     else if (this.keys.left || this.keys.right) this.setState("walk");
     else this.setState("idle");
 
-    // animación por frames
-    const framesByLayer = this.currentFramesByLayer || [];
-    if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
-      if (frameCount % this.frameDelay === 0) {
-        if (this.crouching) {
-          if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
-          else if (this.state.current === "crouchwalk") this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-        } else if (this.onGround || this.attacking) {
-          this.frameIndex = (this.frameIndex + 1) % framesByLayer[0].length;
-        } else if (this.frameIndex < framesByLayer[0].length - 1) this.frameIndex++;
-      }
-    } else this.frameIndex = 0;
+    Anim.updateAnimation(this);
 
-    if (this.opponent) this.autoFace(this.opponent);
+    if (this.opponent) Movement.autoFace(this, this.opponent);
+
     this.state.timer++;
-
-    // salir de hit
-    if (this.isHit && millis() - this.hitStartTime >= this.hitDuration) {
-      this.isHit = false;
-      this.setState("idle");
-    }
+    Anim.exitHitIfElapsed(this);
   }
 
-  display() {
-    const stateText = this.state.current;
-    const framesByLayer = this.currentFramesByLayer || this.idleFramesByLayer;
-
-    if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
-      push();
-      if (this.facing === -1) {
-        translate(this.x + this.w / 2, 0);
-        scale(-1, 1);
-        translate(-(this.x + this.w / 2), 0);
-      }
-      for (let i = 1; i < framesByLayer.length; i++) {
-        const layerFrames = framesByLayer[i];
-        const img = layerFrames[this.frameIndex];
-        if (img) {
-          const frameWidth = img.width / framesByLayer[0].length;
-          image(
-            img, this.x, this.y, this.w, this.h,
-            frameWidth * this.frameIndex, 0,
-            frameWidth, img.height
-          );
-        }
-      }
-      pop();
-    } else {
-      fill(this.col);
-      rect(this.x, this.y, this.w, this.h);
-    }
-
-    // hitbox personaje
-    // const hb = this.getCurrentHitbox();
-    // noFill();
-    // stroke(255, 0, 0);
-    // strokeWeight(2);
-    // rect(hb.x, hb.y, hb.w, hb.h);
-
-    // hitbox ataque
-    // if (this.attacking) {
-    //   const atkHB = this.getAttackHitbox();
-    //   if (atkHB) {
-    //     noFill();
-    //     stroke(0, 200, 255);
-    //     strokeWeight(2);
-    //     rect(atkHB.x, atkHB.y, atkHB.w, atkHB.h);
-    //   }
-    // }
-
-    fill(255);
-    textSize(12);
-    textAlign(CENTER);
-    text(stateText, this.x + this.w / 2, this.y - 10);
-  }
-
-  handleInput() {
-    if (this.isHit) return;
-
-    const setRunTap = (dir, keyName) => {
-      if (keysDown[keyName] && !this.keys[dir] && !this.isHit) {
-        if (millis() - this.lastTapTime[dir] < 250) this.runActive = true;
-        this.lastTapTime[dir] = millis();
-      }
-      this.keys[dir] = keysDown[keyName];
-      if (!this.keys.left && !this.keys.right && !this.isHit) this.runActive = false;
-    };
-
-    if (this.id === 'p1') {
-      setRunTap('left', 'a');
-      setRunTap('right', 'd');
-
-      if (keysDown['w'] && this.onGround) {
-        this.vy = this.jumpStrength;
-        this.onGround = false;
-        this.runActive = false;
-      }
-      this.crouching = keysDown['s'];
-
-      if (keysPressed['i']) this.attack('i');
-      if (keysPressed['o']) this.attack('o');
-
-      if (keysUp['i'] || keysUp['o']) {
-        this.inputLockedByKey['i'] = false;
-        this.inputLockedByKey['o'] = false;
-      }
-    }
-
-    if (this.id === 'p2') {
-      setRunTap('left', 'arrowleft');
-      setRunTap('right', 'arrowright');
-
-      if (keysDown['arrowup'] && this.onGround) {
-        this.vy = this.jumpStrength;
-        this.onGround = false;
-        this.runActive = false;
-      }
-      this.crouching = keysDown['arrowdown'];
-
-      if (keysPressed['b']) this.attack('b');
-      if (keysPressed['n']) this.attack('n');
-
-      if (keysUp['b'] || keysUp['n']) {
-        this.inputLockedByKey['b'] = false;
-        this.inputLockedByKey['n'] = false;
-      }
-    }
-  }
-
-  attack(key) {
-    const now = millis();
-    const chain = this.comboChainsByKey[key];
-    if (!chain || chain.length === 0) return;
-    if (this.inputLockedByKey[key]) return;
-
-    const last = this.lastAttackTimeByKey[key] || 0;
-    let step = this.comboStepByKey[key] || 0;
-    if (now - last > this.comboWindow) step = 0;
-
-    const attackName = chain[step] || chain[0];
-    const action = this.actions[attackName];
-    if (!action) {
-      console.warn('Acción no definida en actions:', attackName);
-      return;
-    }
-
-    this.attackType = attackName;
-    this.setState(attackName);
-    this.attacking = true;
-    this.attackStartTime = now;
-    this.attackDuration = action.duration || 400;
-    this.lastAttackTimeByKey[key] = now;
-    this.inputLockedByKey[key] = true;
-    this.comboStepByKey[key] = (step + 1);
-    if (this.comboStepByKey[key] >= chain.length) this.comboStepByKey[key] = 0;
-  }
-
-  handleInputRelease(type) {
-    if (this.inputLockedByKey[type] !== undefined) this.inputLockedByKey[type] = false;
-  }
-
-  autoFace(opponent) {
-    if (!opponent) return;
-    const towardOpponent = (opponent.x > this.x) ? 1 : -1;
-    const runningBackwards =
-      this.runActive &&
-      ((this.keys.right && towardOpponent === -1) || (this.keys.left && towardOpponent === 1));
-    if (!runningBackwards) this.facing = towardOpponent;
-  }
-
-  attackHits(opponent) {
-    if (!this.attacking) return false;
-    const atkHB = this.getAttackHitbox();
-    if (!atkHB) return false;
-    const oppHB = opponent.getCurrentHitbox();
-    return (
-      atkHB.x < oppHB.x + oppHB.w &&
-      atkHB.x + atkHB.w > oppHB.x &&
-      atkHB.y < oppHB.y + oppHB.h &&
-      atkHB.y + atkHB.h > oppHB.y
-    );
-  }
-
-  shoot() {
-    const dir = this.keys.right ? 1 : (this.keys.left ? -1 : (this.id === 'p1' ? 1 : -1));
-    projectiles.push(new Projectile(this.x + this.w / 2, this.y + this.h / 2, dir, this.id));
-  }
-
-  hit() {
-    if (this.isHit) return;
-    this.hp -= 1;
-    this.isHit = true;
-    this.hitStartTime = millis();
-    this.setState("hit");
-    this.vx = -this.facing * 5;
-    this.vy = -3;
-  }
-
-  getCurrentHitbox() {
-    const box = this.hitboxes[this.state.current] || this.hitboxes["idle"];
-    return {
-      x: this.facing === 1 ? this.x + box.offsetX : this.x + this.w - box.offsetX - box.w,
-      y: this.y + box.offsetY,
-      w: box.w,
-      h: box.h
-    };
-  }
-
-  getAttackHitbox() {
-    if (!this.attacking || !this.attackType) return null;
-    const box = this.attackHitboxes[this.attackType] || this.attackHitboxes[this.attackType.replace(/\d+$/, '')];
-    if (!box) return null;
-    return {
-      x: this.facing === 1 ? this.x + box.offsetX : this.x + this.w - box.offsetX - box.w,
-      y: this.y + box.offsetY,
-      w: box.w,
-      h: box.h
-    };
-  }
-
-  // devuelve array de nombres de keys para un símbolo (según jugador)
-  getKeysForSymbol(sym) {
-    const mapP1 = {
-      '↑': ['w'], '↓': ['s'], '←': ['a'], '→': ['d'],
-      '↘': ['s','d'], '↙': ['s','a'], '↗': ['w','d'], '↖': ['w','a']
-    };
-    const mapP2 = {
-      '↑': ['arrowup'], '↓': ['arrowdown'], '←': ['arrowleft'], '→': ['arrowright'],
-      '↘': ['arrowdown','arrowright'], '↙': ['arrowdown','arrowleft'],
-      '↗': ['arrowup','arrowright'], '↖': ['arrowup','arrowleft']
-    };
-    return (this.id === 'p1' ? mapP1 : mapP2)[sym] || [];
-  }
+  display() { Display.display(this); }
 }
 
 export { Fighter };
