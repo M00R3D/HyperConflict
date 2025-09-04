@@ -1,3 +1,5 @@
+// core\loader.js
+
 function loadPiskel(jsonPath) {
   return new Promise((resolve) => {
     loadJSON(jsonPath, (data) => {

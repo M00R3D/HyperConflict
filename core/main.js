@@ -1,3 +1,4 @@
+// core/main.js
 import { Fighter } from '../../entities/fighter.js';
 import { Projectile } from '../../entities/projectile.js';
 import { updateCamera, applyCamera } from './camera.js';
@@ -50,15 +51,40 @@ function draw() {
     return;
   }
 
+  // inputs
   player1.handleInput();
   player2.handleInput();
 
+  // ataque cuerpo a cuerpo
   if (player1.attackHits(player2)) player2.hit();
   if (player2.attackHits(player1)) player1.hit();
 
+  // updates
   player1.update();
   player2.update();
-  projectiles.forEach(p => p.update());
+
+  // actualizar proyectiles y colisiones en un único bucle
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    p.update();
+
+    // colisión con player1
+    if (!p.toRemove && p.hits(player1) && p.ownerId !== player1.id) {
+      player1.hit();            // pone en estado hit y resta HP usando tu lógica
+      p.toRemove = true;       // marcar para eliminar
+    }
+
+    // colisión con player2
+    else if (!p.toRemove && p.hits(player2) && p.ownerId !== player2.id) {
+      player2.hit();
+      p.toRemove = true;
+    }
+
+    // fuera de pantalla -> eliminar
+    if (p.toRemove || p.offscreen()) {
+      projectiles.splice(i, 1);
+    }
+  }
 
   cam = updateCamera(player1, player2, cam);
 
@@ -71,29 +97,12 @@ function draw() {
 
   player1.display();
   player2.display();
-  // actualizar y dibujar proyectiles
-  for (let i = projectiles.length - 1; i >= 0; i--) {
-    const p = projectiles[i];
-    p.update();
-    p.display();
 
-    if (p.offscreen()) {
-      projectiles.splice(i, 1);
-    } else if (p.hits(player1) && p.ownerId !== player1.id) {
-      player1.hp -= 1;
-      projectiles.splice(i, 1);
-    } else if (p.hits(player2) && p.ownerId !== player2.id) {
-      player2.hp -= 1;
-      projectiles.splice(i, 1);
-    }
-  }
-
-  for (let i = projectiles.length - 1; i >= 0; i--) {
+  // dibujar proyectiles (segundo pase para asegurar que players se dibujan antes si quieres)
+  for (let i = 0; i < projectiles.length; i++) {
     projectiles[i].display();
-    if (projectiles[i].hits(player2)) player2.hit();
-    if (projectiles[i].hits(player1)) player1.hit();
-    if (projectiles[i].offscreen()) projectiles.splice(i, 1);
   }
+
   pop();
 
   drawHealthBars(player1, player2);

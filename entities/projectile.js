@@ -1,105 +1,165 @@
 // entities/projectile.js
+
 class Projectile {
-  /**
-   * @param {number} x - posición inicial
-   * @param {number} y - posición inicial
-   * @param {number} dir - 1 = derecha, -1 = izquierda
-   * @param {string} ownerId - id del que dispara (opcional)
-   * @param {Array} framesByLayer - capas de frames exportadas por loadPiskel (opcional)
-   * @param {Object} opts - opciones { w, h, speed, frameDelay }
-   */
-  constructor(x, y, dir, ownerId = null, framesByLayer = null, opts = {}) {
+  constructor(x, y, dir, typeId = 0, ownerId = null, resources = {}, opts = {}, framesByLayer = null) {
     this.x = x;
     this.y = y;
-    this.dir = dir;
-    this.ownerId = ownerId;
+    this.dir = dir === -1 ? -1 : 1;
+    this.ownerId = ownerId ?? null;
+    this.typeId = typeId;
 
-    // físicas / tamaño
-    this.speed = opts.speed ?? 6;
-    this.w = opts.w ?? 16; // ancho de dibujado
-    this.h = opts.h ?? 16; // alto de dibujado (ajusta según tu sprite)
-    this.size = Math.max(this.w, this.h);
+    // defaults
+    this.speed = 6;
+    this.w = 16;
+    this.h = 16;
+    this.frameDelay = 6;
 
-    // animación (si se le pasan frames)
-    this.framesByLayer = framesByLayer; // mismo formato que usa Fighter
+    // Si framesByLayer es Promise
+    this._framesPromise = null;
+    if (framesByLayer && typeof framesByLayer.then === 'function') {
+      this._framesPromise = framesByLayer;
+      this.framesByLayer = [];
+      this._framesPromise.then(res => { this.framesByLayer = res; })
+                         .catch(err => { console.error('Error framesByLayer:', err); });
+    } else {
+      this.framesByLayer = framesByLayer ?? null;
+    }
+
+    // Config por ID
+    switch (this.typeId) {
+      case 1: // parabólico hadouken
+        this.framesByLayer = this.framesByLayer ?? resources.projectile ?? null;
+        this.x = this.x-33;
+        this.y = this.y+10;
+        this.w = 48;
+        this.h = 32;
+        this.speed = 3;
+        this.vy = -5;      // impulso inicial hacia arriba
+        this.gravity = 0.3; // gravedad
+        this.rotation = 0;  // ángulo de rotación
+        this.rotationSpeed = 15; // grados por frame
+        break;
+
+      case 2: // fireball
+        this.framesByLayer = this.framesByLayer ?? resources.fireball ?? null;
+        this.w = 32;
+        this.h = 32;
+        this.speed = 10;
+        break;
+
+      case 3: // shuriken
+        this.framesByLayer = this.framesByLayer ?? resources.shuriken ?? null;
+        this.w = 24;
+        this.h = 24;
+        this.speed = 12;
+        break;
+
+      default:
+        this.framesByLayer = this.framesByLayer ?? null;
+        this.w = 16;
+        this.h = 16;
+        this.speed = 6;
+    }
+
+    // overrides
+    this.w = opts.w ?? this.w;
+    this.h = opts.h ?? this.h;
+    this.speed = opts.speed ?? this.speed;
+    this.frameDelay = opts.frameDelay ?? this.frameDelay;
+
+    // animación
     this.frameIndex = 0;
-    this.frameDelay = opts.frameDelay ?? 6;
     this._frameTimer = 0;
+    this._finishedAnimation = false;
   }
 
   update() {
     // movimiento
-    this.x += this.speed * this.dir;
+    if (this.typeId === 1) {
+      // parabólico
+      this.x += this.speed * this.dir;
+      this.y += this.vy;
+      this.vy += this.gravity;
 
-    // animación simple por frames
-    if (this.framesByLayer && this.framesByLayer.length > 0 && this.framesByLayer[0]?.length > 0) {
-      this._frameTimer++;
-      if (this._frameTimer >= this.frameDelay) {
-        this._frameTimer = 0;
-        // cantidad de frames según layer 0
-        const n = this.framesByLayer[0].length;
-        this.frameIndex = (this.frameIndex + 1) % n;
+      // rotación
+      this.rotation += this.rotationSpeed;
+
+      // animación que se detiene en último frame
+      if (this.framesByLayer && this.framesByLayer[0]?.length > 0 && !this._finishedAnimation) {
+        this._frameTimer++;
+        if (this._frameTimer >= this.frameDelay) {
+          this._frameTimer = 0;
+          this.frameIndex++;
+          if (this.frameIndex >= this.framesByLayer[0].length - 1) {
+            this.frameIndex = this.framesByLayer[0].length - 1; // último frame fijo
+            this._finishedAnimation = true;
+          }
+        }
+      }
+    } else {
+      // normal lineal
+      this.x += this.speed * this.dir;
+
+      // animación loop normal
+      if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+        this._frameTimer++;
+        if (this._frameTimer >= this.frameDelay) {
+          this._frameTimer = 0;
+          const n = this.framesByLayer[0].length;
+          this.frameIndex = (this.frameIndex + 1) % n;
+        }
       }
     }
   }
 
   display() {
-    // si tiene sprites, dibujarlos con la misma lógica que Fighter
     const framesByLayer = this.framesByLayer;
-    if (framesByLayer && framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
+    if (framesByLayer && framesByLayer[0]?.length > 0) {
       push();
-      // voltear si va hacia la izquierda
+
+      // aplicar flip horizontal si dir=-1
       if (this.dir === -1) {
-        translate(this.x + this.w / 2, 0);
+        translate(this.x + this.w / 2, this.y);
         scale(-1, 1);
-        translate(-(this.x + this.w / 2), 0);
+        translate(-(this.x + this.w / 2), -this.y);
       }
 
-      // muchas de tus animaciones usan layer[0] para contar frames,
-      // y luego dibujas las capas desde 1..n (mimic Fighter)
+      // rotación solo en typeId=1
+      if (this.typeId === 1) {
+        translate(this.x + this.w / 2, this.y + this.h / 2);
+        rotate(radians(this.rotation));
+        translate(-(this.x + this.w / 2), -(this.y + this.h / 2));
+      }
+
       for (let i = 1; i < framesByLayer.length; i++) {
         const layerFrames = framesByLayer[i];
         if (!layerFrames) continue;
         const img = layerFrames[this.frameIndex];
         if (!img) continue;
-
         const frameCount = framesByLayer[0].length || 1;
         const frameWidth = img.width / frameCount;
 
-        // image(img, dx, dy, dWidth, dHeight, sx, sy, sWidth, sHeight)
         image(
           img,
-          this.x,
-          this.y,
-          this.w,
-          this.h,
+          this.x, this.y,
+          this.w, this.h,
           frameWidth * this.frameIndex, 0,
           frameWidth, img.height
         );
       }
       pop();
     } else {
-      // fallback: círculo/rectángulo simple
+      // fallback círculo
       push();
       noStroke();
       fill(255, 200, 0);
-      ellipse(this.x, this.y - 8, this.size);
+      ellipse(this.x, this.y - 8, this.w);
       pop();
     }
-
-    // debug hitbox (opcional)
-    // noFill(); stroke(0,255,0); strokeWeight(1);
-    // const hb = this.getHitbox(); rect(hb.x, hb.y, hb.w, hb.h);
   }
 
-  // hitbox para colisiones (ajusta offsets si tu sprite necesita)
   getHitbox() {
-    return {
-      x: this.x - this.w / 2,
-      y: this.y - this.h / 2,
-      w: this.w,
-      h: this.h
-    };
+    return { x: this.x - this.w / 2, y: this.y - this.h / 2, w: this.w, h: this.h };
   }
 
   hits(fighter) {
@@ -114,7 +174,7 @@ class Projectile {
   }
 
   offscreen() {
-    return (this.x + this.w < 0) || (this.x - this.w > width);
+    return (this.x + this.w < 0) || (this.x - this.w > width) || (this.y > height);
   }
 }
 

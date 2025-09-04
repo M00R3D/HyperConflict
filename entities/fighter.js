@@ -544,41 +544,40 @@ class Fighter {
     }
   }
 
-  doSpecial(moveName) {
-    // dentro de doSpecial, caso hadouken:
-    if (moveName === 'hadouken') {
-      this.setState('hadouken');
-      this.attackType = 'hadouken';
-      this.attacking = true;
-      this.attackStartTime = millis();
-      this.attackDuration = this.actions.hadouken.duration || 600;
-      const dir = this.facing === 1 ? 1 : -1;
-      const px = Math.round(this.x + (dir === 1 ? this.w : 0));
-      // const py = Math.round(this.y + this.h / 2);
-const py = Math.round(this.y + this.h / 2 - 12); // ajusta -12 o lo que quede bien
+    doSpecial(moveName) {
+      // dentro de doSpecial, caso hadouken:
+      if (moveName === 'hadouken') {
+        this.setState('hadouken');
+        this.attackType = 'hadouken';
+        this.attacking = true;
+        this.attackStartTime = millis();
+        this.attackDuration = this.actions.hadouken.duration || 600;
 
-      // <- PASAMOS this.shootFramesByLayer al constructor
-      projectiles.push(new Projectile(px, py, dir, this.id, this.projectileFramesByLayer, {
-        w: 20,            // ancho dibujo del proyectil (ajusta)
-        h: 12,            // alto
-        speed: 8,         // velocidad si quieres distinta
-        frameDelay: 6     // sincronía de animación
-      }));
+        const dir = this.facing === 1 ? 1 : -1;
+        // posición inicial del proyectil, ajustar para que salga desde frente del personaje
+        const px = Math.round(this.x + (dir === 1 ? this.w + 4 : -4));
+        const py = Math.round(this.y + this.h / 2 - 6); // ajuste vertical fino
+
+        // <-- USAR los frames de proyectil que llegaron al Fighter (this.projectileFramesByLayer)
+        // Llamamos al constructor pasando: x,y,dir,typeId,ownerId,resources(opts null),opts(empty),framesByLayer
+        const p = new Projectile(px, py, dir, 1 /*typeId*/, this.id /*ownerId*/, null /*resources*/, {}, this.projectileFramesByLayer);
+        projectiles.push(p);
+      }
+      else if (moveName === 'shoryuken') {
+        this.setState('punch3');
+        this.attackType = 'punch3';
+        this.attacking = true;
+        this.attackStartTime = millis();
+        this.attackDuration = this.actions.punch3.duration || 800;
+      } else if (moveName === 'tatsumaki') {
+        this.setState('kick3');
+        this.attackType = 'kick3';
+        this.attacking = true;
+        this.attackStartTime = millis();
+        this.attackDuration = this.actions.kick3.duration || 600;
+      }
     }
-    else if (moveName === 'shoryuken') {
-      this.setState('punch3');
-      this.attackType = 'punch3';
-      this.attacking = true;
-      this.attackStartTime = millis();
-      this.attackDuration = this.actions.punch3.duration || 800;
-    } else if (moveName === 'tatsumaki') {
-      this.setState('kick3');
-      this.attackType = 'kick3';
-      this.attacking = true;
-      this.attackStartTime = millis();
-      this.attackDuration = this.actions.kick3.duration || 600;
-    }
-  }
+
 
   update() {
     const now = millis();
