@@ -18,6 +18,8 @@ export function attack(self, key) {
   self.attacking = true;
   self.attackStartTime = now;
   self.attackDuration = action.duration || 400;
+  // inicializar set de objetivos golpeados por esta activación (evita multi-hit repetido)
+  self._hitTargets = new Set();
   self.lastAttackTimeByKey[key] = now;
   self.inputLockedByKey[key] = true;
   self.comboStepByKey[key] = (step + 1);
@@ -26,15 +28,28 @@ export function attack(self, key) {
 
 export function attackHits(self, opponent) {
   if (!self.attacking) return false;
+  // asegurar estructura _hitTargets
+  if (!self._hitTargets) self._hitTargets = new Set();
+
+  // si ya fue golpeado por esta activación, no volver a reportar hit
+  if (opponent && opponent.id && self._hitTargets.has(opponent.id)) return false;
+
   const atkHB = self.getAttackHitbox();
   if (!atkHB) return false;
   const oppHB = opponent.getCurrentHitbox();
-  return (
+  const collided = (
     atkHB.x < oppHB.x + oppHB.w &&
     atkHB.x + atkHB.w > oppHB.x &&
     atkHB.y < oppHB.y + oppHB.h &&
     atkHB.y + atkHB.h > oppHB.y
   );
+
+  if (collided) {
+    // marcar como golpeado por esta activación para evitar múltiples hits
+    if (opponent && opponent.id) self._hitTargets.add(opponent.id);
+    return true;
+  }
+  return false;
 }
 
 export function shoot(self) {
@@ -103,12 +118,29 @@ export function hit(self, attacker = null) {
   if (kbY < -1.5) self.onGround = false;
 
   self.hitDuration = hitStun;
-  self.setState("hit");
+  // setear estado específico por nivel: hit1/hit2/hit3 (pero con misma animación)
+  const stateName = 'hit' + (self.hitLevel || 1);
+  self.setState(stateName);
+
+  // Empujón ligero del atacante hacia adelante para facilitar encadenes
+  if (attacker && attacker !== self) {
+    // magnitudes ajustables: sutil para punch2, mayor para punch3
+    const followPushMap = { punch2: 1.6, punch3: 2.6, kick2: 1.2, kick3: 2.0 };
+    const boost = followPushMap[attacker.attackType] || 0;
+    if (boost > 0) {
+      attacker.vx = (attacker.vx || 0) + boost * (attacker.facing || 1);
+      // limitar velocidad del atacante para evitar valores extremos
+      const cap = (attacker.runActive ? attacker.runMaxSpeed : attacker.maxSpeed) * 2;
+      attacker.vx = constrain(attacker.vx, -cap, cap);
+    }
+  }
 }
 
 export function updateAttackState(self) {
   const now = millis();
   if (self.attacking && (now - self.attackStartTime > self.attackDuration)) {
     self.attacking = false; self.attackType = null;
+    // limpiar lista de objetivos al terminar la activación
+    if (self._hitTargets) { self._hitTargets.clear(); self._hitTargets = null; }
   }
 }

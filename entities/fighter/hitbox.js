@@ -1,6 +1,11 @@
 // entities/fighter/hitbox.js
 export function getCurrentHitbox(self) {
-  const box = self.hitboxes[self.state.current] || self.hitboxes["idle"];
+  // si no existe hitbox para el estado exacto, y el estado es "hit1/2/3", usar la hitbox de 'hit'
+  let box = self.hitboxes[self.state.current];
+  if (!box && typeof self.state?.current === 'string' && self.state.current.startsWith('hit')) {
+    box = self.hitboxes['hit'];
+  }
+  box = box || self.hitboxes["idle"];
   return {
     x: self.facing === 1 ? self.x + box.offsetX : self.x + self.w - box.offsetX - box.w,
     y: self.y + box.offsetY,
