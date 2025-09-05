@@ -16,8 +16,8 @@ class Fighter {
     fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [],
     punch2FramesByLayer = [], punch3FramesByLayer = [], kickFramesByLayer = [],
     kick2FramesByLayer = [], kick3FramesByLayer = [], crouchFramesByLayer = [],
-    crouchWalkFramesByLayer = [], hitFramesByLayer = [], shootFramesByLayer = [],
-    projectileFramesByLayer = [], dashFramesByLayer = [] // <-- agregado
+    crouchWalkFramesByLayer = [], hitFramesByLayer = [], hit2FramesByLayer = [], hit3FramesByLayer = [],
+    shootFramesByLayer = [], projectileFramesByLayer = [], dashFramesByLayer = [] // <-- agregado
   ) {
     // delegar inicialización
     Init.initBase(this, x, col, id);
@@ -26,7 +26,9 @@ class Fighter {
       fallFramesByLayer, runFramesByLayer, punchFramesByLayer,
       punch2FramesByLayer, punch3FramesByLayer, kickFramesByLayer,
       kick2FramesByLayer, kick3FramesByLayer, crouchFramesByLayer,
-      crouchWalkFramesByLayer, hitFramesByLayer, shootFramesByLayer, projectileFramesByLayer,
+      crouchWalkFramesByLayer, hitFramesByLayer, hit1FramesByLayer: hit2FramesByLayer /* temp */,
+      hit2FramesByLayer, hit3FramesByLayer,
+      shootFramesByLayer, projectileFramesByLayer,
       dashFramesByLayer // <-- agregado
     });
     Init.initComboAndInput(this);
@@ -171,7 +173,10 @@ class Fighter {
       Anim.exitHitIfElapsed(this);
       return; // Salta el resto de la prioridad de estados
     } else if (this.isHit) {
-      this.setState("hit");
+      // respetar niveles de hit: hit1 / hit2 / hit3 si existen
+      const lvl = this.hitLevel || 1;
+      const stateName = 'hit' + Math.max(1, Math.min(3, lvl));
+      this.setState(stateName);
     } else if (this.attacking && this.attackType) {
       this.setState(this.attackType);
     } else if (!this.onGround) {
@@ -224,7 +229,9 @@ class Fighter {
     this.vx = this.vx || 0;
     this.vy = this.vy || 0;
     // aplicar fricción ligera horizontal (para evitar drift infinito)
-    const minFriction = 0.04;
+    // reducir fricción horizontal si es hit3 (menos desaceleración)
+    let minFriction = 0.04;
+    if (this.hitLevel === 3) minFriction *= 0.15; // 15% de la fricción normal -> vuela más
     if (this.vx > 0.01) this.vx = Math.max(0, this.vx - minFriction);
     if (this.vx < -0.01) this.vx = Math.min(0, this.vx + minFriction);
 

@@ -86,7 +86,17 @@ export function hit(self, attacker = null) {
 
   let kbX = 0;
   let kbY = -2;
-  let hitStun = 220;
+  // default hitstun map (fallbacks)
+  const defaultHitstun = {
+    punch: 200, punch2: 720, punch3: 700,
+    kick: 220, kick2: 320, kick3: 520,
+    hadouken: 260, default: 220
+  };
+
+  // Si el atacante y su acción definen hitstun, úsalo; si no, usa el default map.
+  let hitStun = (attacker && attacker.actions && attacker.actions[atkName] && attacker.actions[atkName].hitstun)
+    || defaultHitstun[atkName] || defaultHitstun.default;
+
   self.hitLevel = newLevel; // setear al nuevo nivel
 
   // empujar hacia la "espalda" del golpeado: -facing
@@ -94,21 +104,21 @@ export function hit(self, attacker = null) {
 
   switch (atkName) {
     case 'punch':
-      kbX = pushDir * 1.0; kbY = -2.2; hitStun = 200; break;
+      kbX = pushDir * 1.0; kbY = -2.2; break;
     case 'punch2':
-      kbX = pushDir * 3.0; kbY = -4.0; hitStun = 320; break;
+      kbX = pushDir * 1.0; kbY = -4.0; break;
     case 'punch3':
-      kbX = pushDir * 6.0; kbY = -6.0; hitStun = 520; break;
+      kbX = pushDir * 10.0; kbY = -5.2; break;
     case 'kick':
-      kbX = pushDir * 2.6; kbY = -1.8; hitStun = 220; break;
+      kbX = pushDir * 2.6; kbY = -1.8; break;
     case 'kick2':
-      kbX = 0; kbY = -4.2; hitStun = 300; break;
+      kbX = 0; kbY = -4.2; break;
     case 'kick3':
-      kbX = pushDir * 5.5; kbY = -5.0; hitStun = 480; break;
+      kbX = pushDir * 5.5; kbY = -5.0; break;
     case 'hadouken':
-      kbX = pushDir * 3.5; kbY = -2.0; hitStun = 260; break;
+      kbX = pushDir * 3.5; kbY = -2.0; break;
     default:
-      kbX = pushDir * 2.0; kbY = -2.0; hitStun = 220; break;
+      kbX = pushDir * 2.0; kbY = -2.0; break;
   }
 
   // aplicar knockback (reemplaza valores anteriores si es upgrade)
@@ -124,12 +134,10 @@ export function hit(self, attacker = null) {
 
   // Empujón ligero del atacante hacia adelante para facilitar encadenes
   if (attacker && attacker !== self) {
-    // magnitudes ajustables: sutil para punch2, mayor para punch3
     const followPushMap = { punch2: 1.6, punch3: 2.6, kick2: 1.2, kick3: 2.0 };
     const boost = followPushMap[attacker.attackType] || 0;
     if (boost > 0) {
       attacker.vx = (attacker.vx || 0) + boost * (attacker.facing || 1);
-      // limitar velocidad del atacante para evitar valores extremos
       const cap = (attacker.runActive ? attacker.runMaxSpeed : attacker.maxSpeed) * 2;
       attacker.vx = constrain(attacker.vx, -cap, cap);
     }

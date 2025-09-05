@@ -26,21 +26,24 @@ export function updateMovement(self) {
   const maxSpd = self.runActive ? self.runMaxSpeed : self.maxSpeed;
   const friction = self.runActive ? self.runFriction : self.friction;
 
+  // si estamos en hit3, queremos menos fricción horizontal para que el launch dure más
+  const effectiveFriction = (self.isHit && self.hitLevel === 3) ? (friction * 0.15) : friction;
+
   // Si estás en estado 'hit', NO permitimos controlar vx ni girar con las teclas
   if (!self.isHit) {
     if (self.keys.left && self.state.current !== "fall" && self.state.current !== "jump") self.vx -= acc;
     if (self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") self.vx += acc;
     if (!self.keys.left && !self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") {
-      if (self.vx > 0) self.vx = Math.max(0, self.vx - friction);
-      if (self.vx < 0) self.vx = Math.min(0, self.vx + friction);
+      if (self.vx > 0) self.vx = Math.max(0, self.vx - effectiveFriction);
+      if (self.vx < 0) self.vx = Math.min(0, self.vx + effectiveFriction);
     }
     if (self.keys.left) self.facing = -1;
     if (self.keys.right) self.facing = 1;
   } else {
     // Si estás en hit: aplicar sólo fricción para que no quede drift infinito
     if (!self.keys.left && !self.keys.right) {
-      if (self.vx > 0) self.vx = Math.max(0, self.vx - friction);
-      if (self.vx < 0) self.vx = Math.min(0, self.vx + friction);
+      if (self.vx > 0) self.vx = Math.max(0, self.vx - effectiveFriction);
+      if (self.vx < 0) self.vx = Math.min(0, self.vx + effectiveFriction);
     }
   }
 

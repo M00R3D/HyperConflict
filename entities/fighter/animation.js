@@ -20,10 +20,10 @@ export function setState(self, newState) {
     case 'kick2':     self.currentFramesByLayer = self.kick2FramesByLayer; break;
     case 'kick3':     self.currentFramesByLayer = self.kick3FramesByLayer; break;
     case 'hit':       self.currentFramesByLayer = self.hitFramesByLayer; break;
-    // usar misma animación de hit para hit1/hit2/hit3
-    case 'hit1':      self.currentFramesByLayer = self.hitFramesByLayer; break;
-    case 'hit2':      self.currentFramesByLayer = self.hitFramesByLayer; break;
-    case 'hit3':      self.currentFramesByLayer = self.hitFramesByLayer; break;
+    // hit1/hit2/hit3 usan sus frames específicos si existen
+    case 'hit1':      self.currentFramesByLayer = self.hit1FramesByLayer || self.hitFramesByLayer; break;
+    case 'hit2':      self.currentFramesByLayer = self.hit2FramesByLayer || self.hitFramesByLayer; break;
+    case 'hit3':      self.currentFramesByLayer = self.hit3FramesByLayer || self.hitFramesByLayer; break;
     case 'hadouken':  self.currentFramesByLayer = self.shootFramesByLayer; break;
     case 'dash':      self.currentFramesByLayer = self.dashFramesByLayer; break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;

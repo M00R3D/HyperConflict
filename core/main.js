@@ -24,6 +24,7 @@ async function setup() {
     tyeman.punch, tyeman.punch2, tyeman.punch3,
     tyeman.kick, tyeman.kick, tyeman.kick,
     tyeman.crouch, tyeman.crouchWalk, tyeman.hit,
+    tyeman.hit2, tyeman.hit3,
     tyeman.shoot, tyeman.projectile, tyeman.dash
   );
 
@@ -32,6 +33,7 @@ async function setup() {
     sbluer.punch, sbluer.punch2, sbluer.punch3,
     sbluer.kick, sbluer.kick, sbluer.kick,
     sbluer.crouch, sbluer.crouchWalk, sbluer.hit,
+    sbluer.hit2, sbluer.hit3,
     sbluer.shoot, sbluer.projectile, sbluer.dash
   );
 

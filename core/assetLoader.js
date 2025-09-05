@@ -15,6 +15,8 @@ async function loadTyemanAssets() {
     crouch: await loadPiskel('src/tyeman/tyeman_crouch.piskel'),
     crouchWalk: await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel'),
     hit: await loadPiskel('src/tyeman/tyeman_hit.piskel'),
+    hit2: await loadPiskel('src/tyeman/tyeman_hit_2.piskel'),
+    hit3: await loadPiskel('src/tyeman/tyeman_hit_3.piskel'),
     shoot: await loadPiskel('src/tyeman/tyeman_shoot.piskel'),
     projectile: await loadPiskel('src/tyeman/tyeman_projectile.piskel'),
     dash: await loadPiskel('src/tyeman/tyeman_dash.piskel')
@@ -35,6 +37,8 @@ async function loadSbluerAssets() {
     crouch: await loadPiskel('src/sbluer/sbluer_crouch.piskel'),
     crouchWalk: await loadPiskel('src/sbluer/sbluer_crouch_walk.piskel'),
     hit: await loadPiskel('src/sbluer/sbluer_hit.piskel'),
+    hit2: await loadPiskel('src/sbluer/sbluer_hit_2.piskel'),
+    hit3: await loadPiskel('src/sbluer/sbluer_hit_3.piskel'),
     shoot: await loadPiskel('src/sbluer/sbluer_shoot.piskel'),
     projectile: await loadPiskel('src/sbluer/sbluer_projectile.piskel'),
     dash: await loadPiskel('src/sbluer/sbluer_dash.piskel')

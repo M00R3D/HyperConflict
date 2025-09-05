@@ -15,15 +15,15 @@ export function initBase(self, x, col, id) {
   self.onGround = true;
 
   self.acceleration = 1.1;
-  self.runAcceleration = 1.01;
+  self.runAcceleration = 1.11;
   self.maxSpeed = 4;
-  self.runMaxSpeed = 6;
+  self.runMaxSpeed = 8;
   self.friction = 0.1;
   self.runFriction = 0.051;
   self.runActive = false;
 
   // dash defaults (velocidad objetivo y factor de easing 0..1)
-  self.dashSpeed = 14;     // velocidad objetivo del dash (ajusta)
+  self.dashSpeed = 10;     // velocidad objetivo del dash (ajusta)
   self.dashEase = 0.45;    // cuánto interpola hacia la velocidad objetivo por frame (0.0..1.0)
   self.dashCooldown = 200; // ms opcional entre dashes si quieres bloquear repetición inmediata
   self.lastDashTime = 0;
@@ -62,6 +62,10 @@ export function initFrames(self, frames) {
   self.crouchFramesByLayer = frames.crouchFramesByLayer;
   self.crouchWalkFramesByLayer = frames.crouchWalkFramesByLayer;
   self.hitFramesByLayer = frames.hitFramesByLayer;
+  // soportar hit1/hit2/hit3 si vienen (fallback a hitFramesByLayer)
+  self.hit1FramesByLayer = frames.hit1FramesByLayer || frames.hitFramesByLayer || [];
+  self.hit2FramesByLayer = frames.hit2FramesByLayer || frames.hitFramesByLayer || [];
+  self.hit3FramesByLayer = frames.hit3FramesByLayer || frames.hitFramesByLayer || [];
   self.shootFramesByLayer = frames.shootFramesByLayer;
   self.projectileFramesByLayer = frames.projectileFramesByLayer;
   // asignar dash si viene en el paquete de frames
