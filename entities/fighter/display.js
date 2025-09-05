@@ -2,6 +2,8 @@
 export function display(self) {
   const stateText = (self.state && self.state.current) || 'idle';
   const framesByLayer = self.currentFramesByLayer || self.idleFramesByLayer;
+  // ensure per-fighter alpha state for dashLight visuals
+  self._dashLightAlpha = (typeof self._dashLightAlpha === 'number') ? self._dashLightAlpha : 1.0;
 
   // si hay frames por capa y la capa 0 tiene frames, dibuja la animación
   if (framesByLayer && framesByLayer.length > 0 && (framesByLayer[0] || []).length > 0) {
@@ -50,7 +52,19 @@ export function display(self) {
     const lightElapsed = millis() - lightStart;
     const lightActive = hasDashLight && lightStart > 0 && lightElapsed < lightDur;
 
-    if (lightActive) {
+    // decide target visual alpha: cuando el juego está en pausa queremos que la luz se desvanezca
+    const isPaused = !!window.PAUSED;
+    const targetVisual = (!isPaused && lightActive) ? 1 : 0;
+    // suavizar alpha (visual only)
+    self._dashLightAlpha = lerp(self._dashLightAlpha, targetVisual, 0.12);
+    // si la alpha visual es prácticamente 0, no dibujamos nada
+    if (self._dashLightAlpha > 0.01) {
+      // usamos lightActive for progress, pero la opacidad final se multiplica por _dashLightAlpha
+    } else {
+      // skip all dash light drawing early
+    }
+
+    if (self._dashLightAlpha > 0.01) {
       const fi2 = Math.max(0, (self.frameIndex || 0));
       // tLight 0..1 across the entire light lifetime (including dash and post-dash shrink)
       let tLight = constrain(lightElapsed / lightDur, 0, 1);
@@ -80,13 +94,20 @@ export function display(self) {
       const satOsc = 18 * Math.sin(millis() / 110);
       const sat = constrain(satBase + satOsc + 36 * (1 - tLight), 0, 100);
       const bri = 88;
-      const alpha = constrain(190 + 60 * Math.sin(millis() / 95) * (1 - tLight * 0.8), 80, 255);
+      // base alpha for the effect (0..255) then modulate by per-fighter dashLight alpha (0..1)
+      const baseAlpha = constrain(190 + 60 * Math.sin(millis() / 95) * (1 - tLight * 0.8), 80, 255);
+      const alpha = Math.round(baseAlpha * (self._dashLightAlpha || 1));
 
-      // anchor fijo en world coords (guardado en dash())
-      // usar ANCLA fija si existe (evita que la luz siga al jugador o se recalculen offsets)
-      const anchorX = (typeof self.dashLightAnchorX === 'number') ? self.dashLightAnchorX
-                      : (self.x + self.w / 2 + lerp(12, 26, easeIn) * lightFacing);
-      const anchorY = (typeof self.dashLightAnchorY === 'number') ? self.dashLightAnchorY : (self.y + self.h / 2 - 6);
+      // calcular anchorX/anchorY (usar ancla fija guardada en dash() si existe,
+      // sino posicionar ligeramente hacia adelante según facing y fase del dash)
+      const forwardBase = 12;
+      const forwardPeak = 18;
+      const anchorX = (typeof self.dashLightAnchorX === 'number')
+        ? self.dashLightAnchorX
+        : (self.x + self.w / 2 + lerp(forwardBase, forwardPeak, easeIn) * lightFacing);
+      const anchorY = (typeof self.dashLightAnchorY === 'number')
+        ? self.dashLightAnchorY
+        : (self.y + self.h / 2 - 6);
 
       push();
       blendMode(ADD);
@@ -117,12 +138,12 @@ export function display(self) {
       colorMode(RGB, 255, 255, 255, 255);
       blendMode(BLEND);
       pop();
-    }
-  } else {
-    // fallback: cuadro simple
-    fill(self.col || 255);
-    rect(self.x, self.y, self.w, self.h);
-  }
+    } // end if _dashLightAlpha > 0.01
+   } else {
+     // fallback: cuadro simple
+     fill(self.col || 255);
+     rect(self.x, self.y, self.w, self.h);
+   }
 
   // texto estado (debug)
   fill(255);

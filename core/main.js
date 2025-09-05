@@ -12,6 +12,13 @@ let player1, player2;
 let projectiles = [];
 let playersReady = false;
 let cam = { x: 0, y: 0, zoom: 1 };
+let PAUSED = false; // bandera de pausa (toggle con Enter)
+// variable para suavizar el zoom aplicado en pantalla (no modifica `cam` real)
+let appliedCamZoom = cam.zoom || 1;
+// suavizado para HUD (0..1)
+let appliedHUDAlpha = 1;
+// exponer pausa globalmente para display.js
+window.PAUSED = window.PAUSED || false;
 
 async function setup() {
   createCanvas(800, 400);
@@ -50,95 +57,146 @@ async function setup() {
 }
 
 function draw() {
-  if (!playersReady) {
+  // esperar a que los players y assets estén listos
+  if (!playersReady || !player1 || !player2) {
     background(0);
     fill(255);
-    textSize(24);
+    textSize(20);
     textAlign(CENTER, CENTER);
     text("Cargando animaciones...", width / 2, height / 2);
+    // sincronizar bandera PAUSED por si se consultara antes
+    window.PAUSED = PAUSED;
+    clearFrameFlags();
     return;
   }
 
+   // sincronizar variable global para que otros módulos la lean
+   window.PAUSED = PAUSED;
+
   // toggle debug overlays with '1' key (press 1 to toggle)
-  // soportar '1' y 'Digit1' según cómo capture el input en el navegador
-  if (keysPressed && (keysPressed['1'] || keysPressed['Digit1'])) {
+  if (typeof keysPressed !== 'undefined' && (keysPressed['1'] || keysPressed['Digit1'])) {
     window.SHOW_DEBUG_OVERLAYS = !window.SHOW_DEBUG_OVERLAYS;
-  }
-  // inputs
-  player1.handleInput();
-  player2.handleInput();
-
-  // ataque cuerpo a cuerpo -> aplicar hitstop al conectar y pasar atacante al hit()
-  if (player1.attackHits(player2)) {
-    const atk = player1.attackType;
-    const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 80;
-    applyHitstop(hs);
-    player2.hit(player1);
-  }
-  if (player2.attackHits(player1)) {
-    const atk = player2.attackType;
-    const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 80;
-    applyHitstop(hs);
-    player1.hit(player2);
+    // evita múltiples toggles por el mismo evento
+    keysPressed['1'] = false;
+    keysPressed['Digit1'] = false;
   }
 
-  // Si hay hitstop activo, NO ejecutar updates (pausa lógica/animaciones/movimientos)
+  // toggle PAUSA con Enter
+  if (typeof keysPressed !== 'undefined' && keysPressed['enter']) {
+    PAUSED = !PAUSED;
+    keysPressed['enter'] = false;
+  }
+
+  // inputs solo si no está en pausa
+  if (!PAUSED) {
+    if (player1 && typeof player1.handleInput === 'function') player1.handleInput();
+    if (player2 && typeof player2.handleInput === 'function') player2.handleInput();
+  }
+
+  // detección de golpes solo si no está en pausa
+  if (!PAUSED) {
+    if (player1 && typeof player1.attackHits === 'function' && player1.attackHits(player2)) {
+      const atk = player1.attackType;
+      const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 80;
+      applyHitstop(hs);
+      player2.hit(player1);
+    }
+    if (player2 && typeof player2.attackHits === 'function' && player2.attackHits(player1)) {
+      const atk = player2.attackType;
+      const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 80;
+      applyHitstop(hs);
+      player1.hit(player2);
+    }
+  }
+
+  // Si hay hitstop o pausa, evitamos updates de lógica
   const hsActive = isHitstopActive();
-  if (!hsActive) {
-    // updates
-    player1.update();
-    player2.update();
+  if (!hsActive && !PAUSED) {
+    if (player1 && typeof player1.update === 'function') player1.update();
+    if (player2 && typeof player2.update === 'function') player2.update();
 
-    // actualizar proyectiles y colisiones en un único bucle
+    // proyectiles y colisiones
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
-      p.update();
+      if (p && typeof p.update === 'function') p.update();
 
-      // colisión con player1
-      if (!p.toRemove && p.hits(player1) && p.ownerId !== player1.id) {
+      if (p && !p.toRemove && typeof p.hits === 'function' && p.hits(player1) && p.ownerId !== player1.id) {
         player1.hit();
         p.toRemove = true;
-      }
-
-      // colisión con player2
-      else if (!p.toRemove && p.hits(player2) && p.ownerId !== player2.id) {
+      } else if (p && !p.toRemove && typeof p.hits === 'function' && p.hits(player2) && p.ownerId !== player2.id) {
         player2.hit();
         p.toRemove = true;
       }
 
-      // fuera de pantalla -> eliminar
-      if (p.toRemove || p.offscreen()) {
+      if (p && (p.toRemove || (typeof p.offscreen === 'function' && p.offscreen()))) {
         projectiles.splice(i, 1);
       }
     }
 
     cam = updateCamera(player1, player2, cam);
   } else {
-    // durante hitstop avanzamos solo timers/minimos estados para no quedar bloqueados
-    if (player1 && typeof player1.updateDuringHitstop === 'function') player1.updateDuringHitstop();
-    if (player2 && typeof player2.updateDuringHitstop === 'function') player2.updateDuringHitstop();
+    // durante hitstop avanzamos timers mínimos (si no está pausado)
+    if (!PAUSED) {
+      if (player1 && typeof player1.updateDuringHitstop === 'function') player1.updateDuringHitstop();
+      if (player2 && typeof player2.updateDuringHitstop === 'function') player2.updateDuringHitstop();
+    }
   }
 
   // render (siempre)
   push();
-  applyCamera(cam);
+  // suavizar transición del zoom cuando se pausa/resume:
+  // targetZoom = cam.zoom * 2 cuando PAUSED, o cam.zoom cuando no.
+  const maxPauseZoom = 3;
+  const pauseMultiplier = 2;
+  const targetZoom = PAUSED ? Math.min((cam.zoom || 1) * pauseMultiplier, maxPauseZoom) : (cam.zoom || 1);
+  // lerp suave hacia target (ajusta factor 0.08 para más/menos rapidez)
+  appliedCamZoom = lerp(appliedCamZoom, targetZoom, 0.08);
+  // aplicar cámara usando el zoom suavizado, sin modificar `cam` real
+  applyCamera({ x: cam.x, y: cam.y, zoom: appliedCamZoom });
   drawBackground();
 
   fill(80, 50, 20);
   rect(0, height - 40, width, 40);
 
-  player1.display();
-  player2.display();
+  if (player1 && typeof player1.display === 'function') player1.display();
+  if (player2 && typeof player2.display === 'function') player2.display();
 
-  // dibujar proyectiles (segundo pase para asegurar que players se dibujan antes si quieres)
   for (let i = 0; i < projectiles.length; i++) {
-    projectiles[i].display();
+    const p = projectiles[i];
+    if (p && typeof p.display === 'function') p.display();
   }
 
   pop();
 
   drawHealthBars(player1, player2);
   drawInputQueues(player1, player2);
+
+  // overlay de PAUSA
+  if (PAUSED) {
+    push();
+    fill(255, 220);
+    textSize(42);
+    textAlign(CENTER, CENTER);
+    text('PAUSA', width / 2, height / 2);
+    pop();
+  }
+
+  // suavizar la opacidad del HUD (0 = invisible, 1 = visible)
+  const hudTarget = PAUSED ? 0 : 1;
+  appliedHUDAlpha = lerp(appliedHUDAlpha, hudTarget, 0.12);
+
+  // dim / fade overlay sobre el área del HUD para simular "fade out" de barras
+  if (appliedHUDAlpha < 0.999) {
+    push();
+    noStroke();
+    // ajusta rect height si tu HUD ocupa más/menos espacio
+    const hudHeight = 60;
+    // rellenar con negro semitransparente proporcional a la invisibilidad deseada
+    const coverAlpha = Math.round((1 - appliedHUDAlpha) * 220);
+    fill(0, coverAlpha);
+    rect(0, 0, width, hudHeight);
+    pop();
+  }
 
   clearFrameFlags();
 }
