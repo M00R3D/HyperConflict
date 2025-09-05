@@ -21,6 +21,8 @@ export function initBase(self, x, col, id) {
   self.friction = 0.1;
   self.runFriction = 0.051;
   self.runActive = false;
+  // multiplicador para aumentar la fricción durante ataques de tipo "grounded" (hadouken/tats)
+  self.groundedAttackFrictionMultiplier = 6;
 
   // dash defaults (velocidad objetivo y factor de easing 0..1)
   self.dashSpeed = 10;     // velocidad objetivo del dash (ajusta)

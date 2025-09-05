@@ -58,10 +58,17 @@ class Projectile {
         this.framesByLayer = this.framesByLayer ?? resources.tats ?? framesByLayer ?? null;
         this.w = opts.w ?? 20;
         this.h = opts.h ?? 28;
-        this.duration = opts.duration ?? 700; // ms
+        this.duration = opts.duration ?? 1200; // ms (más largo por defecto)
         this.age = 0;
         this.alpha = 255;
-        this.upSpeed = opts.upSpeed ?? 0.8;
+        // upSpeed interpretado originalmente como px por "frame"; lo reusamos pero ahora escalado por dt
+        this.upSpeed = (typeof opts.upSpeed === 'number') ? opts.upSpeed : 0.9;
+        // scale target final (por defecto crecer ~1.8x -> 2.4x para efecto fuego)
+        this.targetScale = opts.targetScale ?? 2.4;
+        // delay antes de aparecer (ms)
+        this.spawnDelay = opts.spawnDelay ?? 0;
+        this._spawnTimer = 0;
+        this._visible = (this.spawnDelay <= 0);
         // mantener posición x relativa (no velocidad horizontal), pero respetar dir para spawn
         this.speed = 0;
         break;
@@ -79,6 +86,11 @@ class Projectile {
     this.speed = opts.speed ?? this.speed;
     this.frameDelay = opts.frameDelay ?? this.frameDelay;
 
+    // persistencia: si true, no se elimina al golpear a un rival
+    this.persistent = !!opts.persistent;
+    // evitar golpear repetidamente al mismo objetivo
+    this._hitTargets = new Set();
+
     // animación
     this.frameIndex = 0;
     this._frameTimer = 0;
@@ -87,6 +99,11 @@ class Projectile {
 
   update() {
     // movimiento
+    const now = millis();
+    const dt = Math.max(0, (this._lastUpdate ? (now - this._lastUpdate) : 16));
+    this._lastUpdate = now;
+
+    // hadouken parabólico
     if (this.typeId === 1) {
       // parabólico
       this.x += this.speed * this.dir;
@@ -109,13 +126,31 @@ class Projectile {
         }
       }
     } else {
+      // spawn delay handling para proyectiles que esperan antes de aparecer
+      if (this.spawnDelay && !this._visible) {
+        this._spawnTimer += dt;
+        if (this._spawnTimer >= this.spawnDelay) {
+          this._visible = true;
+          // reset age para que la animación/comportamiento empiece al aparecer
+          this.age = 0;
+        } else {
+          // aún en delay: no avanzar nada
+          return;
+        }
+      }
+
       if (this.typeId === 4) {
-        // efecto: crecer y subir lentamente, desvanecerse
-        this.age = (this.age || 0) + 16; // aproximación ms per frame (p5 tick), suficiente como contador relativo
-        const t = Math.min(1, this.age / (this.duration || 700));
-        this.scaleY = lerp(1, 1.8, t);
+        // efecto: crecer y subir lentamente, desvanecerse, usando dt real
+        this.age = (this.age || 0) + dt;
+        const t = Math.min(1, this.age / (this.duration || 1200));
+        // easing out para growth
+        const ease = 1 - Math.pow(1 - t, 2);
+        this.scaleY = lerp(1, this.targetScale || 1.8, ease);
         this.alpha = Math.round(255 * (1 - t));
-        this.y -= this.upSpeed || 0.8;
+        // mover hacia arriba proporcional a dt (upSpeed es px per frame baseline)
+        this.y -= (this.upSpeed || 0.9) * (dt / 16);
+        // pequeño jitter horizontal para efecto 'llama' (opcional, suave)
+        this.x += Math.sin(this.age / 120) * 0.18;
         if (t >= 1) this.toRemove = true;
       } else {
         // normal lineal

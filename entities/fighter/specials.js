@@ -77,7 +77,7 @@ export function doSpecial(self, moveName) {
     // opcional: reproducir sonido / particle spawn si tienes sistema
     return;
   } else if (moveName === 'ty_tats') {
-    // ty_tats: reproducir la animación 'tats' en el personaje y lanzar el proyectil tats_proj.
+    // ty_tats: reproducir la animación 'tats' en el personaje y crear una BARRERA de 4 proyectiles
     try {
       if (self.tatsFramesByLayer && self.tatsFramesByLayer.length) {
         self.setState('tats');
@@ -86,21 +86,44 @@ export function doSpecial(self, moveName) {
       }
     } catch (e) {}
 
-    // posición delante del fighter
-    const dir = self.facing === 1 ? 1 : -1;
-    const px = Math.round(self.x + (dir === 1 ? self.w + 8 : -8));
-    const py = Math.round(self.y + self.h / 2 - 6);
-
-    // marcar como ataque usando el nombre 'tats' para que el update use esa animación/hitbox
+    // marcar como ataque (usa 'tats' para anim/hitbox)
     self.attacking = true;
     self.attackType = 'tats';
     self.attackStartTime = millis();
     self.attackDuration = (self.actions && self.actions.tats && self.actions.tats.duration) || 420;
 
-    const opts = { duration: 700, upSpeed: 0.8, w: 20, h: 28, frameDelay: 6 };
-    const tatsProj = (self.tatsProjFramesByLayer && self.tatsProjFramesByLayer.length) ? self.tatsProjFramesByLayer : null;
-    const p = new Projectile(px, py, dir, 4, self.id, {}, opts, tatsProj);
-    projectiles.push(p);
+    // parámetros base del proyectil barrier
+    const baseOpts = {
+      duration: 3000,    // duración visible más larga
+      upSpeed: 2.1,
+      targetScale: 2.6,
+      w: 20, h: 36,
+      frameDelay: 6,
+      persistent: true   // IMPORTANT: no se destruyen al golpear
+    };
+
+    // Crear 4 proyectiles con spawnDelay secuencial y pequeños offsets
+    // Ajustes: empezar más cerca del usuario (offset inicial pequeño) y
+    // espaciar más entre las piezas (offset increment más grande).
+    const gap = 110; // ms entre apariciones (mantener o ajustar)
+    const initialOffset = Math.round(this?.w ? this.w / 2 : (self.w / 2)); // offset base cerca del cuerpo
+    const step = 18; // px entre piezas (mayor spacing)
+
+    for (let k = 0; k < 4; k++) {
+      const dir = self.facing === 1 ? 1 : -1;
+      // spawn empieza más cerca (initialOffset) y se desplaza por 'step' por pieza
+      const offsetX = (dir === 1)
+        ? (initialOffset + 6 + k * step)
+        : (-initialOffset - 6 - k * step);
+      const px = Math.round(self.x + offsetX);
+      const py = Math.round(self.y + self.h / 2 - 6);
+      const opts = Object.assign({}, baseOpts, { spawnDelay: k * gap });
+      const tatsProj = (self.tatsProjFramesByLayer && self.tatsProjFramesByLayer.length) ? self.tatsProjFramesByLayer : null;
+      const p = new Projectile(px, py, dir, 4, self.id, {}, opts, tatsProj);
+      p._barrierIndex = k;
+      projectiles.push(p);
+    }
+
     return;
   }
 }

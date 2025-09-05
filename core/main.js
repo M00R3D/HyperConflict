@@ -124,12 +124,25 @@ function draw() {
       const p = projectiles[i];
       if (p && typeof p.update === 'function') p.update();
 
-      if (p && !p.toRemove && typeof p.hits === 'function' && p.hits(player1) && p.ownerId !== player1.id) {
-        player1.hit();
-        p.toRemove = true;
-      } else if (p && !p.toRemove && typeof p.hits === 'function' && p.hits(player2) && p.ownerId !== player2.id) {
-        player2.hit();
-        p.toRemove = true;
+      if (p && !p.toRemove && typeof p.hits === 'function') {
+        // colisión contra player1
+        if (p.hits(player1) && p.ownerId !== player1.id) {
+          if (!p._hitTargets) p._hitTargets = new Set();
+          if (!p._hitTargets.has(player1.id)) {
+            player1.hit();
+            p._hitTargets.add(player1.id);
+            if (!p.persistent) p.toRemove = true;
+          }
+        }
+        // colisión contra player2
+        if (p.hits(player2) && p.ownerId !== player2.id) {
+          if (!p._hitTargets) p._hitTargets = new Set();
+          if (!p._hitTargets.has(player2.id)) {
+            player2.hit();
+            p._hitTargets.add(player2.id);
+            if (!p.persistent) p.toRemove = true;
+          }
+        }
       }
 
       if (p && (p.toRemove || (typeof p.offscreen === 'function' && p.offscreen()))) {

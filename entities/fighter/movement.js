@@ -24,7 +24,17 @@ export function updateMovement(self) {
 
   const acc = self.runActive ? self.runAcceleration : self.acceleration;
   const maxSpd = self.runActive ? self.runMaxSpeed : self.maxSpeed;
-  const friction = self.runActive ? self.runFriction : self.friction;
+  // base friction según si corre o no
+  const baseFriction = self.runActive ? self.runFriction : self.friction;
+
+  // Si el fighter está ejecutando un ataque "grounded" largo (hadouken o tats),
+  // aumentamos la fricción para que se quede más quieto en el suelo.
+  const isGroundedAttack = !self.isHit && (
+    (self.state && (self.state.current === 'hadouken' || self.state.current === 'tats')) ||
+    (self.attacking && (self.attackType === 'hadouken' || self.attackType === 'tats'))
+  );
+  const groundedMult = (typeof self.groundedAttackFrictionMultiplier === 'number') ? self.groundedAttackFrictionMultiplier : 6;
+  const friction = baseFriction * (isGroundedAttack ? groundedMult : 1);
 
   // si estamos en hit3, queremos menos fricción horizontal para que el launch dure más
   const effectiveFriction = (self.isHit && self.hitLevel === 3) ? (friction * 0.15) : friction;
