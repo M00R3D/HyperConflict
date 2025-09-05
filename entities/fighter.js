@@ -18,6 +18,8 @@ class Fighter {
     kick2FramesByLayer = [], kick3FramesByLayer = [], crouchFramesByLayer = [],
     crouchWalkFramesByLayer = [], hitFramesByLayer = [], hit2FramesByLayer = [], hit3FramesByLayer = [],
     shootFramesByLayer = [], projectileFramesByLayer = [],
+    // nuevo orden: primero ANIM de "tats" (personaje), luego frames del proyectil "tats"
+    tatsFramesByLayer = [], tatsProjFramesByLayer = [],
     dashLightFramesByLayer = [], // <-- nuevo parámetro antes del dash final
     dashFramesByLayer = [] // <-- existente
   ) {
@@ -32,6 +34,7 @@ class Fighter {
       hit1FramesByLayer: hit2FramesByLayer /* temp */,
       hit2FramesByLayer, hit3FramesByLayer,
       shootFramesByLayer, projectileFramesByLayer,
+      tatsFramesByLayer, tatsProjFramesByLayer, // <-- pasar ambos
       dashLightFramesByLayer, // <-- pasar al init
       dashFramesByLayer // <-- agregado
     });
@@ -51,11 +54,13 @@ class Fighter {
       kick:    { anim: this.kickFramesByLayer, frameDelay: 6, duration: 400 },
       kick2:   { anim: this.kick2FramesByLayer, frameDelay: 6, duration: 700 },
       kick3:   { anim: this.kick3FramesByLayer, frameDelay: 6, duration: 1000 },
+      // "tats" animation (personaje) - si no hay frames se ignora
+      tats:    { anim: this.tatsFramesByLayer, frameDelay: 4, duration: 820 },
       crouch:  { anim: this.crouchFramesByLayer, frameDelay: 10 },
       crouchwalk: { anim: this.crouchWalkFramesByLayer, frameDelay: 10 },
       hit:     { anim: this.hitFramesByLayer, frameDelay: 10 },
       hadouken: { anim: this.shootFramesByLayer, frameDelay: 6, duration: 600 },
-      dash:    { anim: this.dashFramesByLayer, frameDelay: 4, duration: 1000 } // <-- agregado
+      dash:    { anim: this.dashFramesByLayer, frameDelay: 10, duration: 1200 } // <-- agregado
     };
 
     // estado inicial

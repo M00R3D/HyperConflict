@@ -54,6 +54,18 @@ class Projectile {
         this.speed = 12;
         break;
 
+      case 4: // "tats" special: crece hacia arriba y se desvanece (no se desplaza horizontal fuerte)
+        this.framesByLayer = this.framesByLayer ?? resources.tats ?? framesByLayer ?? null;
+        this.w = opts.w ?? 20;
+        this.h = opts.h ?? 28;
+        this.duration = opts.duration ?? 700; // ms
+        this.age = 0;
+        this.alpha = 255;
+        this.upSpeed = opts.upSpeed ?? 0.8;
+        // mantener posición x relativa (no velocidad horizontal), pero respetar dir para spawn
+        this.speed = 0;
+        break;
+
       default:
         this.framesByLayer = this.framesByLayer ?? null;
         this.w = 16;
@@ -97,8 +109,18 @@ class Projectile {
         }
       }
     } else {
-      // normal lineal
-      this.x += this.speed * this.dir;
+      if (this.typeId === 4) {
+        // efecto: crecer y subir lentamente, desvanecerse
+        this.age = (this.age || 0) + 16; // aproximación ms per frame (p5 tick), suficiente como contador relativo
+        const t = Math.min(1, this.age / (this.duration || 700));
+        this.scaleY = lerp(1, 1.8, t);
+        this.alpha = Math.round(255 * (1 - t));
+        this.y -= this.upSpeed || 0.8;
+        if (t >= 1) this.toRemove = true;
+      } else {
+        // normal lineal
+        this.x += this.speed * this.dir;
+      }
 
       // animación loop normal
       if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
@@ -129,6 +151,14 @@ class Projectile {
         translate(this.x + this.w / 2, this.y + this.h / 2);
         rotate(radians(this.rotation));
         translate(-(this.x + this.w / 2), -(this.y + this.h / 2));
+      } else if (this.typeId === 4) {
+        // escalar verticalmente desde la base (mantener anclaje en la base del sprite)
+        const sy = this.scaleY || 1;
+        // trasladar a la esquina superior para escalar desde arriba -> queremos crecer hacia arriba,
+        // así que mover el origen a (x, y + h) y escalar en Y hacia arriba (flip Y)
+        translate(this.x, this.y + this.h);
+        scale(1, -sy);
+        translate(-this.x, -(this.y + this.h));
       }
 
       for (let i = 1; i < framesByLayer.length; i++) {
@@ -138,6 +168,10 @@ class Projectile {
         if (!img) continue;
         const frameCount = framesByLayer[0].length || 1;
         const frameWidth = img.width / frameCount;
+        // aplicar alpha para typeId 4
+        if (this.typeId === 4) {
+          tint(255, this.alpha || 255);
+        }
 
         image(
           img,

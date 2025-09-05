@@ -72,6 +72,10 @@ export function initFrames(self, frames) {
   self.dashLightFramesByLayer = frames.dashLightFramesByLayer || [];
   // asignar dash si viene en el paquete de frames
   self.dashFramesByLayer = frames.dashFramesByLayer || [];
+  // frames de animación "tats" para el personaje (attack animation)
+  self.tatsFramesByLayer = frames.tatsFramesByLayer || frames.tats || [];
+  // frames específicas para el proyectil "tats" (si vienen en el paquete)
+  self.tatsProjFramesByLayer = frames.tatsProjFramesByLayer || [];
 }
 
 export function initComboAndInput(self) {
@@ -121,6 +125,8 @@ export function initHitboxes(self) {
     punch2: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
     punch3: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
     kick:  { offsetX: 25, offsetY: 10, w: 30, h: 15 },
-    hadouken: { offsetX: 0, offsetY: 0, w: 20, h: 20 }
+    hadouken: { offsetX: 0, offsetY: 0, w: 20, h: 20 },
+    // hitbox para el "tats" cuerpo-a-cuerpo (ajusta offsets/tamaño si hace falta)
+    tats: { offsetX: 20, offsetY: 4, w: 18, h: 24 }
   };
 }

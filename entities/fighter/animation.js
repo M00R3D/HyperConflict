@@ -19,6 +19,7 @@ export function setState(self, newState) {
     case 'kick':      self.currentFramesByLayer = self.kickFramesByLayer; break;
     case 'kick2':     self.currentFramesByLayer = self.kick2FramesByLayer; break;
     case 'kick3':     self.currentFramesByLayer = self.kick3FramesByLayer; break;
+    case 'tats':      self.currentFramesByLayer = self.tatsFramesByLayer; break;
     case 'hit':       self.currentFramesByLayer = self.hitFramesByLayer; break;
     // hit1/hit2/hit3 usan sus frames específicos si existen
     case 'hit1':      self.currentFramesByLayer = self.hit1FramesByLayer || self.hitFramesByLayer; break;

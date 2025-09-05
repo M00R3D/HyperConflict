@@ -23,6 +23,10 @@ async function loadTyemanAssets() {
     kick2: await loadOrNull('src/tyeman/tyeman_kick_2.piskel'),
     kick3: await loadOrNull('src/tyeman/tyeman_kick_3.piskel'),
     kick: await loadOrNull('src/tyeman/tyeman_kick.piskel'),
+    // animación "tats" que se mostrará en el personaje (hitbox/anim)
+    tats: await loadOrNull('src/tyeman/tyeman_tats.piskel'),
+    // frames específicos para el proyectil (sprite distinto)
+    tatsProjFramesByLayer: await loadOrNull('src/tyeman/tyeman_tats_proj.piskel'),
     crouch: await loadOrNull('src/tyeman/tyeman_crouch.piskel'),
     crouchWalk: await loadOrNull('src/tyeman/tyeman_crouch_walk.piskel'),
     hit: await loadOrNull('src/tyeman/tyeman_hit.piskel'),
@@ -34,7 +38,7 @@ async function loadTyemanAssets() {
     dashLight: await loadOrNull('src/tyeman/tyeman_dash_light.piskel')
   };
 }
-
+ 
 async function loadSbluerAssets() {
   return {
     idle: await loadOrNull('src/sbluer/sbluer_idle.piskel'),
@@ -48,6 +52,10 @@ async function loadSbluerAssets() {
     kick2: await loadOrNull('src/sbluer/sbluer_kick_2.piskel'),
     kick3: await loadOrNull('src/sbluer/sbluer_kick_3.piskel'),
     kick: await loadOrNull('src/sbluer/sbluer_kick.piskel'),
+    // animación "tats" para personaje (si existe)
+    tats: await loadOrNull('src/sbluer/sbluer_tats.piskel'),
+    // sprite de proyectil tats para sbluer (puede ser null si no existe)
+    tatsProjFramesByLayer: await loadOrNull('src/sbluer/sbluer_tats_proj.piskel'),
     crouch: await loadOrNull('src/sbluer/sbluer_crouch.piskel'),
     crouchWalk: await loadOrNull('src/sbluer/sbluer_crouch_walk.piskel'),
     hit: await loadOrNull('src/sbluer/sbluer_hit.piskel'),
@@ -59,5 +67,5 @@ async function loadSbluerAssets() {
     dashLight: await loadOrNull('src/sbluer/sbluer_dash_light.piskel')
   };
 }
-
+ 
 export { loadTyemanAssets, loadSbluerAssets };

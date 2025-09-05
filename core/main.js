@@ -34,6 +34,8 @@ async function setup() {
     tyeman.crouch, tyeman.crouchWalk, tyeman.hit,
     tyeman.hit2, tyeman.hit3,
     tyeman.shoot, tyeman.projectile,
+    tyeman.tats, // anim "tats" para el personaje
+    tyeman.tatsProjFramesByLayer, // frames del proyectil tats
     tyeman.dashLight, // <-- nuevo parámetro para dash overlay
     tyeman.dash
   );
@@ -45,6 +47,8 @@ async function setup() {
     sbluer.crouch, sbluer.crouchWalk, sbluer.hit,
     sbluer.hit2, sbluer.hit3,
     sbluer.shoot, sbluer.projectile,
+    sbluer.tats, // personaje tats (puede ser null)
+    sbluer.tatsProjFramesByLayer, // passthrough (may be null)
     sbluer.dashLight, // <-- nuevo parámetro para dash overlay
     sbluer.dash
   );

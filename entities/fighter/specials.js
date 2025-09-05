@@ -5,9 +5,11 @@ import { projectiles } from '../../core/main.js';
 export const specialMoves = {
   hadouken: ['↓','↘','→','P'],
   shoryuken: ['→','↓','↘','P'],
-  tatsumaki: ['↓','↙','←','K'],
+  // tatsumaki: ['↓','↙','←','K'],
   // supersalto: agacharse y saltar rápido (down, up)
-  supersalto: ['↓','↑']
+  supersalto: ['↓','↑'],
+  // tyeman tats special (dispara el proyectil vertical que crece y se desvanece)
+  ty_tats: ['↓','↙','←','K']
 };
 
 import * as Hitbox from './hitbox.js';
@@ -61,7 +63,7 @@ export function doSpecial(self, moveName) {
     self.onGround = false;
 
     // Velocidad vertical aumentada (jumpStrength es negativo)
-    const boostFactor = 1.2;
+    const boostFactor = 1.5;
     self.vy = (self.jumpStrength || -5.67) * boostFactor;
 
     // Efecto de "float": bajar gravedad temporalmente para más hang-time
@@ -73,6 +75,32 @@ export function doSpecial(self, moveName) {
       self._supersaltoActive = true;
     }
     // opcional: reproducir sonido / particle spawn si tienes sistema
+    return;
+  } else if (moveName === 'ty_tats') {
+    // ty_tats: reproducir la animación 'tats' en el personaje y lanzar el proyectil tats_proj.
+    try {
+      if (self.tatsFramesByLayer && self.tatsFramesByLayer.length) {
+        self.setState('tats');
+      } else {
+        self.setState('punch3');
+      }
+    } catch (e) {}
+
+    // posición delante del fighter
+    const dir = self.facing === 1 ? 1 : -1;
+    const px = Math.round(self.x + (dir === 1 ? self.w + 8 : -8));
+    const py = Math.round(self.y + self.h / 2 - 6);
+
+    // marcar como ataque usando el nombre 'tats' para que el update use esa animación/hitbox
+    self.attacking = true;
+    self.attackType = 'tats';
+    self.attackStartTime = millis();
+    self.attackDuration = (self.actions && self.actions.tats && self.actions.tats.duration) || 420;
+
+    const opts = { duration: 700, upSpeed: 0.8, w: 20, h: 28, frameDelay: 6 };
+    const tatsProj = (self.tatsProjFramesByLayer && self.tatsProjFramesByLayer.length) ? self.tatsProjFramesByLayer : null;
+    const p = new Projectile(px, py, dir, 4, self.id, {}, opts, tatsProj);
+    projectiles.push(p);
     return;
   }
 }
