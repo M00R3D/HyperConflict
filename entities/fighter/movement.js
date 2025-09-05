@@ -41,28 +41,35 @@ export function updateMovement(self) {
   self.x += self.vx;
 
   // push para evitar superposición con oponente
-  if (self.opponent && self.state.current !== "dash") {
-    const myHB = Hitbox.getCurrentHitbox(self);
-    const oppHB = Hitbox.getCurrentHitbox(self.opponent);
-    if (
-      myHB.x < oppHB.x + oppHB.w &&
-      myHB.x + myHB.w > oppHB.x &&
-      myHB.y < oppHB.y + oppHB.h &&
-      myHB.y + myHB.h > oppHB.y
-    ) {
-      const myCenter = myHB.x + myHB.w / 2;
-      const oppCenter = oppHB.x + oppHB.w / 2;
-      const halfSum = myHB.w / 2 + oppHB.w / 2;
-      const dist = Math.abs(myCenter - oppCenter);
-      const overlap = Math.max(0, halfSum - dist);
-      if (overlap > 0.0001) {
-        const pushAmount = overlap / 2 + 0.5;
-        if (myCenter < oppCenter) {
-          self.x = constrain(self.x - pushAmount, 0, width - self.w);
-          self.opponent.x = constrain(self.opponent.x + pushAmount, 0, width - self.opponent.w);
-        } else {
-          self.x = constrain(self.x + pushAmount, 0, width - self.w);
-          self.opponent.x = constrain(self.opponent.x - pushAmount, 0, width - self.opponent.w);
+  if (self.opponent) {
+    const selfDashing = (self.state && self.state.current) === "dash";
+    const oppDashing = (self.opponent.state && self.opponent.state.current) === "dash";
+    // aplicar push sólo si ambos están en dash o ninguno está en dash.
+    // Si sólo uno está en dash, permitir atravesar (no empujar).
+    const applyPush = (!selfDashing && !oppDashing) || (selfDashing && oppDashing);
+    if (applyPush) {
+      const myHB = Hitbox.getCurrentHitbox(self);
+      const oppHB = Hitbox.getCurrentHitbox(self.opponent);
+      if (
+        myHB.x < oppHB.x + oppHB.w &&
+        myHB.x + myHB.w > oppHB.x &&
+        myHB.y < oppHB.y + oppHB.h &&
+        myHB.y + myHB.h > oppHB.y
+      ) {
+        const myCenter = myHB.x + myHB.w / 2;
+        const oppCenter = oppHB.x + oppHB.w / 2;
+        const halfSum = myHB.w / 2 + oppHB.w / 2;
+        const dist = Math.abs(myCenter - oppCenter);
+        const overlap = Math.max(0, halfSum - dist);
+        if (overlap > 0.0001) {
+          const pushAmount = overlap / 2 + 0.5;
+          if (myCenter < oppCenter) {
+            self.x = constrain(self.x - pushAmount, 0, width - self.w);
+            self.opponent.x = constrain(self.opponent.x + pushAmount, 0, width - self.opponent.w);
+          } else {
+            self.x = constrain(self.x + pushAmount, 0, width - self.w);
+            self.opponent.x = constrain(self.opponent.x - pushAmount, 0, width - self.opponent.w);
+          }
         }
       }
     }
