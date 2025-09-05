@@ -68,6 +68,8 @@ export function initFrames(self, frames) {
   self.hit3FramesByLayer = frames.hit3FramesByLayer || frames.hitFramesByLayer || [];
   self.shootFramesByLayer = frames.shootFramesByLayer;
   self.projectileFramesByLayer = frames.projectileFramesByLayer;
+  // overlay para dash (opcional)
+  self.dashLightFramesByLayer = frames.dashLightFramesByLayer || [];
   // asignar dash si viene en el paquete de frames
   self.dashFramesByLayer = frames.dashFramesByLayer || [];
 }

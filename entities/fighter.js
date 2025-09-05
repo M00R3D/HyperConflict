@@ -17,7 +17,9 @@ class Fighter {
     punch2FramesByLayer = [], punch3FramesByLayer = [], kickFramesByLayer = [],
     kick2FramesByLayer = [], kick3FramesByLayer = [], crouchFramesByLayer = [],
     crouchWalkFramesByLayer = [], hitFramesByLayer = [], hit2FramesByLayer = [], hit3FramesByLayer = [],
-    shootFramesByLayer = [], projectileFramesByLayer = [], dashFramesByLayer = [] // <-- agregado
+    shootFramesByLayer = [], projectileFramesByLayer = [],
+    dashLightFramesByLayer = [], // <-- nuevo parámetro antes del dash final
+    dashFramesByLayer = [] // <-- existente
   ) {
     // delegar inicialización
     Init.initBase(this, x, col, id);
@@ -26,9 +28,11 @@ class Fighter {
       fallFramesByLayer, runFramesByLayer, punchFramesByLayer,
       punch2FramesByLayer, punch3FramesByLayer, kickFramesByLayer,
       kick2FramesByLayer, kick3FramesByLayer, crouchFramesByLayer,
-      crouchWalkFramesByLayer, hitFramesByLayer, hit1FramesByLayer: hit2FramesByLayer /* temp */,
+      crouchWalkFramesByLayer, hitFramesByLayer,
+      hit1FramesByLayer: hit2FramesByLayer /* temp */,
       hit2FramesByLayer, hit3FramesByLayer,
       shootFramesByLayer, projectileFramesByLayer,
+      dashLightFramesByLayer, // <-- pasar al init
       dashFramesByLayer // <-- agregado
     });
     Init.initComboAndInput(this);
@@ -260,11 +264,25 @@ class Fighter {
     this.dashDirection = dir || this.facing || 1;
     this.dashStartTime = millis();
     this.dashDuration = 100; // más corto para sensación más "snappy" (ajusta: 120..200)
-    // desactiva run durante el dash para evitar conflictos; al acabar se reevalúa runActive
+    // Desactiva run durante el dash para evitar conflictos; al acabar se reevalúa runActive
     this.runActive = false;
     // fuerza un pequeño impulso inicial para responsividad (mejora feel)
     const initialBoost = (this.dashSpeed || 14) * 0.6;
     this.vx = initialBoost * this.dashDirection;
+
+    // dash light: dura un poco más que el dash y sirve para el overlay visual
+    this.dashLightStart = this.dashStartTime;
+    // duración total de la luz (incluye fase post-dash donde se encoge verticalmente)
+    this.dashLightDuration = Math.max(1, this.dashDuration + 220); // ajustar si quieres más/menos
+
+    // Guardar facing y ancla visual para la dashLight (no debe seguir cambios de facing/posición)
+    // anchorX se fija en el momento del dash para que la luz "permanezca" delante del punto inicial
+    const centerX = this.x + this.w / 2;
+    const centerY = this.y + this.h / 2 - 6;
+    const forwardPeak = 26; // debe coincidir con display.js forwardPeak para consistencia
+    this.dashLightFacing = this.dashDirection || this.facing || 1;
+    this.dashLightAnchorX = centerX + forwardPeak * this.dashLightFacing;
+    this.dashLightAnchorY = centerY;
   }
 }
 

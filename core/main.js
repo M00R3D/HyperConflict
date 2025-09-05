@@ -25,7 +25,9 @@ async function setup() {
     tyeman.kick, tyeman.kick, tyeman.kick,
     tyeman.crouch, tyeman.crouchWalk, tyeman.hit,
     tyeman.hit2, tyeman.hit3,
-    tyeman.shoot, tyeman.projectile, tyeman.dash
+    tyeman.shoot, tyeman.projectile,
+    tyeman.dashLight, // <-- nuevo parámetro para dash overlay
+    tyeman.dash
   );
 
   player2 = new Fighter(600, color(100, 100, 255), 'p2',
@@ -34,7 +36,9 @@ async function setup() {
     sbluer.kick, sbluer.kick, sbluer.kick,
     sbluer.crouch, sbluer.crouchWalk, sbluer.hit,
     sbluer.hit2, sbluer.hit3,
-    sbluer.shoot, sbluer.projectile, sbluer.dash
+    sbluer.shoot, sbluer.projectile,
+    sbluer.dashLight, // <-- nuevo parámetro para dash overlay
+    sbluer.dash
   );
 
   player1.opponent = player2;
