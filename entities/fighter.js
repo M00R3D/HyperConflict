@@ -96,7 +96,15 @@ class Fighter {
   getKeysForSymbol(sym) { return Hitbox.getKeysForSymbol(this, sym); }
 
   handleInput() {
+    // guardar si estábamos en suelo antes de procesar inputs,
+    // para que specials puedan detectar supersalto aún cuando Buffer ponga onGround=false
+    this._prevOnGround = !!this.onGround;
     Buffer.handleInput(this);
+    // detectar specials inmediatamente después de que el buffer reciba el input
+    // (permite activar supersalto antes de que la asignación de vy "normal" quede final)
+    this.checkSpecialMoves();
+    // limpiar flag auxiliar (opcional, se recalculará en la siguiente frame)
+    delete this._prevOnGround;
 
     const now = millis();
 
@@ -149,6 +157,18 @@ class Fighter {
   handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
 
   update() {
+    // Manejo de supersalto: restaurar gravedad cuando expire el efecto
+    if (this._supersaltoActive) {
+      const elapsed = millis() - (this._supersaltoStart || 0);
+      if (elapsed >= (this._supersaltoDuration || 0)) {
+        if (typeof this._supersaltoOriginalGravity === 'number') this.gravity = this._supersaltoOriginalGravity;
+        this._supersaltoOriginalGravity = undefined;
+        this._supersaltoStart = 0;
+        this._supersaltoDuration = 0;
+        this._supersaltoActive = false;
+      }
+    }
+
     // pequeñas responsabilidades delegadas:
     Buffer.handlePendingDiagRelease(this);
     this.trimBuffer();

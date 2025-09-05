@@ -5,7 +5,9 @@ import { projectiles } from '../../core/main.js';
 export const specialMoves = {
   hadouken: ['↓','↘','→','P'],
   shoryuken: ['→','↓','↘','P'],
-  tatsumaki: ['↓','↙','←','K']
+  tatsumaki: ['↓','↙','←','K'],
+  // supersalto: agacharse y saltar rápido (down, up)
+  supersalto: ['↓','↑']
 };
 
 import * as Hitbox from './hitbox.js';
@@ -48,5 +50,29 @@ export function doSpecial(self, moveName) {
   } else if (moveName === 'tatsumaki') {
     self.setState('kick3'); self.attackType = 'kick3'; self.attacking = true;
     self.attackStartTime = millis(); self.attackDuration = self.actions.kick3.duration || 600;
+  } else if (moveName === 'supersalto') {
+    // Supersalto: impulso vertical más fuerte y "float" temporal (menor gravedad).
+    // Activar solo cuando estaba en suelo justo antes del input (evita doble activación en aire)
+    const wasOnGround = (typeof self._prevOnGround === 'boolean') ? self._prevOnGround : !!self.onGround;
+    if (!wasOnGround) return;
+
+    // Estado visual: salto
+    self.setState('jump');
+    self.onGround = false;
+
+    // Velocidad vertical aumentada (jumpStrength es negativo)
+    const boostFactor = 1.2;
+    self.vy = (self.jumpStrength || -5.67) * boostFactor;
+
+    // Efecto de "float": bajar gravedad temporalmente para más hang-time
+    if (typeof self.gravity === 'number') {
+      self._supersaltoOriginalGravity = self.gravity;
+      self.gravity = Math.max(0.08, (self.gravity || 0.3) * 0.55); // reducir gravedad
+      self._supersaltoStart = millis();
+      self._supersaltoDuration = 520; // ms de reducción de gravedad (ajustable)
+      self._supersaltoActive = true;
+    }
+    // opcional: reproducir sonido / particle spawn si tienes sistema
+    return;
   }
 }
