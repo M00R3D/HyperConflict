@@ -2,7 +2,7 @@
 import { Fighter } from '../../entities/fighter.js';
 import { Projectile } from '../../entities/projectile.js';
 import { updateCamera, applyCamera } from './camera.js';
-import { initInput, clearFrameFlags } from './input.js';
+import { initInput, clearFrameFlags, keysPressed } from './input.js';
 import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';
 import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
 import { drawBackground } from '../ui/background.js';
@@ -15,7 +15,8 @@ let cam = { x: 0, y: 0, zoom: 1 };
 
 async function setup() {
   createCanvas(800, 400);
-
+  // bandera global para debug overlays (asegura valor por defecto)
+  window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
   const tyeman = await loadTyemanAssets();
   const sbluer = await loadSbluerAssets();
 
@@ -58,6 +59,11 @@ function draw() {
     return;
   }
 
+  // toggle debug overlays with '1' key (press 1 to toggle)
+  // soportar '1' y 'Digit1' según cómo capture el input en el navegador
+  if (keysPressed && (keysPressed['1'] || keysPressed['Digit1'])) {
+    window.SHOW_DEBUG_OVERLAYS = !window.SHOW_DEBUG_OVERLAYS;
+  }
   // inputs
   player1.handleInput();
   player2.handleInput();

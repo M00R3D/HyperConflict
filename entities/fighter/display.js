@@ -83,6 +83,7 @@ export function display(self) {
       const alpha = constrain(190 + 60 * Math.sin(millis() / 95) * (1 - tLight * 0.8), 80, 255);
 
       // anchor fijo en world coords (guardado en dash())
+      // usar ANCLA fija si existe (evita que la luz siga al jugador o se recalculen offsets)
       const anchorX = (typeof self.dashLightAnchorX === 'number') ? self.dashLightAnchorX
                       : (self.x + self.w / 2 + lerp(12, 26, easeIn) * lightFacing);
       const anchorY = (typeof self.dashLightAnchorY === 'number') ? self.dashLightAnchorY : (self.y + self.h / 2 - 6);
@@ -127,7 +128,9 @@ export function display(self) {
   fill(255);
   textSize(12);
   textAlign(CENTER);
-  text(stateText, self.x + self.w / 2, self.y - 10);
+  if (window.SHOW_DEBUG_OVERLAYS) {
+    text(stateText, self.x + self.w / 2, self.y - 10);
+  }
 
   // Dibuja la hitbox (debug)
   if (typeof self.getCurrentHitbox === 'function') {
@@ -137,7 +140,7 @@ export function display(self) {
       noFill();
       stroke(0, 255, 0, 180); // Verde semitransparente
       strokeWeight(2);
-      rect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
+      if (window.SHOW_DEBUG_OVERLAYS) rect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
       pop();
     }
   }
@@ -148,7 +151,7 @@ export function display(self) {
       noFill();
       stroke(255, 0, 0, 180); // Rojo semitransparente
       strokeWeight(2);
-      rect(attackHitbox.x, attackHitbox.y, attackHitbox.w, attackHitbox.h);
+      if (window.SHOW_DEBUG_OVERLAYS) rect(attackHitbox.x, attackHitbox.y, attackHitbox.w, attackHitbox.h);
       pop();
     }
   }

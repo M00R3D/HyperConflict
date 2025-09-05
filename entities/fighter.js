@@ -160,6 +160,15 @@ class Fighter {
 
     this.checkSpecialMoves();
 
+    // limpiar dashLight cuando su duración expire (evita overlays "fantasma")
+    if (this.dashLightStart && (millis() - this.dashLightStart >= (this.dashLightDuration || 0))) {
+      this.dashLightStart = 0;
+      this.dashLightDuration = 0;
+      delete this.dashLightAnchorX;
+      delete this.dashLightAnchorY;
+      delete this.dashLightFacing;
+    }
+
     // prioridad de estados + anim
     if (this.state.current === "dash") {
       if (millis() - this.dashStartTime > this.dashDuration) {
@@ -279,10 +288,12 @@ class Fighter {
     // anchorX se fija en el momento del dash para que la luz "permanezca" delante del punto inicial
     const centerX = this.x + this.w / 2;
     const centerY = this.y + this.h / 2 - 6;
-    const forwardPeak = 26; // debe coincidir con display.js forwardPeak para consistencia
+    // menor forwardPeak para que no parezca "proyectil" (ajústalo si quieres)
+    const forwardPeak = 18;
     this.dashLightFacing = this.dashDirection || this.facing || 1;
-    this.dashLightAnchorX = centerX + forwardPeak * this.dashLightFacing;
-    this.dashLightAnchorY = centerY;
+    // anchor en coordenadas del mundo (no se recalcula después)
+    this.dashLightAnchorX = Math.round(centerX + forwardPeak * this.dashLightFacing);
+    this.dashLightAnchorY = Math.round(centerY);
   }
 }
 
