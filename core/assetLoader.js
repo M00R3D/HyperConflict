@@ -36,8 +36,8 @@ async function loadSbluerAssets() {
     crouchWalk: await loadPiskel('src/sbluer/sbluer_crouch_walk.piskel'),
     hit: await loadPiskel('src/sbluer/sbluer_hit.piskel'),
     shoot: await loadPiskel('src/sbluer/sbluer_shoot.piskel'),
-    projectile: await loadPiskel('src/sbluer/sbluer_projectile.piskel')
-
+    projectile: await loadPiskel('src/sbluer/sbluer_projectile.piskel'),
+    dash: await loadPiskel('src/sbluer/sbluer_dash.piskel')
   };
 }
 
