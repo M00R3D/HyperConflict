@@ -1,32 +1,54 @@
 // entities/fighter/display.js
 export function display(self) {
-  const stateText = self.state.current;
+  const stateText = (self.state && self.state.current) || 'idle';
   const framesByLayer = self.currentFramesByLayer || self.idleFramesByLayer;
 
-  if (framesByLayer.length > 0 && framesByLayer[0]?.length > 0) {
+  // si hay frames por capa y la capa 0 tiene frames, dibuja la animación
+  if (framesByLayer && framesByLayer.length > 0 && (framesByLayer[0] || []).length > 0) {
     push();
+    // voltear según facing si tu pipeline lo necesita
     if (self.facing === -1) {
       translate(self.x + self.w / 2, 0);
       scale(-1, 1);
       translate(-(self.x + self.w / 2), 0);
     }
-    for (let i = 1; i < framesByLayer.length; i++) {
-      const layerFrames = framesByLayer[i];
-      const img = layerFrames[self.frameIndex];
-      if (!img) continue;
-      const frameWidth = img.width / framesByLayer[0].length;
-      image(
-        img, self.x, self.y, self.w, self.h,
-        frameWidth * self.frameIndex, 0,
-        frameWidth, img.height
-      );
+
+    const fi = Math.max(0, self.frameIndex || 0);
+    const frameCount = (framesByLayer[0]?.length) || 1;
+
+    // si hay más de una capa, saltamos la capa 0 (la capa "de abajo")
+    const startLayer = (framesByLayer.length > 1) ? 1 : 0;
+
+    for (let layer = /*start*/ startLayer; layer < framesByLayer.length; layer++) {
+      const layerFrames = framesByLayer[layer] || [];
+      // cada layerFrames[i] puede ser: a) imagen por frame, b) spritesheet (ancho = frameCount * frameWidth)
+      const imgCandidate = layerFrames[fi] || layerFrames[0];
+      if (!imgCandidate) continue;
+
+      // si la imagen parece un spritesheet horizontal (ancho mayor que alto y hay multiple frames),
+      // dibujamos solo la porción correspondiente al frame actual.
+      if (frameCount > 1 && imgCandidate.width && imgCandidate.height && imgCandidate.width >= imgCandidate.height * frameCount) {
+        const frameWidth = Math.round(imgCandidate.width / frameCount);
+        image(
+          imgCandidate,
+          self.x, self.y,
+          self.w, self.h,
+          frameWidth * fi, 0,
+          frameWidth, imgCandidate.height
+        );
+      } else {
+        // imagen única por frame: dibuja tal cual, escalando al tamaño del fighter
+        image(imgCandidate, self.x, self.y, self.w, self.h);
+      }
     }
     pop();
   } else {
-    fill(self.col);
+    // fallback: cuadro simple
+    fill(self.col || 255);
     rect(self.x, self.y, self.w, self.h);
   }
 
+  // texto estado (debug)
   fill(255);
   textSize(12);
   textAlign(CENTER);

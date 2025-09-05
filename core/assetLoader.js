@@ -16,7 +16,8 @@ async function loadTyemanAssets() {
     crouchWalk: await loadPiskel('src/tyeman/tyeman_crouch_walk.piskel'),
     hit: await loadPiskel('src/tyeman/tyeman_hit.piskel'),
     shoot: await loadPiskel('src/tyeman/tyeman_shoot.piskel'),
-    projectile: await loadPiskel('src/tyeman/tyeman_projectile.piskel')
+    projectile: await loadPiskel('src/tyeman/tyeman_projectile.piskel'),
+    dash: await loadPiskel('src/tyeman/tyeman_dash.piskel')
   };
 }
 

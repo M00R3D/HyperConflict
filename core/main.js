@@ -23,7 +23,7 @@ async function setup() {
     tyeman.punch, tyeman.punch2, tyeman.punch3,
     tyeman.kick, tyeman.kick, tyeman.kick,
     tyeman.crouch, tyeman.crouchWalk, tyeman.hit,
-    tyeman.shoot, tyeman.projectile
+    tyeman.shoot, tyeman.projectile, tyeman.dash
   );
 
   player2 = new Fighter(600, color(100, 100, 255), 'p2',
@@ -31,7 +31,7 @@ async function setup() {
     sbluer.punch, sbluer.punch2, sbluer.punch3,
     sbluer.kick, sbluer.kick, sbluer.kick,
     sbluer.crouch, sbluer.crouchWalk, sbluer.hit,
-    sbluer.shoot, sbluer.projectile
+    sbluer.shoot, sbluer.projectile, tyeman.dash
   );
 
   player1.opponent = player2;

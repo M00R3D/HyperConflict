@@ -222,11 +222,16 @@ export function handleInput(self) {
 
   const setRunTap = (dir, keyName) => {
     if (keysDown[keyName] && !self.keys[dir] && !self.isHit) {
-      if (millis() - self.lastTapTime[dir] < 250) self.runActive = true;
+      // Solo activa runActive si NO está en dash
+      if (millis() - self.lastTapTime[dir] < 250 && self.state.current !== "dash") {
+        self.runActive = true;
+      }
       self.lastTapTime[dir] = millis();
     }
     self.keys[dir] = keysDown[keyName];
     if (!self.keys.left && !self.keys.right && !self.isHit) self.runActive = false;
+    // Si está en dash, fuerza runActive a false
+    if (self.state.current === "dash") self.runActive = false;
   };
 
   if (self.id === 'p1') {

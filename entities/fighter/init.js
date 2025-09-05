@@ -22,6 +22,12 @@ export function initBase(self, x, col, id) {
   self.runFriction = 0.051;
   self.runActive = false;
 
+  // dash defaults (velocidad objetivo y factor de easing 0..1)
+  self.dashSpeed = 14;     // velocidad objetivo del dash (ajusta)
+  self.dashEase = 0.45;    // cuánto interpola hacia la velocidad objetivo por frame (0.0..1.0)
+  self.dashCooldown = 200; // ms opcional entre dashes si quieres bloquear repetición inmediata
+  self.lastDashTime = 0;
+
   self.lastTapTime = { left: 0, right: 0 };
 
   self.frameIndex = 0;
@@ -59,6 +65,8 @@ export function initFrames(self, frames) {
   self.hitFramesByLayer = frames.hitFramesByLayer;
   self.shootFramesByLayer = frames.shootFramesByLayer;
   self.projectileFramesByLayer = frames.projectileFramesByLayer;
+  // asignar dash si viene en el paquete de frames
+  self.dashFramesByLayer = frames.dashFramesByLayer || [];
 }
 
 export function initComboAndInput(self) {
