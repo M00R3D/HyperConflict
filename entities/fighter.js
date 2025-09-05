@@ -82,7 +82,8 @@ class Fighter {
   attack(key) { Attacks.attack(this, key); }
   attackHits(opponent) { return Attacks.attackHits(this, opponent); }
   shoot() { Attacks.shoot(this); }
-  hit() { Attacks.hit(this); }
+  // forward attacker optional param so attacks logic knows who hit us
+  hit(attacker = null) { Attacks.hit(this, attacker); }
 
   getCurrentHitbox() { return Hitbox.getCurrentHitbox(this); }
   getAttackHitbox() { return Hitbox.getAttackHitbox(this); }

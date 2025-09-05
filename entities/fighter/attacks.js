@@ -48,15 +48,62 @@ export function shoot(self) {
 }
 
 export function hit(self, attacker = null) {
-  if (self.isHit) return;
+  // si ya está en hit y no es un upgrade de nivel, no re-aplicamos
+  const atkName = attacker && attacker.attackType ? attacker.attackType : null;
+
+  // mapear ataque -> nivel deseado
+  const levelMap = {
+    punch: 1, punch2: 2, punch3: 3,
+    kick: 1, kick2: 2, kick3: 3,
+    hadouken: 1
+  };
+  const newLevel = levelMap[atkName] || 1;
+
+  // si ya está en hit y su nivel actual es >= newLevel, no hacemos nada
+  if (self.isHit && (self.hitLevel || 0) >= newLevel) {
+    return;
+  }
+
+  // ahora sí aplicamos/upgrade del hit
   self.hp -= 1;
   self.isHit = true;
   self.hitStartTime = millis();
+
+  let kbX = 0;
+  let kbY = -2;
+  let hitStun = 220;
+  self.hitLevel = newLevel; // setear al nuevo nivel
+
+  // empujar hacia la "espalda" del golpeado: -facing
+  const pushDir = -(self.facing || 1);
+
+  switch (atkName) {
+    case 'punch':
+      kbX = pushDir * 1.0; kbY = -2.2; hitStun = 200; break;
+    case 'punch2':
+      kbX = pushDir * 3.0; kbY = -4.0; hitStun = 320; break;
+    case 'punch3':
+      kbX = pushDir * 6.0; kbY = -6.0; hitStun = 520; break;
+    case 'kick':
+      kbX = pushDir * 2.6; kbY = -1.8; hitStun = 220; break;
+    case 'kick2':
+      kbX = 0; kbY = -4.2; hitStun = 300; break;
+    case 'kick3':
+      kbX = pushDir * 5.5; kbY = -5.0; hitStun = 480; break;
+    case 'hadouken':
+      kbX = pushDir * 3.5; kbY = -2.0; hitStun = 260; break;
+    default:
+      kbX = pushDir * 2.0; kbY = -2.0; hitStun = 220; break;
+  }
+
+  // aplicar knockback (reemplaza valores anteriores si es upgrade)
+  self.vx = kbX;
+  self.vy = kbY;
+
+  if (kbY < -1.5) self.onGround = false;
+
+  self.hitDuration = hitStun;
   self.setState("hit");
-  // si tenemos atacante, empujar en la dirección opuesta al atacante.facing
-  const fromFacing = attacker ? attacker.facing : self.facing;
-  self.vx = -fromFacing * 5;
-  self.vy = -3;
 }
 
 export function updateAttackState(self) {
