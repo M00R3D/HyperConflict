@@ -1,6 +1,15 @@
 // entities/fighter/display.js
 export function display(self) {
-  const stateText = (self.state && self.state.current) || 'idle';
+  // freeze state text during pause so the UI label doesn't change while paused
+  let stateText = (self.state && self.state.current) || 'idle';
+  const isPausedTop = !!window.PAUSED;
+  if (isPausedTop) {
+    if (self._stateTextFrozen == null) self._stateTextFrozen = stateText;
+    stateText = self._stateTextFrozen;
+  } else {
+    if (self._stateTextFrozen != null) self._stateTextFrozen = null;
+  }
+
   const framesByLayer = self.currentFramesByLayer || self.idleFramesByLayer;
   // ensure per-fighter alpha state for dashLight visuals
   self._dashLightAlpha = (typeof self._dashLightAlpha === 'number') ? self._dashLightAlpha : 1.0;
@@ -49,7 +58,8 @@ export function display(self) {
   const lightActive = hasDashLight && lightStart > 0 && lightElapsed < lightDur;
 
   // ---------- FREEZE dashLight COMPLETELY while PAUSED ----------
-  const isPaused = !!window.PAUSED;
+  // use the top-level pause value (avoid redeclaring). `isPausedTop` set near the top.
+  const isPaused = !!window.PAUSED
 
   // mantener la luz visible si está activa; no hacemos fade por pausa (se congela visible)
   const targetVisual = lightActive ? 1 : 0;
@@ -225,4 +235,49 @@ export function display(self) {
     rect(self.x, self.y, self.w, self.h);
     pop();
   }
+
+  // Debug: dibujar hitboxes si está activado el overlay (toggle con '1')
+  if (window.SHOW_DEBUG_OVERLAYS) {
+    try {
+      // hitbox principal
+      const hb = (typeof self.getCurrentHitbox === 'function') ? self.getCurrentHitbox() : null;
+      // hitbox de ataque (si existe)
+      const ahb = (typeof self.getAttackHitbox === 'function') ? self.getAttackHitbox() : null;
+
+      push();
+      // dibujar hitboxes
+      noFill();
+      strokeWeight(1.5);
+      if (hb) {
+        stroke(255, 0, 0, 200);
+        rect(hb.x, hb.y, hb.w, hb.h);
+      }
+      if (ahb) {
+        stroke(0, 255, 0, 200);
+        rect(ahb.x, ahb.y, ahb.w, ahb.h);
+      }
+
+      // dibujar texto de estado sobre la cabeza del fighter (centered)
+      try {
+        textAlign(CENTER, BOTTOM);
+        textSize(12);
+        noStroke();
+        fill(255);
+        const labelX = Math.round(self.x + self.w / 2);
+        const labelY = Math.round(self.y - 6);
+        // usar texto congelado si existe (stateText definido al inicio de display)
+        const label = (typeof stateText === 'string') ? stateText : ((self.state && self.state.current) || 'idle');
+        text(label, labelX, labelY);
+      } catch (e) {
+        /* ignore text draw errors */
+      }
+
+      pop();
+    } catch (e) {
+      // safe: no romper render si hay error
+      // console.warn('debug draw failed', e);
+    }
+  }  
+
 }
+
