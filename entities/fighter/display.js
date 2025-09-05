@@ -31,4 +31,28 @@ export function display(self) {
   textSize(12);
   textAlign(CENTER);
   text(stateText, self.x + self.w / 2, self.y - 10);
+
+  // Dibuja la hitbox (debug)
+  if (typeof self.getCurrentHitbox === 'function') {
+    const hitbox = self.getCurrentHitbox();
+    if (hitbox) {
+      push();
+      noFill();
+      stroke(0, 255, 0, 180); // Verde semitransparente
+      strokeWeight(2);
+      rect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
+      pop();
+    }
+  }
+  if(typeof self.getAttackHitbox === 'function') {
+    const attackHitbox = self.getAttackHitbox();
+    if (attackHitbox) {
+      push();
+      noFill();
+      stroke(255, 0, 0, 180); // Rojo semitransparente
+      strokeWeight(2);
+      rect(attackHitbox.x, attackHitbox.y, attackHitbox.w, attackHitbox.h);
+      pop();
+    }
+  }
 }
