@@ -47,13 +47,15 @@ export function shoot(self) {
   proj.push(p);
 }
 
-export function hit(self) {
+export function hit(self, attacker = null) {
   if (self.isHit) return;
   self.hp -= 1;
   self.isHit = true;
   self.hitStartTime = millis();
   self.setState("hit");
-  self.vx = -self.facing * 5;
+  // si tenemos atacante, empujar en la dirección opuesta al atacante.facing
+  const fromFacing = attacker ? attacker.facing : self.facing;
+  self.vx = -fromFacing * 5;
   self.vy = -3;
 }
 

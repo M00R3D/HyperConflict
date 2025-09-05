@@ -195,6 +195,52 @@ class Fighter {
     Anim.exitHitIfElapsed(this);
   }
 
+  // llamada ligera durante hitstop: avanza timers de ataque/hit sin ejecutar movimiento completo
+  updateDuringHitstop() {
+    // avanzar estado de ataque para que startup/active/recovery cierren
+    if (typeof Attacks !== 'undefined' && Attacks.updateAttackState) {
+      Attacks.updateAttackState(this);
+    }
+
+    // permitir salir de hit si elapsed (asegura que Anim exista y tenga exitHitIfElapsed)
+    if (typeof Anim !== 'undefined' && Anim.exitHitIfElapsed) {
+      Anim.exitHitIfElapsed(this);
+    }
+
+    // Forzar salida de isHit si por alguna razón no se limpió (protección)
+    if (this.isHit && (millis() - (this.hitStartTime || 0) >= (this.hitDuration || 0))) {
+      this.isHit = false;
+      // restablecer estado base según direcciones sostenidas
+      const stillDir = this.keys && (this.keys.left || this.keys.right);
+      this.runActive = !!stillDir;
+      if (this.runActive && stillDir) this.setState('run');
+      else this.setState('idle');
+    }
+
+    // aplicar física mínima para que el golpeado reciba knockback y no quede inmóvil.
+    // no ejecutamos full Movement.updateMovement para mantener "congelación" de hitstop feel,
+    // pero sí dejamos avanzar la posición por la velocidad actual y la gravedad.
+    this.vx = this.vx || 0;
+    this.vy = this.vy || 0;
+    // aplicar fricción ligera horizontal (para evitar drift infinito)
+    const minFriction = 0.04;
+    if (this.vx > 0.01) this.vx = Math.max(0, this.vx - minFriction);
+    if (this.vx < -0.01) this.vx = Math.min(0, this.vx + minFriction);
+
+    this.x += this.vx;
+    this.vy += (this.gravity || 0.3);
+    this.y += this.vy;
+
+    if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
+    else this.onGround = false;
+
+    this.x = constrain(this.x, 0, width - this.w);
+
+    // avanzar contadores de estado/animación para evitar bloqueos visuales
+    if (this.state) this.state.timer = (this.state.timer || 0) + 1;
+    this.frameTimer = (this.frameTimer || 0) + 1;
+  }
+
   display() { Display.display(this); }
 
   dash(dir) {

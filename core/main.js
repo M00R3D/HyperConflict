@@ -6,6 +6,7 @@ import { initInput, clearFrameFlags } from './input.js';
 import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';
 import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
 import { drawBackground } from '../ui/background.js';
+import { applyHitstop, isHitstopActive } from './hitstop.js';
 
 let player1, player2;
 let projectiles = [];
@@ -55,39 +56,58 @@ function draw() {
   player1.handleInput();
   player2.handleInput();
 
-  // ataque cuerpo a cuerpo
-  if (player1.attackHits(player2)) player2.hit();
-  if (player2.attackHits(player1)) player1.hit();
-
-  // updates
-  player1.update();
-  player2.update();
-
-  // actualizar proyectiles y colisiones en un único bucle
-  for (let i = projectiles.length - 1; i >= 0; i--) {
-    const p = projectiles[i];
-    p.update();
-
-    // colisión con player1
-    if (!p.toRemove && p.hits(player1) && p.ownerId !== player1.id) {
-      player1.hit();            // pone en estado hit y resta HP usando tu lógica
-      p.toRemove = true;       // marcar para eliminar
-    }
-
-    // colisión con player2
-    else if (!p.toRemove && p.hits(player2) && p.ownerId !== player2.id) {
-      player2.hit();
-      p.toRemove = true;
-    }
-
-    // fuera de pantalla -> eliminar
-    if (p.toRemove || p.offscreen()) {
-      projectiles.splice(i, 1);
-    }
+  // ataque cuerpo a cuerpo -> aplicar hitstop al conectar y pasar atacante al hit()
+  if (player1.attackHits(player2)) {
+    const atk = player1.attackType;
+    const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 80;
+    applyHitstop(hs);
+    player2.hit(player1);
+  }
+  if (player2.attackHits(player1)) {
+    const atk = player2.attackType;
+    const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 80;
+    applyHitstop(hs);
+    player1.hit(player2);
   }
 
-  cam = updateCamera(player1, player2, cam);
+  // Si hay hitstop activo, NO ejecutar updates (pausa lógica/animaciones/movimientos)
+  const hsActive = isHitstopActive();
+  if (!hsActive) {
+    // updates
+    player1.update();
+    player2.update();
 
+    // actualizar proyectiles y colisiones en un único bucle
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const p = projectiles[i];
+      p.update();
+
+      // colisión con player1
+      if (!p.toRemove && p.hits(player1) && p.ownerId !== player1.id) {
+        player1.hit();
+        p.toRemove = true;
+      }
+
+      // colisión con player2
+      else if (!p.toRemove && p.hits(player2) && p.ownerId !== player2.id) {
+        player2.hit();
+        p.toRemove = true;
+      }
+
+      // fuera de pantalla -> eliminar
+      if (p.toRemove || p.offscreen()) {
+        projectiles.splice(i, 1);
+      }
+    }
+
+    cam = updateCamera(player1, player2, cam);
+  } else {
+    // durante hitstop avanzamos solo timers/minimos estados para no quedar bloqueados
+    if (player1 && typeof player1.updateDuringHitstop === 'function') player1.updateDuringHitstop();
+    if (player2 && typeof player2.updateDuringHitstop === 'function') player2.updateDuringHitstop();
+  }
+
+  // render (siempre)
   push();
   applyCamera(cam);
   drawBackground();

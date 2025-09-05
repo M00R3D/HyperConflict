@@ -44,8 +44,7 @@ export function initBase(self, x, col, id) {
 
   self.isHit = false;
   self.hitStartTime = 0;
-  self.hitDuration = 600;
-
+  self.hitDuration = 260; // default más corto para sensación más responsiva (ajusta)
 }
 
 export function initFrames(self, frames) {
