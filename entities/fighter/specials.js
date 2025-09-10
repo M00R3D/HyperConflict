@@ -4,112 +4,55 @@ import { projectiles } from '../../core/main.js';
 import * as Hitbox from './hitbox.js';
 import * as Buffer from './buffer.js';
 
-export const specialMoves = {
-  hadouken: ['↓','↘','→','P'],
-  shoryuken: ['→','↓','↘','P'],
-  // supersalto: agacharse y saltar rápido (down, up)
-  supersalto: ['↓','↑'],
-  // ty_tats declarado como BACKWARD (↓,↙,←,K) — lo dejamos con input de "hacia atrás"
-  ty_tats: ['↓','↙','←','K']
+// Se definen las secuencias base asumiendo facing = 1 (mirando a la derecha).
+// Cada movimiento puede declarar direction: 'forward'|'backward'|'any' para reglas futuras.
+export const specialDefs = {
+  hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
+  shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
+  supersalto: { seq: ['↓','↑'], direction: 'any' },
+  ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' }
 };
 
 export function checkSpecialMoves(self) {
   const bufSymbols = (self.inputBuffer || []).map(i => i.symbol || '');
-  console.log('checkSpecialMoves [' + (self.id||'?') + ']: facing=', self.facing, 'x=', Math.round(self.x), 'buffer=', bufSymbols);
-
-  // Para hadouken, verificar la secuencia exacta según facing
-  if (self.facing === 1) {
-    // Mirando a la derecha: requerir secuencia exacta ↓,↘,→,P
-    const hadoukenSeq = ['↓','↘','→','P'];
-    
-    // Verificación estricta: debe terminar exactamente con ↓,↘,→,P
-    let hadoukenMatch = false;
-    if (bufSymbols.length >= hadoukenSeq.length) {
-      const endSlice = bufSymbols.slice(-hadoukenSeq.length);
-      hadoukenMatch = endSlice.every((sym, i) => sym === hadoukenSeq[i]);
-      
-      if (hadoukenMatch) {
-        doSpecial(self, 'hadouken');
-        Buffer.bufferConsumeLast(self, hadoukenSeq.length);
-        return;
-      }
-    }
-  } else if (self.facing === -1) {
-    // Mirando a la izquierda: requerir secuencia exacta ↓,↙,←,P
-    const hadoukenSeq = ['↓','↙','←','P']; 
-    
-    // Verificación estricta: debe terminar exactamente con ↓,↙,←,P
-    let hadoukenMatch = false;
-    if (bufSymbols.length >= hadoukenSeq.length) {
-      const endSlice = bufSymbols.slice(-hadoukenSeq.length);
-      hadoukenMatch = endSlice.every((sym, i) => sym === hadoukenSeq[i]);
-      
-      if (hadoukenMatch) {
-        doSpecial(self, 'hadouken');
-        Buffer.bufferConsumeLast(self, hadoukenSeq.length);
-        return;
-      }
-    }
-  }
-
-  // Procesar otros movimientos especiales (incluyendo ty_tats)
+  // identificar el último símbolo direccional (si existe)
   const directionalSet = new Set(['←','→','↑','↓','↖','↗','↘','↙']);
-  const isForwardSymbol = (sym, facing) => {
-    if (!sym) return false;
-    if (facing === 1) return sym === '→' || sym === '↘' || sym === '↗';
-    return sym === '←' || sym === '↙' || sym === '↖';
-  };
-  
-  const isBackwardSymbol = (sym, facing) => {
-    if (!sym) return false;
-    if (facing === 1) return sym === '←' || sym === '↙' || sym === '↖';
-    return sym === '→' || sym === '↘' || sym === '↗';
-  };
-
-  // último símbolo direccional en el buffer (si existe)
   let lastDirInBuffer = null;
   for (let i = bufSymbols.length - 1; i >= 0; i--) {
     if (directionalSet.has(bufSymbols[i])) { lastDirInBuffer = bufSymbols[i]; break; }
   }
 
-  // Procesar todos los movimientos excepto hadouken (ya procesado arriba)
-  for (const moveName in specialMoves) {
-    if (moveName === 'hadouken') continue; // Saltamos hadouken porque ya lo procesamos
-    
-    const baseSeq = [...specialMoves[moveName]];
+  for (const moveName in specialDefs) {
+    const def = specialDefs[moveName];
+    if (!def || !Array.isArray(def.seq)) continue;
 
-    if (moveName === 'ty_tats') {
-      // ty_tats requiere que la última dirección sea hacia atrás
-      if (lastDirInBuffer && !isBackwardSymbol(lastDirInBuffer, self.facing)) {
-        continue; // No permitir ty_tats si no termina apuntando hacia atrás
-      }
-    }
-
-    // crear secuencia efectiva según facing (espejar si mira a la izquierda)
-    let seq = baseSeq.map(s => s);
+    // construir secuencia efectiva según facing (si facing === -1, espejar)
+    let seq = def.seq.slice();
     if (self.facing === -1) seq = seq.map(s => Hitbox.mirrorSymbol(s));
 
-    // intentar match flexible o estricto
-    let matched = false;
-    if (Buffer.flexibleEndsWith(self, bufSymbols, seq)) matched = true;
-    else if (Buffer.bufferEndsWith(self, seq)) matched = true;
-
-    if (!matched) continue;
-
-    // Verificación adicional para ty_tats (ya verificamos hadouken arriba)
-    if (moveName === 'ty_tats') {
-      // Verificar que el último input direccional de la secuencia sea backward
-      const dirSymbolsInSeq = seq.filter(s => directionalSet.has(s));
-      const lastDirInSeq = dirSymbolsInSeq.length ? dirSymbolsInSeq[dirSymbolsInSeq.length - 1] : null;
-      if (!isBackwardSymbol(lastDirInSeq, self.facing)) {
-        continue; // No permitir ty_tats si la secuencia no termina en backward
+    // opción: exigir direction (forward/backward) — pero al espejar la secuencia ya queda correcta
+    if (def.direction === 'forward') {
+      // si hay un símbolo direccional en el buffer y no coincide con forward relativo al facing, skip
+      if (lastDirInBuffer) {
+        const forwardSet = (self.facing === 1) ? new Set(['→','↘','↗']) : new Set(['←','↙','↖']);
+        if (!forwardSet.has(lastDirInBuffer)) continue;
+      }
+    } else if (def.direction === 'backward') {
+      if (lastDirInBuffer) {
+        const backSet = (self.facing === 1) ? new Set(['←','↙','↖']) : new Set(['→','↘','↗']);
+        if (!backSet.has(lastDirInBuffer)) continue;
       }
     }
 
-    // ejecutar y consumir buffer
-    doSpecial(self, moveName);
-    Buffer.bufferConsumeLast(self, seq.length);
-    return;
+    // match estricto: la cola del buffer debe coincidir exactamente con la secuencia
+    if (Buffer.bufferEndsWith(self, seq)) {
+      doSpecial(self, moveName);
+      Buffer.bufferConsumeLast(self, seq.length);
+      return;
+    }
+
+    // si quieres permitir entradas con símbolos intermedios en algunos specials,
+    // usa Buffer.flexibleEndsWith(bufSymbols, seq) en lugar de bufferEndsWith.
   }
 }
 
