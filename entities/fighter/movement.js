@@ -47,8 +47,9 @@ export function updateMovement(self) {
       if (self.vx > 0) self.vx = Math.max(0, self.vx - effectiveFriction);
       if (self.vx < 0) self.vx = Math.min(0, self.vx + effectiveFriction);
     }
-    if (self.keys.left) self.facing = -1;
-    if (self.keys.right) self.facing = 1;
+    // no reasignar facing continuamente aquí (segestiona en key-press y autoFace)
+    // if (self.keys.left) self.facing = -1;
+    // if (self.keys.right) self.facing = 1;
   } else {
     // Si estás en hit: aplicar sólo fricción para que no quede drift infinito
     if (!self.keys.left && !self.keys.right) {

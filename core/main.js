@@ -56,6 +56,10 @@ async function setup() {
   player1.opponent = player2;
   player2.opponent = player1;
 
+  // asegurar facing inicial basado en la posición relativa (source of truth = Fighter.facing)
+  player1.facing = (player1.x < player2.x) ? 1 : -1;
+  player2.facing = (player2.x < player1.x) ? 1 : -1;
+
   initInput({ p1: player1, p2: player2, ready: true });
   playersReady = true;
 }

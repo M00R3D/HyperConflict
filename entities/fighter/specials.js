@@ -1,35 +1,115 @@
 // entities/fighter/specials.js
 import { Projectile } from '../../entities/projectile.js';
 import { projectiles } from '../../core/main.js';
+import * as Hitbox from './hitbox.js';
+import * as Buffer from './buffer.js';
 
 export const specialMoves = {
   hadouken: ['↓','↘','→','P'],
   shoryuken: ['→','↓','↘','P'],
-  // tatsumaki: ['↓','↙','←','K'],
   // supersalto: agacharse y saltar rápido (down, up)
   supersalto: ['↓','↑'],
-  // tyeman tats special (dispara el proyectil vertical que crece y se desvanece)
+  // ty_tats declarado como BACKWARD (↓,↙,←,K) — lo dejamos con input de "hacia atrás"
   ty_tats: ['↓','↙','←','K']
 };
 
-import * as Hitbox from './hitbox.js';
-import * as Buffer from './buffer.js';
-
 export function checkSpecialMoves(self) {
-  const bufSymbols = (self.inputBuffer || []).map(i => i.symbol);
+  const bufSymbols = (self.inputBuffer || []).map(i => i.symbol || '');
+  console.log('checkSpecialMoves [' + (self.id||'?') + ']: facing=', self.facing, 'x=', Math.round(self.x), 'buffer=', bufSymbols);
+
+  // Para hadouken, verificar la secuencia exacta según facing
+  if (self.facing === 1) {
+    // Mirando a la derecha: requerir secuencia exacta ↓,↘,→,P
+    const hadoukenSeq = ['↓','↘','→','P'];
+    
+    // Verificación estricta: debe terminar exactamente con ↓,↘,→,P
+    let hadoukenMatch = false;
+    if (bufSymbols.length >= hadoukenSeq.length) {
+      const endSlice = bufSymbols.slice(-hadoukenSeq.length);
+      hadoukenMatch = endSlice.every((sym, i) => sym === hadoukenSeq[i]);
+      
+      if (hadoukenMatch) {
+        doSpecial(self, 'hadouken');
+        Buffer.bufferConsumeLast(self, hadoukenSeq.length);
+        return;
+      }
+    }
+  } else if (self.facing === -1) {
+    // Mirando a la izquierda: requerir secuencia exacta ↓,↙,←,P
+    const hadoukenSeq = ['↓','↙','←','P']; 
+    
+    // Verificación estricta: debe terminar exactamente con ↓,↙,←,P
+    let hadoukenMatch = false;
+    if (bufSymbols.length >= hadoukenSeq.length) {
+      const endSlice = bufSymbols.slice(-hadoukenSeq.length);
+      hadoukenMatch = endSlice.every((sym, i) => sym === hadoukenSeq[i]);
+      
+      if (hadoukenMatch) {
+        doSpecial(self, 'hadouken');
+        Buffer.bufferConsumeLast(self, hadoukenSeq.length);
+        return;
+      }
+    }
+  }
+
+  // Procesar otros movimientos especiales (incluyendo ty_tats)
+  const directionalSet = new Set(['←','→','↑','↓','↖','↗','↘','↙']);
+  const isForwardSymbol = (sym, facing) => {
+    if (!sym) return false;
+    if (facing === 1) return sym === '→' || sym === '↘' || sym === '↗';
+    return sym === '←' || sym === '↙' || sym === '↖';
+  };
+  
+  const isBackwardSymbol = (sym, facing) => {
+    if (!sym) return false;
+    if (facing === 1) return sym === '←' || sym === '↙' || sym === '↖';
+    return sym === '→' || sym === '↘' || sym === '↗';
+  };
+
+  // último símbolo direccional en el buffer (si existe)
+  let lastDirInBuffer = null;
+  for (let i = bufSymbols.length - 1; i >= 0; i--) {
+    if (directionalSet.has(bufSymbols[i])) { lastDirInBuffer = bufSymbols[i]; break; }
+  }
+
+  // Procesar todos los movimientos excepto hadouken (ya procesado arriba)
   for (const moveName in specialMoves) {
-    let seq = specialMoves[moveName];
+    if (moveName === 'hadouken') continue; // Saltamos hadouken porque ya lo procesamos
+    
+    const baseSeq = [...specialMoves[moveName]];
+
+    if (moveName === 'ty_tats') {
+      // ty_tats requiere que la última dirección sea hacia atrás
+      if (lastDirInBuffer && !isBackwardSymbol(lastDirInBuffer, self.facing)) {
+        continue; // No permitir ty_tats si no termina apuntando hacia atrás
+      }
+    }
+
+    // crear secuencia efectiva según facing (espejar si mira a la izquierda)
+    let seq = baseSeq.map(s => s);
     if (self.facing === -1) seq = seq.map(s => Hitbox.mirrorSymbol(s));
-    if (Buffer.flexibleEndsWith(self, bufSymbols, seq)) {
-      doSpecial(self, moveName);
-      Buffer.bufferConsumeLast(self, seq.length);
-      return;
+
+    // intentar match flexible o estricto
+    let matched = false;
+    if (Buffer.flexibleEndsWith(self, bufSymbols, seq)) matched = true;
+    else if (Buffer.bufferEndsWith(self, seq)) matched = true;
+
+    if (!matched) continue;
+
+    // Verificación adicional para ty_tats (ya verificamos hadouken arriba)
+    if (moveName === 'ty_tats') {
+      // Verificar que el último input direccional de la secuencia sea backward
+      const dirSymbolsInSeq = seq.filter(s => directionalSet.has(s));
+      const lastDirInSeq = dirSymbolsInSeq.length ? dirSymbolsInSeq[dirSymbolsInSeq.length - 1] : null;
+      if (!isBackwardSymbol(lastDirInSeq, self.facing)) {
+        continue; // No permitir ty_tats si la secuencia no termina en backward
+      }
     }
-    if (Buffer.bufferEndsWith(self, seq)) {
-      doSpecial(self, moveName);
-      Buffer.bufferConsumeLast(self, seq.length);
-      return;
-    }
+
+    // ejecutar y consumir buffer
+    doSpecial(self, moveName);
+    Buffer.bufferConsumeLast(self, seq.length);
+    return;
   }
 }
 
@@ -103,19 +183,17 @@ export function doSpecial(self, moveName) {
     };
 
     // Crear 4 proyectiles con spawnDelay secuencial y pequeños offsets
-    // Ajustes: empezar más cerca del usuario (offset inicial pequeño) y
-    // espaciar más entre las piezas (offset increment más grande).
-    const gap = 110; // ms entre apariciones (mantener o ajustar)
-    const initialOffset = Math.round(this?.w ? this.w / 2 : (self.w / 2)); // offset base cerca del cuerpo
-    const step = 18; // px entre piezas (mayor spacing)
-
+    const gap = 110; // ms entre apariciones
+    const initialOffset = Math.round(self.w / 2); // offset base desde el centro
+    const step = 18; // px entre piezas
+    const centerX = Math.round(self.x + self.w / 2);
     for (let k = 0; k < 4; k++) {
       const dir = self.facing === 1 ? 1 : -1;
-      // spawn empieza más cerca (initialOffset) y se desplaza por 'step' por pieza
+      // offset relativo al centro del fighter; para facing=-1 offset será negativo
       const offsetX = (dir === 1)
         ? (initialOffset + 6 + k * step)
-        : (-initialOffset - 6 - k * step);
-      const px = Math.round(self.x + offsetX);
+        : -(initialOffset + 6 + k * step);
+      const px = Math.round(centerX + offsetX);
       const py = Math.round(self.y + self.h / 2 - 6);
       const opts = Object.assign({}, baseOpts, { spawnDelay: k * gap });
       const tatsProj = (self.tatsProjFramesByLayer && self.tatsProjFramesByLayer.length) ? self.tatsProjFramesByLayer : null;

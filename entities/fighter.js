@@ -25,6 +25,10 @@ class Fighter {
   ) {
     // delegar inicialización
     Init.initBase(this, x, col, id);
+
+    // asegurar que el Fighter tenga una propiedad 'facing' definida (1 = derecha, -1 = izquierda)
+    if (typeof this.facing !== 'number') this.facing = 1;
+    
     Init.initFrames(this, {
       idleFramesByLayer, walkFramesByLayer, jumpFramesByLayer,
       fallFramesByLayer, runFramesByLayer, punchFramesByLayer,
@@ -122,6 +126,8 @@ class Fighter {
           this.dash(-1);
         }
         this.lastTapTime.left = now;
+        // cambiar facing en el evento de pulsación (solo al iniciar la pulsación)
+        this.facing = -1;
       }
       if (keysUp['a']) {
         this.lastReleaseTime.left = now;
@@ -132,6 +138,8 @@ class Fighter {
           this.dash(1);
         }
         this.lastTapTime.right = now;
+        // cambiar facing en el evento de pulsación (solo al iniciar la pulsación)
+        this.facing = 1;
       }
       if (keysUp['d']) {
         this.lastReleaseTime.right = now;
@@ -143,6 +151,7 @@ class Fighter {
           this.dash(-1);
         }
         this.lastTapTime.left = now;
+        this.facing = -1;
       }
       if (keysUp['arrowleft']) {
         this.lastReleaseTime.left = now;
@@ -153,6 +162,7 @@ class Fighter {
           this.dash(1);
         }
         this.lastTapTime.right = now;
+        this.facing = 1;
       }
       if (keysUp['arrowright']) {
         this.lastReleaseTime.right = now;
