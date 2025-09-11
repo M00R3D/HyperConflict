@@ -37,7 +37,7 @@ async function setup() {
     tyeman.tats, // anim "tats" para el personaje
     tyeman.tatsProjFramesByLayer, // frames del proyectil tats
     tyeman.dashLight, // <-- nuevo parámetro para dash overlay
-    tyeman.dash
+    tyeman.dash, tyeman.taunt
   );
 
   player2 = new Fighter(600, color(100, 100, 255), 'p2',
@@ -50,7 +50,7 @@ async function setup() {
     sbluer.tats, // personaje tats (puede ser null)
     sbluer.tatsProjFramesByLayer, // passthrough (may be null)
     sbluer.dashLight, // <-- nuevo parámetro para dash overlay
-    sbluer.dash
+    sbluer.dash, sbluer.taunt
   );
 
   player1.opponent = player2;

@@ -77,9 +77,11 @@ export function addInputFromKey(self, keyName) {
   if (self.id === 'p1') {
     if (keyName === 'i') { addInput(self, 'P'); return; }
     if (keyName === 'o') { addInput(self, 'K'); return; }
+    if (keyName === ' ') { addInput(self, 'T'); return; }
   } else {
     if (keyName === 'b') { addInput(self, 'P'); return; }
     if (keyName === 'n') { addInput(self, 'K'); return; }
+    if (keyName === 'backspace') { addInput(self, 'T'); return; }
   }
 
   const thisSym = (self.id === 'p1') ? dirMapP1[keyName] : dirMapP2[keyName];

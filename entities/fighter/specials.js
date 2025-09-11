@@ -10,7 +10,8 @@ export const specialDefs = {
   hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
   shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
   supersalto: { seq: ['↓','↑'], direction: 'any' },
-  ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' }
+  ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
+  taunt: { seq: ['T'], direction: 'any' }
 };
 
 export function checkSpecialMoves(self) {
@@ -146,5 +147,12 @@ export function doSpecial(self, moveName) {
     }
 
     return;
+  } else if (moveName === 'taunt') {
+    self.setState('taunt');
+    // mantener la animación durante ~1.7s usando la mecánica de "attacking"
+    self.attacking = true;
+    self.attackType = 'taunt';
+    self.attackStartTime = millis();
+    self.attackDuration = 1700; // 1700 ms = 1.7s
   }
 }

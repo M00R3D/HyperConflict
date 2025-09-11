@@ -66,7 +66,7 @@ async function loadSbluerAssets() {
     projectile: await loadOrNull('src/sbluer/sbluer_projectile.piskel'),
     dash: await loadOrNull('src/sbluer/sbluer_dash.piskel'),
   dashLight: await loadOrNull('src/sbluer/sbluer_dash_light.piskel'),
-  taunt: await loadOrNull('src/tyeman/tyeman_taunt.piskel')
+  taunt: await loadOrNull('src/sbluer/sbluer_taunt.piskel')
   };
 }
  
