@@ -22,6 +22,7 @@ class Fighter {
     tatsFramesByLayer = [], tatsProjFramesByLayer = [],
     dashLightFramesByLayer = [], // <-- nuevo parámetro antes del dash final
     dashFramesByLayer = [] // <-- existente
+    ,tauntFramesByLayer = []
   ) {
     // delegar inicialización
     Init.initBase(this, x, col, id);
@@ -35,12 +36,13 @@ class Fighter {
       punch2FramesByLayer, punch3FramesByLayer, kickFramesByLayer,
       kick2FramesByLayer, kick3FramesByLayer, crouchFramesByLayer,
       crouchWalkFramesByLayer, hitFramesByLayer,
-      hit1FramesByLayer: hit2FramesByLayer /* temp */,
+      hit1FramesByLayer: hitFramesByLayer,
       hit2FramesByLayer, hit3FramesByLayer,
       shootFramesByLayer, projectileFramesByLayer,
-      tatsFramesByLayer, tatsProjFramesByLayer, // <-- pasar ambos
-      dashLightFramesByLayer, // <-- pasar al init
-      dashFramesByLayer // <-- agregado
+      tatsFramesByLayer, tatsProjFramesByLayer,
+      dashLightFramesByLayer,
+      dashFramesByLayer,
+      tauntFramesByLayer
     });
     Init.initComboAndInput(this);
     Init.initHitboxes(this);
@@ -64,7 +66,8 @@ class Fighter {
       crouchwalk: { anim: this.crouchWalkFramesByLayer, frameDelay: 10 },
       hit:     { anim: this.hitFramesByLayer, frameDelay: 10 },
       hadouken: { anim: this.shootFramesByLayer, frameDelay: 6, duration: 600 },
-      dash:    { anim: this.dashFramesByLayer, frameDelay: 10, duration: 1200 } // <-- agregado
+      dash:    { anim: this.dashFramesByLayer, frameDelay: 10, duration: 1200 }, // <-- agregado
+      taunt:  { anim: this.tauntFramesByLayer, frameDelay: 10, duration: 800 } // <-- agregado
     };
 
     // estado inicial

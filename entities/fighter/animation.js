@@ -27,6 +27,7 @@ export function setState(self, newState) {
     case 'hit3':      self.currentFramesByLayer = self.hit3FramesByLayer || self.hitFramesByLayer; break;
     case 'hadouken':  self.currentFramesByLayer = self.shootFramesByLayer; break;
     case 'dash':      self.currentFramesByLayer = self.dashFramesByLayer; break;
+    case 'taunt':      self.currentFramesByLayer = self.tauntFramesByLayer; break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 

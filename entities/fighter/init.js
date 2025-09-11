@@ -17,7 +17,7 @@ export function initBase(self, x, col, id) {
   self.acceleration = 1.1;
   self.runAcceleration = 1.11;
   self.maxSpeed = 4;
-  self.runMaxSpeed = 8;
+  self.runMaxSpeed = 10;
   self.friction = 0.1;
   self.runFriction = 0.051;
   self.runActive = false;
@@ -78,6 +78,9 @@ export function initFrames(self, frames) {
   self.tatsFramesByLayer = frames.tatsFramesByLayer || frames.tats || [];
   // frames específicas para el proyectil "tats" (si vienen en el paquete)
   self.tatsProjFramesByLayer = frames.tatsProjFramesByLayer || [];
+
+  self.tauntFramesByLayer = frames.tauntFramesByLayer || [];
+
 }
 
 export function initComboAndInput(self) {
