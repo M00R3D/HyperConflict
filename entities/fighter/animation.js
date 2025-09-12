@@ -28,6 +28,7 @@ export function setState(self, newState) {
     case 'hadouken':  self.currentFramesByLayer = self.shootFramesByLayer; break;
     case 'dash':      self.currentFramesByLayer = self.dashFramesByLayer; break;
     case 'taunt':      self.currentFramesByLayer = self.tauntFramesByLayer; break;
+    case 'block':      self.currentFramesByLayer = self.blockFramesByLayer; break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 

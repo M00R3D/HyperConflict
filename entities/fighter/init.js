@@ -80,6 +80,7 @@ export function initFrames(self, frames) {
   self.tatsProjFramesByLayer = frames.tatsProjFramesByLayer || [];
 
   self.tauntFramesByLayer = frames.tauntFramesByLayer || [];
+  self.blockFramesByLayer = frames.blockFramesByLayer || [];
 
 }
 
