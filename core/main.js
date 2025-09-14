@@ -37,7 +37,7 @@ async function setup() {
     tyeman.tats, // anim "tats" para el personaje
     tyeman.tatsProjFramesByLayer, // frames del proyectil tats
     tyeman.dashLight, // <-- nuevo parámetro para dash overlay
-    tyeman.dash, tyeman.taunt,tyeman.block
+    tyeman.dash, tyeman.taunt,tyeman.block,tyeman.crouchBlock
   );
 
   player2 = new Fighter(600, color(100, 100, 255), 'p2',
@@ -50,7 +50,7 @@ async function setup() {
     sbluer.tats, // personaje tats (puede ser null)
     sbluer.tatsProjFramesByLayer, // passthrough (may be null)
     sbluer.dashLight, // <-- nuevo parámetro para dash overlay
-    sbluer.dash, sbluer.taunt,sbluer.block
+    sbluer.dash, sbluer.taunt,sbluer.block,sbluer.crouchBlock
   );
 
   player1.opponent = player2;
@@ -111,7 +111,7 @@ function draw() {
     if (player1 && typeof player1.attackHits === 'function' && player1.attackHits(player2)) {
       if (player2.blocking && isAttackerInFront(player1, player2)) {
         applyHitstop(30); // feedback corto por bloqueo
-        player2.setState && player2.setState('block');
+        player2.setState && player2.setState(player2.crouching ? 'crouchBlock' : 'block');
       } else {
         const atk = player1.attackType;
         const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 80;
@@ -123,7 +123,7 @@ function draw() {
     if (player2 && typeof player2.attackHits === 'function' && player2.attackHits(player1)) {
       if (player1.blocking && isAttackerInFront(player2, player1)) {
         applyHitstop(30);
-        player1.setState && player1.setState('block');
+        player1.setState && player1.setState(player1.crouching ? 'crouchBlock' : 'block');
       } else {
         const atk = player2.attackType;
         const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 80;
@@ -154,7 +154,7 @@ function draw() {
             const attackerInFront = owner ? ((owner.x > player1.x && player1.facing === 1) || (owner.x < player1.x && player1.facing === -1)) : false;
             if (player1.blocking && attackerInFront) {
               applyHitstop(30);
-              player1.setState && player1.setState('block');
+              player1.setState && player1.setState(player1.crouching ? 'crouchBlock' : 'block');
               if (!p.persistent) p.toRemove = true;
             } else {
               player1.hit(owner);
@@ -171,7 +171,7 @@ function draw() {
             const attackerInFront = owner ? ((owner.x > player2.x && player2.facing === 1) || (owner.x < player2.x && player2.facing === -1)) : false;
             if (player2.blocking && attackerInFront) {
               applyHitstop(30);
-              player2.setState && player2.setState('block');
+              player2.setState && player2.setState(player2.crouching ? 'crouchBlock' : 'block');
               if (!p.persistent) p.toRemove = true;
             } else {
               player2.hit(owner);

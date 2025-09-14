@@ -245,8 +245,11 @@ class Fighter {
     } else if (this.attacking && this.attackType) {
       this.setState(this.attackType);
     } else if (this.blocking && this.onGround) {
-      // bloqueo en pie: prioridad sobre caminar/idle (pero no sobre hit/attack/dash)
-      this.setState('block'); if(this.vx>0)this.vx=0; if(this.vx<0)this.vx=0; // detener desplazamiento horizontal al bloquear
+      // bloqueo en pie o agachado: si además estamos agachando, usar crouchBlock
+      if (this.crouching) this.setState('crouchBlock');
+      else this.setState('block');
+      // detener desplazamiento horizontal al bloquear
+      this.vx = 0;
     } else if (!this.onGround) {
       this.setState(this.vy < 0 ? "jump" : "fall");
     } else if (this.crouching && this.vx === 0) {
