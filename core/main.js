@@ -26,36 +26,60 @@ async function setup() {
   window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
   const tyeman = await loadTyemanAssets();
   const sbluer = await loadSbluerAssets();
+  player1 = new Fighter({
+    x: 100, col: color(255,100,100), id: 'p1', charId: 'tyeman',
+    assets: tyeman,
+    actions: {
+      punch: { duration: 200, frameDelay: 1 }, /* override o extiende */
+      // puedes añadir grab/throw actions aquí
+      punch: { duration: 400, frameDelay: 4 },
+      punch2: { duration: 400, frameDelay: 4 },
+      punch3: { duration: 500, frameDelay: 6 },
+      kick: { duration: 400, frameDelay: 7 },
+      kick2: { duration: 400, frameDelay: 6 }
+    }
+  });
 
-  player1 = new Fighter(100, color(255, 100, 100), 'p1',
-    tyeman.idle, tyeman.walk, tyeman.jump, tyeman.fall, tyeman.run,
-    tyeman.punch, tyeman.punch2, tyeman.punch3,
-    tyeman.kick, tyeman.kick2, tyeman.kick3,
-    tyeman.crouch, tyeman.crouchWalk, tyeman.hit,
-    tyeman.hit2, tyeman.hit3,
-    tyeman.shoot, tyeman.projectile,
-    tyeman.tats, // anim "tats" para el personaje
-    tyeman.tatsProjFramesByLayer, // frames del proyectil tats
-    tyeman.dashLight, // <-- nuevo parámetro para dash overlay
-    tyeman.dash, tyeman.taunt,tyeman.block,tyeman.crouchBlock
-  );
+  player2 = new Fighter({
+    x: 600,
+    col: color(100,100,255),
+    id: 'p2',
+    charId: 'sbluer',
+    assets: sbluer,
+    actions: {
+      // overrides para alargar ataques de sbluer
+      punch: { duration: 700, frameDelay: 7 },
+      punch2: { duration: 1000, frameDelay: 6 },
+      punch3: { duration: 1000, frameDelay: 6 },
+      kick: { duration: 700, frameDelay: 7 },
+      kick2: { duration: 1000, frameDelay: 6 },
+      kick3: { duration: 1000, frameDelay: 6 },
+    }
+  });
 
-  player2 = new Fighter(600, color(100, 100, 255), 'p2',
-    sbluer.idle, sbluer.walk, sbluer.jump, sbluer.fall, sbluer.run,
-    sbluer.punch, sbluer.punch2, sbluer.punch3,
-    sbluer.kick, sbluer.kick2, sbluer.kick3,
-    sbluer.crouch, sbluer.crouchWalk, sbluer.hit,
-    sbluer.hit2, sbluer.hit3,
-    sbluer.shoot, sbluer.projectile,
-    sbluer.tats, // personaje tats (puede ser null)
-    sbluer.tatsProjFramesByLayer, // passthrough (may be null)
-    sbluer.dashLight, // <-- nuevo parámetro para dash overlay
-    sbluer.dash, sbluer.taunt,sbluer.block,sbluer.crouchBlock
-  );
-
+  // ajustar parámetros de movimiento de player2 para que corra/camine más lento que p1
+  player2.maxSpeed = 2.4;      // velocidad de caminata
+  player2.runMaxSpeed = 5.0;   // velocidad de correr
+  player2.acceleration = 0.9;  // aceleración al andar
+  player2.runAcceleration = 0.95; // aceleración al correr
+  // opcional: ajustar fricción para cambiar sensación
+  player2.friction = 0.12;
+  player2.runFriction = 0.06;
+  
   player1.opponent = player2;
   player2.opponent = player1;
 
+
+
+
+
+
+
+
+
+
+
+  
   // asegurar facing inicial basado en la posición relativa (source of truth = Fighter.facing)
   player1.facing = (player1.x < player2.x) ? 1 : -1;
   player2.facing = (player2.x < player1.x) ? 1 : -1;

@@ -10,45 +10,31 @@ import * as Display from './fighter/display.js';
 import { keysPressed, keysUp } from '../core/input.js';
 
 class Fighter {
-  constructor(
-    x, col, id,
-    idleFramesByLayer = [], walkFramesByLayer = [], jumpFramesByLayer = [],
-    fallFramesByLayer = [], runFramesByLayer = [], punchFramesByLayer = [],
-    punch2FramesByLayer = [], punch3FramesByLayer = [], kickFramesByLayer = [],
-    kick2FramesByLayer = [], kick3FramesByLayer = [], crouchFramesByLayer = [],
-    crouchWalkFramesByLayer = [], hitFramesByLayer = [], hit2FramesByLayer = [], hit3FramesByLayer = [],
-    shootFramesByLayer = [], projectileFramesByLayer = [],
-    // nuevo orden: primero ANIM de "tats" (personaje), luego frames del proyectil "tats"
-    tatsFramesByLayer = [], tatsProjFramesByLayer = [],
-    dashLightFramesByLayer = [], // <-- nuevo parámetro antes del dash final
-    dashFramesByLayer = [] // <-- existente
-    ,tauntFramesByLayer = [],blockFramesByLayer = [],crouchBlockFramesByLayer = []   
-  ) {
-    // delegar inicialización
+  constructor(opts = {}) {
+    // opts: { x, col, id, charId, assets, actions }
+    const { x = 0, col = color(255), id = 'p?', charId = 'default', assets = {}, actions = {} } = opts;
     Init.initBase(this, x, col, id);
-
-    // asegurar que el Fighter tenga una propiedad 'facing' definida (1 = derecha, -1 = izquierda)
-    if (typeof this.facing !== 'number') this.facing = 1;
-    
+    this.charId = charId;
+    // usar assets y actions provistos
     Init.initFrames(this, {
-      idleFramesByLayer, walkFramesByLayer, jumpFramesByLayer,
-      fallFramesByLayer, runFramesByLayer, punchFramesByLayer,
-      punch2FramesByLayer, punch3FramesByLayer, kickFramesByLayer,
-      kick2FramesByLayer, kick3FramesByLayer, crouchFramesByLayer,
-      crouchWalkFramesByLayer, hitFramesByLayer,
-      hit1FramesByLayer: hitFramesByLayer,
-      hit2FramesByLayer, hit3FramesByLayer,
-      shootFramesByLayer, projectileFramesByLayer,
-      tatsFramesByLayer, tatsProjFramesByLayer,
-      dashLightFramesByLayer,
-      dashFramesByLayer,
-      tauntFramesByLayer,
-      blockFramesByLayer,
-      crouchBlockFramesByLayer
+      idleFramesByLayer: assets.idle, walkFramesByLayer: assets.walk, jumpFramesByLayer: assets.jump,
+      fallFramesByLayer: assets.fall, runFramesByLayer: assets.run, punchFramesByLayer: assets.punch,
+      punch2FramesByLayer: assets.punch2, punch3FramesByLayer: assets.punch3, kickFramesByLayer: assets.kick,
+      kick2FramesByLayer: assets.kick2, kick3FramesByLayer: assets.kick3, crouchFramesByLayer: assets.crouch,
+      crouchWalkFramesByLayer: assets.crouchWalk, hitFramesByLayer: assets.hit, hit2FramesByLayer: assets.hit2, hit3FramesByLayer: assets.hit3,
+      shootFramesByLayer: assets.shoot, projectileFramesByLayer: assets.projectile,
+      // nuevo orden: primero ANIM de "tats" (personaje), luego frames del proyectil "tats"
+      tatsFramesByLayer: assets.tats, tatsProjFramesByLayer: assets.tatsProjFramesByLayer,
+      dashLightFramesByLayer: assets.dashLight, // <-- nuevo parámetro antes del dash final
+      dashFramesByLayer: assets.dash, // <-- existente
+      tauntFramesByLayer: assets.taunt, blockFramesByLayer: assets.block, crouchBlockFramesByLayer: assets.crouchBlock
     });
+    // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
+    // (se fusionarán por llave con las acciones por defecto más abajo)
+    this._incomingActions = actions || {};
     Init.initComboAndInput(this);
     Init.initHitboxes(this);
-
+    
     // actions (puedes ajustar frameDelay aquí si quieres)
     this.actions = {
       idle:    { anim: this.idleFramesByLayer, frameDelay: 10 },
@@ -74,6 +60,14 @@ class Fighter {
       crouchBlock:  { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 800 } // <-- agregado
     };
 
+    // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)
+    if (this._incomingActions && typeof this._incomingActions === 'object') {
+      for (const k in this._incomingActions) {
+        this.actions[k] = Object.assign({}, this.actions[k] || {}, this._incomingActions[k]);
+      }
+    }
+    delete this._incomingActions;
+    
     // estado inicial
     this.state = { current: "idle", timer: 0, canCancel: true };
 
@@ -179,11 +173,23 @@ class Fighter {
     // back = izquierda cuando facing === 1 ; back = derecha cuando facing === -1
     const holdingBack = (this.facing === 1 && this.keys.left) || (this.facing === -1 && this.keys.right);
 
-    // exigir amenaza del rival: está en su ventana de ataque (attacking = true)
-    // (esto cubre specials/proyectiles que marcan attacking mientras están activos)
-    const opponentThreat = !!(this.opponent && this.opponent.attacking);
-    
-    // bloquear sólo en suelo, si se mantiene back, no estamos en hit/attacking, Y hay amenaza del oponente
+    // determinar amenaza del oponente:
+    // - si está en su ventana "attacking" (opp.attacking)
+    // - o si atacó recientemente (ventana de gracia) — permite que el defensor se prepare aunque el hit no coincida exactamente
+    let opponentThreat = false;
+    if (this.opponent) {
+      try {
+        const opp = this.opponent;
+        const now = millis();
+        const attackActive = !!opp.attacking;
+        const recentAttack = !!(opp.attackStartTime && (now - opp.attackStartTime) < ((opp.attackDuration || 400) + 250));
+        opponentThreat = attackActive || recentAttack;
+      } catch (e) {
+        opponentThreat = !!(this.opponent && this.opponent.attacking);
+      }
+    }
+
+    // bloquear sólo en suelo, si se mantiene back, no estamos en hit/attacking, Y existe amenaza del oponente
     this.blocking = !!(holdingBack && this.onGround && !this.isHit && !this.attacking && opponentThreat);
    }
    handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
