@@ -76,6 +76,7 @@ export function initFrames(self, frames) {
   self.tatsProjFramesByLayer = frames.tatsProjFramesByLayer || [];
   self.tauntFramesByLayer = frames.tauntFramesByLayer || [];
   self.blockFramesByLayer = frames.blockFramesByLayer || [];
+  self.crouchBlockFramesByLayer = frames.crouchBlockFramesByLayer || [];
 }
 
 export function initComboAndInput(self) {

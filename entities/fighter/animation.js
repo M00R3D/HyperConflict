@@ -29,6 +29,7 @@ export function setState(self, newState) {
     case 'dash':      self.currentFramesByLayer = self.dashFramesByLayer; break;
     case 'taunt':      self.currentFramesByLayer = self.tauntFramesByLayer; break;
     case 'block':      self.currentFramesByLayer = self.blockFramesByLayer; break;
+    case 'crouchBlock':      self.currentFramesByLayer = self.crouchBlockFramesByLayer; break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 

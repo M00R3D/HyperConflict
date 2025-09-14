@@ -22,7 +22,7 @@ class Fighter {
     tatsFramesByLayer = [], tatsProjFramesByLayer = [],
     dashLightFramesByLayer = [], // <-- nuevo parámetro antes del dash final
     dashFramesByLayer = [] // <-- existente
-    ,tauntFramesByLayer = [],blockFramesByLayer = []
+    ,tauntFramesByLayer = [],blockFramesByLayer = [],crouchBlockFramesByLayer = []   
   ) {
     // delegar inicialización
     Init.initBase(this, x, col, id);
@@ -43,7 +43,8 @@ class Fighter {
       dashLightFramesByLayer,
       dashFramesByLayer,
       tauntFramesByLayer,
-      blockFramesByLayer
+      blockFramesByLayer,
+      crouchBlockFramesByLayer
     });
     Init.initComboAndInput(this);
     Init.initHitboxes(this);
@@ -69,7 +70,8 @@ class Fighter {
       hadouken: { anim: this.shootFramesByLayer, frameDelay: 6, duration: 600 },
       dash:    { anim: this.dashFramesByLayer, frameDelay: 10, duration: 1200 }, // <-- agregado
       taunt:  { anim: this.tauntFramesByLayer, frameDelay: 10, duration: 800 }, // <-- agregado
-      block:  { anim: this.blockFramesByLayer, frameDelay: 10, duration: 800 } // <-- agregado
+      block:  { anim: this.blockFramesByLayer, frameDelay: 10, duration: 800 } ,// <-- agregado
+      crouchBlock:  { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 800 } // <-- agregado
     };
 
     // estado inicial
