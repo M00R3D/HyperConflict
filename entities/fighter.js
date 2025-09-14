@@ -173,10 +173,20 @@ class Fighter {
         this.lastReleaseTime.right = now;
       }
     }
-  }
-  handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
+    // --- bloqueo: mantener "back" relativo al facing activa bloqueo ---
+    // back = izquierda cuando facing === 1 ; back = derecha cuando facing === -1
+    const holdingBack = (this.facing === 1 && this.keys.left) || (this.facing === -1 && this.keys.right);
 
-  update() {
+    // exigir amenaza del rival: está en su ventana de ataque (attacking = true)
+    // (esto cubre specials/proyectiles que marcan attacking mientras están activos)
+    const opponentThreat = !!(this.opponent && this.opponent.attacking);
+    
+    // bloquear sólo en suelo, si se mantiene back, no estamos en hit/attacking, Y hay amenaza del oponente
+    this.blocking = !!(holdingBack && this.onGround && !this.isHit && !this.attacking && opponentThreat);
+   }
+   handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
+   
+   update() {
     // Manejo de supersalto: restaurar gravedad cuando expire el efecto
     if (this._supersaltoActive) {
       const elapsed = millis() - (this._supersaltoStart || 0);
@@ -232,6 +242,9 @@ class Fighter {
       this.setState(stateName);
     } else if (this.attacking && this.attackType) {
       this.setState(this.attackType);
+    } else if (this.blocking && this.onGround) {
+      // bloqueo en pie: prioridad sobre caminar/idle (pero no sobre hit/attack/dash)
+      this.setState('block'); if(this.vx>0)this.vx=0; if(this.vx<0)this.vx=0; // detener desplazamiento horizontal al bloquear
     } else if (!this.onGround) {
       this.setState(this.vy < 0 ? "jump" : "fall");
     } else if (this.crouching && this.vx === 0) {
