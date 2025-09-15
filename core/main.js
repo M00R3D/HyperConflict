@@ -21,18 +21,58 @@ let appliedHUDAlpha = 1;
 // exponer pausa globalmente para display.js
 window.PAUSED = window.PAUSED || false;
 
+// assets refs (llenadas en setup)
+let _tyemanAssets = null;
+let _sbluerAssets = null;
+
+// character selection state
+let selectionActive = false;
+const choices = ['tyeman', 'sbluer'];
+let p1Choice = 0; // index in choices (final chosen char index)
+let p2Choice = 1;
+let p1Confirmed = false;
+let p2Confirmed = false;
+
+// GRID selection state (3x2 matrix)
+let p1SelIndex = 0; // 0..5 cursor pos for jugador1
+let p2SelIndex = 1; // 0..5 cursor pos for jugador2
+
 async function setup() {
   createCanvas(800, 400);
+  // instalar listeners de input desde el inicio para que el menú detecte teclas
+  initInput(); // <-- ADICIÓN
+
   // bandera global para debug overlays (asegura valor por defecto)
   window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
-  const tyeman = await loadTyemanAssets();
-  const sbluer = await loadSbluerAssets();
+  // cargar assets pero NO crear players todavía — primero pantalla de selección
+  _tyemanAssets = await loadTyemanAssets();
+  _sbluerAssets = await loadSbluerAssets();
+
+  // iniciar pantalla de selección
+  selectionActive = true;
+  playersReady = false;
+  // asegurar confirm flags iniciales
+  p1Confirmed = false;
+  p2Confirmed = false;
+  p1Choice = 0;
+  p2Choice = 1;
+}
+
+function tryCreatePlayers() {
+  // sólo crear si ambos confirmaron
+  if (!p1Confirmed || !p2Confirmed) return;
+
+  // evitar crear dos veces
+  if (player1 || player2) return;
+
+  const tyeman = _tyemanAssets;
+  const sbluer = _sbluerAssets;
+
   player1 = new Fighter({
-    x: 100, col: color(255,100,100), id: 'p1', charId: 'tyeman',
-    assets: tyeman,
+    x: 100, col: color(255,100,100), id: 'p1', charId: choices[p1Choice],
+    assets: choices[p1Choice] === 'tyeman' ? tyeman : sbluer,
     actions: {
       punch: { duration: 200, frameDelay: 1 }, /* override o extiende */
-      // puedes añadir grab/throw actions aquí
       punch: { duration: 400, frameDelay: 4 },
       punch2: { duration: 400, frameDelay: 4 },
       punch3: { duration: 500, frameDelay: 6 },
@@ -45,8 +85,8 @@ async function setup() {
     x: 600,
     col: color(100,100,255),
     id: 'p2',
-    charId: 'sbluer',
-    assets: sbluer,
+    charId: choices[p2Choice],
+    assets: choices[p2Choice] === 'tyeman' ? tyeman : sbluer,
     actions: {
       // overrides para alargar ataques de sbluer
       punch: { duration: 700, frameDelay: 7 },
@@ -92,9 +132,258 @@ async function setup() {
 
   initInput({ p1: player1, p2: player2, ready: true });
   playersReady = true;
+  selectionActive = false;
+}
+
+function drawCharacterSelect() {
+  background(12, 18, 28);
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(28);
+  text("Selecciona tu personaje", width/2, 48);
+
+  // Grid configuration (3x2)
+  const cols = 3;
+  const rows = 2;
+  const cellSize = 72;
+  const cellGap = 12;
+  const gridW = cols * cellSize + (cols - 1) * cellGap;
+  const gridH = rows * cellSize + (rows - 1) * cellGap;
+  const gridX = Math.round((width - gridW) / 2);
+  const gridY = Math.round((height - gridH) / 2);
+
+  // draw grid cells
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const ix = gridX + c * (cellSize + cellGap);
+      const iy = gridY + r * (cellSize + cellGap);
+
+      push();
+      // cell background
+      noStroke();
+      fill(18, 22, 30);
+      rect(ix, iy, cellSize, cellSize, 6);
+
+      // if this slot maps to a character (only first two slots)
+      if (idx < choices.length) {
+        const charId = choices[idx];
+        const assets = (charId === 'tyeman') ? _tyemanAssets : _sbluerAssets;
+        // use only second layer (index 1) if present, otherwise fallback to layer 0
+        const idleLayer = (assets?.idle && assets.idle[1]) ? assets.idle[1] : (assets?.idle && assets.idle[0]) ? assets.idle[0] : null;
+        const frameImg = (idleLayer && idleLayer.length) ? idleLayer[0] : null; // draw a single static frame
+
+        if (frameImg) {
+          imageMode(CENTER);
+          // scale to fit cell with padding
+          const maxW = cellSize - 12;
+          const maxH = cellSize - 12;
+          const ratio = Math.min(maxW / frameImg.width, maxH / frameImg.height, 1);
+          const dw = Math.round(frameImg.width * ratio);
+          const dh = Math.round(frameImg.height * ratio);
+          image(frameImg, ix + cellSize/2, iy + cellSize/2, dw, dh);
+        } else {
+          // placeholder
+          fill(120);
+          noStroke();
+          ellipse(ix + cellSize/2, iy + cellSize/2, cellSize * 0.45);
+        }
+        // name under sprite
+        fill(200);
+        textSize(10);
+        textAlign(CENTER, TOP);
+        text(charId.toUpperCase(), ix + cellSize/2, iy + cellSize - 16);
+      } else {
+        // empty slot placeholder
+        push();
+        noFill();
+        stroke(80);
+        strokeWeight(1);
+        rect(ix + 6, iy + 6, cellSize - 12, cellSize - 12, 4);
+        pop();
+      }
+      pop();
+    }
+  }
+
+  // draw taunt sprite: one on left representing jugador1 selection, one on right for jugador2
+  const tauntW = 56, tauntH = 56;
+  // player1 taunt: show taunt of whatever character p1 currently has selected (if in first two slots)
+  const p1CharIdx = (p1SelIndex < choices.length) ? p1SelIndex : null;
+  if (p1CharIdx !== null) {
+    const assets = choices[p1CharIdx] === 'tyeman' ? _tyemanAssets : _sbluerAssets;
+    const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
+    const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
+    if (tauntImg) {
+      push();
+      imageMode(CORNER);
+      tint(255, 240);
+      image(tauntImg, gridX - tauntW - 18, gridY + (gridH - tauntH)/2, tauntW, tauntH);
+      noTint();
+      pop();
+    }
+  }
+  // player2 taunt
+  const p2CharIdx = (p2SelIndex < choices.length) ? p2SelIndex : null;
+  if (p2CharIdx !== null) {
+    const assets = choices[p2CharIdx] === 'tyeman' ? _tyemanAssets : _sbluerAssets;
+    const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
+    const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
+    if (tauntImg) {
+      push();
+      imageMode(CORNER);
+      tint(255, 240);
+      image(tauntImg, gridX + gridW + 18, gridY + (gridH - tauntH)/2, tauntW, tauntH);
+      noTint();
+      pop();
+    }
+  }
+
+  // draw selection cursors (blue for p1, red for p2)
+  function drawCursorAt(index, colr) {
+    const r = Math.floor(index / cols);
+    const c = index % cols;
+    const ix = gridX + c * (cellSize + cellGap);
+    const iy = gridY + r * (cellSize + cellGap);
+    push();
+    noFill();
+    stroke(colr);
+    strokeWeight(4);
+    rect(ix - 4, iy - 4, cellSize + 8, cellSize + 8, 8);
+    pop();
+  }
+  // blue = jugador1, red = jugador2
+  drawCursorAt(p1SelIndex, color(80,150,255));
+  drawCursorAt(p2SelIndex, color(255,80,80));
+
+  // confirmations overlay
+  if (p1Confirmed) {
+    push();
+    fill(80,150,255,40);
+    rect(gridX, gridY + gridH + 12, gridW, 28, 6);
+    fill(220);
+    textSize(12);
+    textAlign(LEFT, CENTER);
+    text("Jugador 1: CONFIRMADO", gridX + 8, gridY + gridH + 26);
+    pop();
+  }
+  if (p2Confirmed) {
+    push();
+    fill(255,80,80,40);
+    rect(gridX, gridY + gridH + 44, gridW, 28, 6);
+    fill(220);
+    textSize(12);
+    textAlign(LEFT, CENTER);
+    text("Jugador 2: CONFIRMADO", gridX + 8, gridY + gridH + 58);
+    pop();
+  }
+
+  // footer hint
+  push();
+  fill(180);
+  textSize(12);
+  textAlign(CENTER, TOP);
+  text("P1: A/D/W/S mover, I confirmar.  P2: ←/→/↑/↓ mover, B confirmar.", width/2, gridY + gridH + 96);
+  pop();
+}
+
+function handleSelectionInput() {
+  // --- P1 movement (A/D/W/S) ---
+  if (keysPressed['a'] || keysPressed['a']) {
+    // left
+    if ((keysPressed['a'])) {
+      const cols = 3;
+      const c = p1SelIndex % cols;
+      const r = Math.floor(p1SelIndex / cols);
+      if (c > 0) p1SelIndex = r * cols + (c - 1);
+      keysPressed['a'] = false;
+    }
+  }
+  if (keysPressed['d'] || keysPressed['d']) {
+    if ((keysPressed['d'])) {
+      const cols = 3;
+      const c = p1SelIndex % cols;
+      const r = Math.floor(p1SelIndex / cols);
+      if (c < cols - 1) p1SelIndex = r * cols + (c + 1);
+      keysPressed['d'] = false;
+    }
+  }
+  if (keysPressed['w']) {
+    const cols = 3;
+    const c = p1SelIndex % cols;
+    const r = Math.floor(p1SelIndex / cols);
+    if (r > 0) p1SelIndex = (r - 1) * cols + c;
+    keysPressed['w'] = false;
+  }
+  if (keysPressed['s']) {
+    const cols = 3, rows = 2;
+    const c = p1SelIndex % cols;
+    const r = Math.floor(p1SelIndex / cols);
+    if (r < rows - 1) p1SelIndex = (r + 1) * cols + c;
+    keysPressed['s'] = false;
+  }
+
+  // P1 confirm (only if pointing to a valid character slot)
+  if (!p1Confirmed && (keysPressed['i'] || keysPressed[' '])) {
+    if (p1SelIndex < choices.length) {
+      p1Choice = p1SelIndex;
+      p1Confirmed = true;
+    }
+    keysPressed['i'] = false; keysPressed[' '] = false;
+  }
+
+  // --- P2 movement (arrow keys) ---
+  if (keysPressed['arrowleft']) {
+    const cols = 3;
+    const c = p2SelIndex % cols;
+    const r = Math.floor(p2SelIndex / cols);
+    if (c > 0) p2SelIndex = r * cols + (c - 1);
+    keysPressed['arrowleft'] = false;
+  }
+  if (keysPressed['arrowright']) {
+    const cols = 3;
+    const c = p2SelIndex % cols;
+    const r = Math.floor(p2SelIndex / cols);
+    if (c < cols - 1) p2SelIndex = r * cols + (c + 1);
+    keysPressed['arrowright'] = false;
+  }
+  if (keysPressed['arrowup']) {
+    const cols = 3;
+    const c = p2SelIndex % cols;
+    const r = Math.floor(p2SelIndex / cols);
+    if (r > 0) p2SelIndex = (r - 1) * cols + c;
+    keysPressed['arrowup'] = false;
+  }
+  if (keysPressed['arrowdown']) {
+    const cols = 3, rows = 2;
+    const c = p2SelIndex % cols;
+    const r = Math.floor(p2SelIndex / cols);
+    if (r < rows - 1) p2SelIndex = (r + 1) * cols + c;
+    keysPressed['arrowdown'] = false;
+  }
+
+  // P2 confirm (only if pointing to a valid character slot)
+  if (!p2Confirmed && (keysPressed['b'] || keysPressed['backspace'])) {
+    if (p2SelIndex < choices.length) {
+      p2Choice = p2SelIndex;
+      p2Confirmed = true;
+    }
+    keysPressed['b'] = false; keysPressed['backspace'] = false;
+  }
 }
 
 function draw() {
+  // si estamos en pantalla de selección, manejarla primero
+  if (selectionActive) {
+    handleSelectionInput();
+    drawCharacterSelect();
+    // si ambos confirmaron, crear jugadores
+    tryCreatePlayers();
+    // limpiar flags y retornar (no ejecutar game loop aún)
+    clearFrameFlags();
+    return;
+  }
+
   // esperar a que los players y assets estén listos
   if (!playersReady || !player1 || !player2) {
     background(0);
