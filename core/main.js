@@ -73,6 +73,7 @@ async function setup() {
   registerSpecialsForChar('tyeman', {
     // override o definiciones adicionales sólo para tyeman
     hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
+    bun: { seq: ['→','↓','↘','P'], direction: 'forward' },
     ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
     taunt: { seq: ['T'], direction: 'any' },
     supersalto: { seq: ['↓','↑'], direction: 'any' }
@@ -190,49 +191,116 @@ function draw() {
         // colisión contra player1
         if (p.hits(player1) && p.ownerId !== player1.id) {
           if (!p._hitTargets) p._hitTargets = new Set();
-          if (!p._hitTargets.has(player1.id)) {
-            // determinar owner como attacker para evaluar front/block
-            const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
-            const attackerInFront = owner ? ((owner.x > player1.x && player1.facing === 1) || (owner.x < player1.x && player1.facing === -1)) : false;
-            if (player1.blocking && attackerInFront) {
-              applyHitstop(30);
-              // entrar en block-stun por proyectil bloqueado
-              const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
-              player1.blockStunStartTime = millis();
-              player1.blockStunDuration = player1.crouching
-                ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
-                : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
-              player1.setState && player1.setState(stunState);
-              player1.vx = 0;
-              if (!p.persistent) p.toRemove = true;
-            } else {
-              player1.hit(owner);
-              if (!p.persistent) p.toRemove = true;
+
+          // SPECIAL: bun behavior (typeId 5) -> if hits and NOT blocked, attract opponent and start return
+          if (p.typeId === 5) {
+            if (!p._hitTargets.has(player1.id)) {
+              const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
+              const attackerInFront = owner ? ((owner.x > player1.x && player1.facing === 1) || (owner.x < player1.x && player1.facing === -1)) : false;
+              if (player1.blocking && attackerInFront) {
+                // blocked: normal block reaction
+                applyHitstop(30);
+                const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
+                player1.blockStunStartTime = millis();
+                player1.blockStunDuration = player1.crouching
+                  ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
+                  : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
+                player1.setState && player1.setState(stunState);
+                player1.vx = 0;
+                if (!p.persistent) p.toRemove = true;
+              } else {
+                // successful hit by bun: apply attraction pull towards owner and trigger return
+                applyHitstop(160);
+                if (owner) {
+                  const dx = (owner.x + owner.w/2) - (player1.x + player1.w/2);
+                  const pullStrength = 0.12; // ajuste: fuerza de atracción
+                  player1.vx = constrain(dx * pullStrength, -12, 12);
+                  // ligera elevación para feel
+                  player1.vy = Math.min(player1.vy, -2.2);
+                }
+                // mark projectile to return
+                p.returning = true;
+                p.dir = -p.dir;
+                p._hitTargets.add(player1.id);
+                // keep projectile to return (don't remove)
+              }
             }
-            p._hitTargets.add(player1.id);
+          } else {
+            // existing logic for non-bun projectiles
+            if (!p._hitTargets.has(player1.id)) {
+              const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
+              const attackerInFront = owner ? ((owner.x > player1.x && player1.facing === 1) || (owner.x < player1.x && player1.facing === -1)) : false;
+              if (player1.blocking && attackerInFront) {
+                applyHitstop(30);
+                // entrar en block-stun por proyectil bloqueado
+                const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
+                player1.blockStunStartTime = millis();
+                player1.blockStunDuration = player1.crouching
+                  ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
+                  : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
+                player1.setState && player1.setState(stunState);
+                player1.vx = 0;
+                if (!p.persistent) p.toRemove = true;
+              } else {
+                player1.hit(owner);
+                if (!p.persistent) p.toRemove = true;
+              }
+              p._hitTargets.add(player1.id);
+            }
           }
         }
         // colisión contra player2
         if (p.hits(player2) && p.ownerId !== player2.id) {
           if (!p._hitTargets) p._hitTargets = new Set();
-          if (!p._hitTargets.has(player2.id)) {
-            const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
-            const attackerInFront = owner ? ((owner.x > player2.x && player2.facing === 1) || (owner.x < player2.x && player2.facing === -1)) : false;
-            if (player2.blocking && attackerInFront) {
-              applyHitstop(30);
-              const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
-              player2.blockStunStartTime = millis();
-              player2.blockStunDuration = player2.crouching
-                ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
-                : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
-              player2.setState && player2.setState(stunState);
-              player2.vx = 0;
-              if (!p.persistent) p.toRemove = true;
-            } else {
-              player2.hit(owner);
-              if (!p.persistent) p.toRemove = true;
+
+          if (p.typeId === 5) {
+            if (!p._hitTargets.has(player2.id)) {
+              const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
+              const attackerInFront = owner ? ((owner.x > player2.x && player2.facing === 1) || (owner.x < player2.x && player2.facing === -1)) : false;
+              if (player2.blocking && attackerInFront) {
+                applyHitstop(30);
+                const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
+                player2.blockStunStartTime = millis();
+                player2.blockStunDuration = player2.crouching
+                  ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
+                  : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
+                player2.setState && player2.setState(stunState);
+                player2.vx = 0;
+                if (!p.persistent) p.toRemove = true;
+              } else {
+                applyHitstop(160);
+                const ownerRef = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
+                if (ownerRef) {
+                  const dx = (ownerRef.x + ownerRef.w/2) - (player2.x + player2.w/2);
+                  const pullStrength = 0.12;
+                  player2.vx = constrain(dx * pullStrength, -12, 12);
+                  player2.vy = Math.min(player2.vy, -2.2);
+                }
+                p.returning = true;
+                p.dir = -p.dir;
+                p._hitTargets.add(player2.id);
+              }
             }
-            p._hitTargets.add(player2.id);
+          } else {
+            if (!p._hitTargets.has(player2.id)) {
+              const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
+              const attackerInFront = owner ? ((owner.x > player2.x && player2.facing === 1) || (owner.x < player2.x && player2.facing === -1)) : false;
+              if (player2.blocking && attackerInFront) {
+                applyHitstop(30);
+                const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
+                player2.blockStunStartTime = millis();
+                player2.blockStunDuration = player2.crouching
+                  ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
+                  : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
+                player2.setState && player2.setState(stunState);
+                player2.vx = 0;
+                if (!p.persistent) p.toRemove = true;
+              } else {
+                player2.hit(owner);
+                if (!p.persistent) p.toRemove = true;
+              }
+              p._hitTargets.add(player2.id);
+            }
           }
         }
       }

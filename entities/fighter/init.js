@@ -82,6 +82,11 @@ export function initFrames(self, frames) {
   self.tauntFramesByLayer = frames.tauntFramesByLayer || [];
   self.blockFramesByLayer = frames.blockFramesByLayer || [];
   self.crouchBlockFramesByLayer = frames.crouchBlockFramesByLayer || [];
+
+  // NEW: shor animation + bun projectile + bun string frames (optional: null safe)
+  self.shorFramesByLayer = frames.shor || [];
+  self.bunProjFramesByLayer = frames.bunProj || null;
+  self.bunStringFramesByLayer = frames.bunString || null;
 }
 
 export function initComboAndInput(self) {

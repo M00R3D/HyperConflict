@@ -9,6 +9,7 @@ import * as Buffer from './buffer.js';
 const defaultSpecialDefs = {
   hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
   shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
+  bun: { seq: ['→','↓','↘','P'], direction: 'forward' },
   supersalto: { seq: ['↓','↑'], direction: 'any' },
   ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
   taunt: { seq: ['T'], direction: 'any' }
@@ -166,5 +167,51 @@ export function doSpecial(self, moveName) {
     self.attackType = 'taunt';
     self.attackStartTime = millis();
     self.attackDuration = 1700; // 1700 ms = 1.7s
+  } else if (moveName === 'bun') {
+    // visual: usar anim 'bun' (shor-like) si existe
+    try { if (self.shorFramesByLayer && self.shorFramesByLayer.length) self.setState('bun'); else self.setState('punch3'); } catch(e){}
+
+    self.attacking = true;
+    self.attackType = 'bun';
+    self.attackStartTime = millis();
+    self.attackDuration = (self.actions && self.actions.bun && self.actions.bun.duration) || 700;
+
+    const dir = self.facing === 1 ? 1 : -1;
+
+    // valores por defecto del origen relativos al fighter (puedes cambiar en opts)
+    const defaultOffsetX = dir === 1 ? (self.w + 6) : -6;
+    const defaultOffsetY = Math.round(self.h / 2 - 6);
+
+    // opts: alcance maximo antes de dar vuelta, velocidad, etc.
+    const opts = {
+      speed: 8,
+      maxRange: 380,
+      persistent: false,
+      // dimensiones lógicas deseadas para dibujar el bun pequeño (ajustadas a 7x3)
+      w: 18, h: 6,
+      frameDelay: 6,
+      // escala visual del sprite (separada de w/h lógicas). Dejar 1 para que respete w/h.
+      spriteScale: 1.0,
+      // parámetros de la cuerda (opcional)
+      stringW: 6,
+      stringH: 2,
+      stringFrameDelay: 6,
+      // ORIGEN configurable (relativo a self.x / self.y)
+      offsetX: defaultOffsetX +(-14*self.facing), // por defecto, delante del fighter
+      offsetY: defaultOffsetY+6
+    };
+
+    // calcular origen usando opts (permite sobrescribir offsetX/offsetY desde fuera)
+    const px = Math.round(self.x + (opts.offsetX || 0));
+    const py = Math.round(self.y + (opts.offsetY || 0));
+
+    // pasar frames del proyectil y string via resources
+    const bunFrames = (self.bunProjFramesByLayer && self.bunProjFramesByLayer.length) ? self.bunProjFramesByLayer : null;
+    const stringFrames = (self.bunStringFramesByLayer && self.bunStringFramesByLayer.length) ? self.bunStringFramesByLayer : null;
+    const p = new Projectile(px, py, dir, 5, self.id, { string: stringFrames }, opts, bunFrames);
+    // guardar referencia del owner para dibujo de cuerda y cálculos
+    p._ownerRef = self;
+    projectiles.push(p);
+    return;
   }
 }

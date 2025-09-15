@@ -27,6 +27,11 @@ async function loadTyemanAssets() {
     tats: await loadOrNull('src/tyeman/tyeman_tats.piskel'),
     // frames específicos para el proyectil (sprite distinto)
     tatsProjFramesByLayer: await loadOrNull('src/tyeman/tyeman_tats_proj.piskel'),
+    // NEW: shory-like anim used during "bun" special
+    shor: await loadOrNull('src/tyeman/tyeman_shor.piskel'),
+    // NEW: bun projectile frames + string frames
+    bunProj: await loadOrNull('src/tyeman/tyeman_bun.piskel'),
+    bunString: await loadOrNull('src/tyeman/tyeman_string.piskel'),
     crouch: await loadOrNull('src/tyeman/tyeman_crouch.piskel'),
     crouchWalk: await loadOrNull('src/tyeman/tyeman_crouch_walk.piskel'),
     hit: await loadOrNull('src/tyeman/tyeman_hit.piskel'),

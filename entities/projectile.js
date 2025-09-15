@@ -14,6 +14,10 @@ class Projectile {
     this.h = 16;
     this.frameDelay = 6;
 
+    // resources may include string frames for bun
+    this._resources = resources || {};
+    this.stringFramesByLayer = this._resources.string || null;
+
     // Si framesByLayer es Promise
     this._framesPromise = null;
     if (framesByLayer && typeof framesByLayer.then === 'function') {
@@ -73,6 +77,35 @@ class Projectile {
         this.speed = 0;
         break;
 
+      case 5: // BUN: va hacia fuera, al chocar o alcanzar rango regresa al owner; tiene string
+        this.framesByLayer = this.framesByLayer ?? this._resources.bun ?? this.framesByLayer ?? null;
+        // logical bun size (collision/position)
+        this.w = opts.w ?? 7;
+        this.h = opts.h ?? 4;
+        this.speed = opts.speed ?? 8;
+        this.duration = opts.duration ?? 2000;
+        this.spawnDelay = opts.spawnDelay ?? 0;
+        this._spawnTimer = 0;
+        this._visible = (this.spawnDelay <= 0);
+        this.maxRange = opts.maxRange ?? 320;
+        this._startX = this.x;
+        this.returning = false;
+        this.toRemove = false;
+        this.persistent = !!opts.persistent;
+        // visual scaling for the bun sprite (separate from logical w/h)
+        this.spriteScale = (typeof opts.spriteScale === 'number') ? opts.spriteScale : 1;
+        // string visual params: allow explicit width/height and frame timing
+        this.stringW = (typeof opts.stringW === 'number') ? opts.stringW : (6 * (this.stringScale || 1));
+        this.stringH = (typeof opts.stringH === 'number') ? opts.stringH : (8 * (this.stringScale || 1));
+        this.stringFrameDelay = (typeof opts.stringFrameDelay === 'number') ? opts.stringFrameDelay : (opts.frameDelay ?? 6);
+        // animation state for string (independent index/timer)
+        this._stringFrameIndex = 0;
+        this._stringFrameTimer = 0;
+        // owner anchor offsets (si opts proporciona offsetX/offsetY se usan para calcular el punto de origen de la cuerda)
+        this.ownerOffsetX = (typeof opts.offsetX === 'number') ? opts.offsetX : null;
+        this.ownerOffsetY = (typeof opts.offsetY === 'number') ? opts.offsetY : null;
+        break;
+
       default:
         this.framesByLayer = this.framesByLayer ?? null;
         this.w = 16;
@@ -87,7 +120,7 @@ class Projectile {
     this.frameDelay = opts.frameDelay ?? this.frameDelay;
 
     // persistencia: si true, no se elimina al golpear a un rival
-    this.persistent = !!opts.persistent;
+    this.persistent = !!opts.persistent || this.persistent;
     // evitar golpear repetidamente al mismo objetivo
     this._hitTargets = new Set();
 
@@ -131,7 +164,6 @@ class Projectile {
         this._spawnTimer += dt;
         if (this._spawnTimer >= this.spawnDelay) {
           this._visible = true;
-          // reset age para que la animación/comportamiento empiece al aparecer
           this.age = 0;
         } else {
           // aún en delay: no avanzar nada
@@ -152,18 +184,62 @@ class Projectile {
         // pequeño jitter horizontal para efecto 'llama' (opcional, suave)
         this.x += Math.sin(this.age / 120) * 0.18;
         if (t >= 1) this.toRemove = true;
+      } else if (this.typeId === 5) {
+        // BUN behaviour: move outwards until maxRange or collision sets returning
+        const moveAmount = (this.speed || 6) * (dt / 16);
+        if (!this.returning) {
+          this.x += moveAmount * this.dir;
+          // si excede maxRange, comenzar retorno
+          if (Math.abs(this.x - (this._startX || 0)) >= this.maxRange) {
+            this.returning = true;
+            this.dir = -this.dir;
+          }
+        } else {
+          // regreso hacia ownerRef si existe
+          if (this._ownerRef && !this._ownerRef.toRemove) {
+            const ownerCenter = this._ownerRef.x + this._ownerRef.w / 2;
+            // mover hacia ownerCenter con smoothing
+            const dx = ownerCenter - this.x;
+            const step = Math.sign(dx) * Math.min(Math.abs(dx), moveAmount * 1.6);
+            this.x += step;
+            // si está lo bastante cerca, marcar para remover
+            if (Math.abs(dx) <= 8) this.toRemove = true;
+          } else {
+            // fallback: mover por dir como antes y eliminar si offscreen
+            this.x += moveAmount * this.dir;
+          }
+        }
+
+        // animación loop normal si hay frames
+        if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+          this._frameTimer++;
+          if (this._frameTimer >= this.frameDelay) {
+            this._frameTimer = 0;
+            const n = this.framesByLayer[0].length;
+            this.frameIndex = (this.frameIndex + 1) % n;
+          }
+        }
+
+        // actualizar animación de la cuerda de forma independiente (si tiene frames)
+        if (this.stringFramesByLayer && this.stringFramesByLayer[0]?.length > 0) {
+          this._stringFrameTimer++;
+          if (this._stringFrameTimer >= (this.stringFrameDelay || 6)) {
+            this._stringFrameTimer = 0;
+            const n2 = this.stringFramesByLayer[0].length;
+            this._stringFrameIndex = (this._stringFrameIndex + 1) % n2;
+          }
+        }
       } else {
         // normal lineal
         this.x += this.speed * this.dir;
-      }
-
-      // animación loop normal
-      if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
-        this._frameTimer++;
-        if (this._frameTimer >= this.frameDelay) {
-          this._frameTimer = 0;
-          const n = this.framesByLayer[0].length;
-          this.frameIndex = (this.frameIndex + 1) % n;
+        // anim loop...
+        if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+          this._frameTimer++;
+          if (this._frameTimer >= this.frameDelay) {
+            this._frameTimer = 0;
+            const n = this.framesByLayer[0].length;
+            this.frameIndex = (this.frameIndex + 1) % n;
+          }
         }
       }
     }
@@ -174,14 +250,72 @@ class Projectile {
     if (framesByLayer && framesByLayer[0]?.length > 0) {
       push();
 
-      // aplicar flip horizontal si dir=-1
-      if (this.dir === -1) {
-        translate(this.x + this.w / 2, this.y);
+      // compute visual draw size (allow bun-specific scaling)
+      const isBun = (this.typeId === 5);
+      const drawW = isBun ? (this.w * (this.spriteScale || 1)) : this.w;
+      const drawH = isBun ? (this.h * (this.spriteScale || 1)) : this.h;
+
+      // draw string for bun (between owner and projectile)
+      if (this.typeId === 5 && this._ownerRef && this.stringFramesByLayer && this.stringFramesByLayer.length > 0) {
+        try {
+          // select an image frame for the string (its own index)
+          const img = (this.stringFramesByLayer[0] && this.stringFramesByLayer[0][this._stringFrameIndex]) || this.stringFramesByLayer[0][0];
+           if (img) {
+             // draw repeated/tiled or scaled segment between points
+             // si se configuró ownerOffsetX/Y, usar esos offsets relativos a owner.x/owner.y
+             const ox = (typeof this.ownerOffsetX === 'number')
+               ? (this._ownerRef.x + this.ownerOffsetX)
+               : (this._ownerRef.x + this._ownerRef.w / 2);
+             const oy = (typeof this.ownerOffsetY === 'number')
+               ? (this._ownerRef.y + this.ownerOffsetY)
+               : (this._ownerRef.y + this._ownerRef.h / 2 - 6);
+             // Apuntar al centro visual del bun (usar drawW/drawH evita que la cuerda quede corta)
+             const tx = this.x + drawW / 2;
+             const ty = this.y + drawH / 2;
+             const dx = tx - ox;
+             const dy = ty - oy;
+             const dist = Math.max(4, Math.sqrt(dx*dx + dy*dy));
+             // rotate so the string follows the exact inclination
+             const ang = Math.atan2(dy, dx);
+            push();
+            translate(ox, oy);
+            rotate(ang);
+            // use configured tile size (stringW/stringH) and tile along distance
+            const sFrameCount = (this.stringFramesByLayer[0]?.length) || 1;
+            const sFrameW = Math.max(1, Math.floor(img.width / sFrameCount));
+            // desired tile size in world pixels (from opts) or fallback to source frame size
+            const tileW = (typeof this.stringW === 'number' && this.stringW > 0) ? this.stringW : sFrameW;
+            const tileH = (typeof this.stringH === 'number' && this.stringH > 0) ? this.stringH : img.height;
+            // choose an overlap factor <1 so tiles slightly overlap and avoid gaps; adjust if needed
+            const overlapFactor = 0.92;
+            const tiles = Math.max(1, Math.ceil(dist / (tileW * overlapFactor)));
+            // recompute step so tiles exactly span the distance (ensures no tiny gap at the end)
+            const step = dist / tiles;
+            // draw tiles from owner (0) to target (dist)
+            for (let i = 0; i < tiles; i++) {
+              const tX = i * step - (tileW / 2);
+              image(img, tX, -tileH / 2, tileW, tileH, 0, 0, sFrameW, img.height);
+            }
+            // dibujar un "cap" final alineado al extremo para eliminar posible gap residual
+            const lastTileRightEdge = ((tiles - 1) * step) + (tileW / 2);
+            if (lastTileRightEdge < dist - 0.5) {
+              const capX = dist - (tileW / 2);
+              image(img, capX, -tileH / 2, tileW, tileH, 0, 0, sFrameW, img.height);
+            }
+            pop();
+           }
+         } catch (e) { /* silent */ }
+       }
+
+      // aplicar flip horizontal si dir=-1 (solo para la sprite del bun)
+      if (isBun && this.dir === -1) {
+        // use drawW as anchor so flipped visual centers correctly when scaled
+        translate(this.x + drawW / 2, this.y);
         scale(-1, 1);
-        translate(-(this.x + this.w / 2), -this.y);
+        translate(-(this.x + drawW / 2), -this.y);
       }
 
-      // rotación solo en typeId=1
+      // rotación/scale cases (existing)
       if (this.typeId === 1) {
         translate(this.x + this.w / 2, this.y + this.h / 2);
         rotate(radians(this.rotation));
@@ -211,7 +345,7 @@ class Projectile {
         image(
           img,
           this.x, this.y,
-          this.w, this.h,
+          drawW, drawH,
           frameWidth * this.frameIndex, 0,
           frameWidth, img.height
         );

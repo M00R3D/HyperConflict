@@ -27,7 +27,11 @@ class Fighter {
       tatsFramesByLayer: assets.tats, tatsProjFramesByLayer: assets.tatsProjFramesByLayer,
       dashLightFramesByLayer: assets.dashLight, // <-- nuevo parámetro antes del dash final
       dashFramesByLayer: assets.dash, // <-- existente
-      tauntFramesByLayer: assets.taunt, blockFramesByLayer: assets.block, crouchBlockFramesByLayer: assets.crouchBlock
+      tauntFramesByLayer: assets.taunt, blockFramesByLayer: assets.block, crouchBlockFramesByLayer: assets.crouchBlock,
+      // NEW: shor / bun proj / bun string
+      shor: assets.shor,
+      bunProj: assets.bunProj,
+      bunString: assets.bunString
     });
     // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
     // (se fusionarán por llave con las acciones por defecto más abajo)
@@ -59,7 +63,9 @@ class Fighter {
       block:  { anim: this.blockFramesByLayer, frameDelay: 10, duration: 800 } ,// <-- agregado
       crouchBlock:  { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 800 } ,// <-- agregado
       blockStun: { anim: this.blockFramesByLayer, frameDelay: 10, duration: 540 }, // <-- agregado
-      crouchBlockStun: { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 540 } // <-- agregado
+      crouchBlockStun: { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 540 }, // <-- agregado
+      // NEW: bun special visual using shor frames
+      bun: { anim: this.shorFramesByLayer, frameDelay: 6, duration: 700 }
     };
 
     // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)
