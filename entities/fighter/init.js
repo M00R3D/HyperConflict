@@ -48,6 +48,11 @@ export function initBase(self, x, col, id) {
   self.isHit = false;
   self.hitStartTime = 0;
   self.hitDuration = 260;
+
+  // --- block stun defaults (puedes sobrescribir en tiempo de creación del fighter) ---
+  // tiempo en ms que dura el block-stun en pie / agachado cuando se recibe un golpe bloqueado
+  self.blockStunDuration = 1540;
+  self.crouchBlockStunDuration = 1540;
 }
 
 export function initFrames(self, frames) {

@@ -57,7 +57,9 @@ class Fighter {
       dash:    { anim: this.dashFramesByLayer, frameDelay: 10, duration: 1200 }, // <-- agregado
       taunt:  { anim: this.tauntFramesByLayer, frameDelay: 10, duration: 800 }, // <-- agregado
       block:  { anim: this.blockFramesByLayer, frameDelay: 10, duration: 800 } ,// <-- agregado
-      crouchBlock:  { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 800 } // <-- agregado
+      crouchBlock:  { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 800 } ,// <-- agregado
+      blockStun: { anim: this.blockFramesByLayer, frameDelay: 10, duration: 540 }, // <-- agregado
+      crouchBlockStun: { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 540 } // <-- agregado
     };
 
     // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)
@@ -109,13 +111,22 @@ class Fighter {
     // guardar si estábamos en suelo antes de procesar inputs,
     // para que specials puedan detectar supersalto aún cuando Buffer ponga onGround=false
     this._prevOnGround = !!this.onGround;
+
+    // Si estamos en block-stun forzado, IGNORAR completamente inputs (movimiento/ataque/dash).
+    // Esto asegura que el stun dure exactamente la duración declarada en init, independientemente
+    // de teclas presionadas/soltadas.
+    if (this.state && (this.state.current === 'blockStun' || this.state.current === 'crouchBlockStun')) {
+      // no procesar buffer ni specials; conservar _prevOnGround para compatibilidad y salir.
+      return;
+    }
+
     Buffer.handleInput(this);
     // detectar specials inmediatamente después de que el buffer reciba el input
     // (permite activar supersalto antes de que la asignación de vy "normal" quede final)
     this.checkSpecialMoves();
     // limpiar flag auxiliar (opcional, se recalculará en la siguiente frame)
     delete this._prevOnGround;
-
+    
     const now = millis();
 
     // Detecta el evento de pulsación (solo cuando la tecla se presiona, no mantenida)
@@ -217,6 +228,16 @@ class Fighter {
     Movement.updateMovement(this);
 
     this.checkSpecialMoves();
+
+    // <-- NUEVO: Priorizar block-stun para que ninguna otra rama sobreescriba el estado
+    if (this.state && (this.state.current === 'blockStun' || this.state.current === 'crouchBlockStun')) {
+      // mantener animación/timers hasta que exitHitIfElapsed determine el fin
+      Anim.updateAnimation(this);
+      this.state.timer = (this.state.timer || 0) + 1;
+      // permitir que exitHitIfElapsed haga la transición cuando corresponda
+      Anim.exitHitIfElapsed(this);
+      return;
+    }
 
     // limpiar dashLight cuando su duración expire (evita overlays "fantasma")
     if (this.dashLightStart && (millis() - this.dashLightStart >= (this.dashLightDuration || 0))) {

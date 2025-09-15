@@ -30,6 +30,8 @@ export function setState(self, newState) {
     case 'taunt':      self.currentFramesByLayer = self.tauntFramesByLayer; break;
     case 'block':      self.currentFramesByLayer = self.blockFramesByLayer; break;
     case 'crouchBlock':      self.currentFramesByLayer = self.crouchBlockFramesByLayer; break;
+    case 'blockStun': self.currentFramesByLayer = self.blockStunFramesByLayer || self.blockFramesByLayer; break;
+    case 'crouchBlockStun': self.currentFramesByLayer = self.crouchBlockStunFramesByLayer || self.crouchBlockFramesByLayer; break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 
@@ -58,5 +60,33 @@ export function updateAnimation(self) {
 export function exitHitIfElapsed(self) {
   if (self.isHit && millis() - self.hitStartTime >= self.hitDuration) {
     self.isHit = false; self.setState("idle");
+  }
+
+  // manejar expiración de blockStun / crouchBlockStun
+  try {
+    if (self.state && (self.state.current === 'blockStun' || self.state.current === 'crouchBlockStun')) {
+      const start = self.blockStunStartTime || 0;
+      const elapsed = millis() - start;
+      const defaultDur = (self.state.current === 'crouchBlockStun') ? (self.crouchBlockStunDuration || 540) : (self.blockStunDuration || 540);
+      const actionDur = (self.actions && self.actions[self.state.current] && self.actions[self.state.current].duration) || defaultDur;
+      const dur = actionDur;
+
+      if (start > 0 && elapsed >= dur) {
+        // Al salir del block-stun volvemos a 'block'/'crouchBlock' si el jugador sigue manteniendo bloqueo en suelo,
+        // si no, volvemos a estado base ('idle' / reevaluación en update()).
+        const stillBlocking = !!(self.blocking && self.onGround);
+        if (self.state.current === 'crouchBlockStun') {
+          if (self.crouching && stillBlocking) self.setState('crouchBlock');
+          else self.setState('idle');
+        } else {
+          if (!self.crouching && stillBlocking) self.setState('block');
+          else self.setState('idle');
+        }
+        // limpiar timer
+        self.blockStunStartTime = 0;
+      }
+    }
+  } catch (e) {
+    // no romper si hay error
   }
 }

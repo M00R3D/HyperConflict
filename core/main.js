@@ -134,11 +134,18 @@ function draw() {
 
     if (player1 && typeof player1.attackHits === 'function' && player1.attackHits(player2)) {
       if (player2.blocking && isAttackerInFront(player1, player2)) {
-        applyHitstop(30); // feedback corto por bloqueo
-        player2.setState && player2.setState(player2.crouching ? 'crouchBlock' : 'block');
+        applyHitstop(240); // feedback corto por bloqueo
+        // entrar en block-stun (usar crouchBlockStun si está agachado)
+        const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
+        player2.blockStunStartTime = millis();
+        player2.blockStunDuration = player2.crouching
+          ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
+          : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
+        player2.setState && player2.setState(stunState);
+        player2.vx = 0;
       } else {
         const atk = player1.attackType;
-        const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 80;
+        const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 180;
         applyHitstop(hs);
         player2.hit(player1);
       }
@@ -146,11 +153,17 @@ function draw() {
 
     if (player2 && typeof player2.attackHits === 'function' && player2.attackHits(player1)) {
       if (player1.blocking && isAttackerInFront(player2, player1)) {
-        applyHitstop(30);
-        player1.setState && player1.setState(player1.crouching ? 'crouchBlock' : 'block');
+        applyHitstop(240);
+        const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
+        player1.blockStunStartTime = millis();
+        player1.blockStunDuration = player1.crouching
+          ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
+          : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
+        player1.setState && player1.setState(stunState);
+        player1.vx = 0;
       } else {
         const atk = player2.attackType;
-        const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 80;
+        const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 180;
         applyHitstop(hs);
         player1.hit(player2);
       }
@@ -178,7 +191,14 @@ function draw() {
             const attackerInFront = owner ? ((owner.x > player1.x && player1.facing === 1) || (owner.x < player1.x && player1.facing === -1)) : false;
             if (player1.blocking && attackerInFront) {
               applyHitstop(30);
-              player1.setState && player1.setState(player1.crouching ? 'crouchBlock' : 'block');
+              // entrar en block-stun por proyectil bloqueado
+              const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
+              player1.blockStunStartTime = millis();
+              player1.blockStunDuration = player1.crouching
+                ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
+                : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
+              player1.setState && player1.setState(stunState);
+              player1.vx = 0;
               if (!p.persistent) p.toRemove = true;
             } else {
               player1.hit(owner);
@@ -195,7 +215,13 @@ function draw() {
             const attackerInFront = owner ? ((owner.x > player2.x && player2.facing === 1) || (owner.x < player2.x && player2.facing === -1)) : false;
             if (player2.blocking && attackerInFront) {
               applyHitstop(30);
-              player2.setState && player2.setState(player2.crouching ? 'crouchBlock' : 'block');
+              const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
+              player2.blockStunStartTime = millis();
+              player2.blockStunDuration = player2.crouching
+                ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
+                : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
+              player2.setState && player2.setState(stunState);
+              player2.vx = 0;
               if (!p.persistent) p.toRemove = true;
             } else {
               player2.hit(owner);
