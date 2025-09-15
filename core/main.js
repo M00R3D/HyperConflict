@@ -7,6 +7,7 @@ import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';
 import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
 import { drawBackground } from '../ui/background.js';
 import { applyHitstop, isHitstopActive } from './hitstop.js';
+import { registerSpecialsForChar } from '../../entities/fighter/specials.js';
 
 let player1, player2;
 let projectiles = [];
@@ -69,16 +70,20 @@ async function setup() {
   player1.opponent = player2;
   player2.opponent = player1;
 
+  registerSpecialsForChar('tyeman', {
+    // override o definiciones adicionales sólo para tyeman
+    hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
+    ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
+    taunt: { seq: ['T'], direction: 'any' },
+    supersalto: { seq: ['↓','↑'], direction: 'any' }
+  });
 
-
-
-
-
-
-
-
-
-
+  registerSpecialsForChar('sbluer', {
+    // sbluer podría tener un special exclusivo (ejemplo)
+    shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
+    supersalto: { seq: ['↓','↑'], direction: 'any' },
+    taunt: { seq: ['T'], direction: 'any' }
+  });
   
   // asegurar facing inicial basado en la posición relativa (source of truth = Fighter.facing)
   player1.facing = (player1.x < player2.x) ? 1 : -1;

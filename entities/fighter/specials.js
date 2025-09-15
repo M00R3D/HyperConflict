@@ -5,8 +5,8 @@ import * as Hitbox from './hitbox.js';
 import * as Buffer from './buffer.js';
 
 // Se definen las secuencias base asumiendo facing = 1 (mirando a la derecha).
-// Cada movimiento puede declarar direction: 'forward'|'backward'|'any' para reglas futuras.
-export const specialDefs = {
+// Cada movimiento puede declarar direction: 'forward'|'backward'|'any' para reglas futuras
+const defaultSpecialDefs = {
   hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
   shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
   supersalto: { seq: ['↓','↑'], direction: 'any' },
@@ -14,7 +14,24 @@ export const specialDefs = {
   taunt: { seq: ['T'], direction: 'any' }
 };
 
+// mapa opcional por personaje (charId -> defs)
+const specialDefsByChar = Object.create(null);
+
+// función helper para registrar specials por personaje desde main.js u otro módulo
+export function registerSpecialsForChar(charId, defs) {
+  if (!charId || typeof defs !== 'object') return;
+  specialDefsByChar[charId] = Object.assign({}, specialDefsByChar[charId] || {}, defs);
+}
+
+// obtiene el conjunto efectivo de specials para un fighter (instancia override > charId > default)
+function getEffectiveSpecialDefs(self) {
+  if (self && self.specialDefs && typeof self.specialDefs === 'object') return self.specialDefs;
+  if (self && self.charId && specialDefsByChar[self.charId]) return specialDefsByChar[self.charId];
+  return defaultSpecialDefs;
+}
+
 export function checkSpecialMoves(self) {
+  const defsMap = getEffectiveSpecialDefs(self);
   const bufSymbols = (self.inputBuffer || []).map(i => i.symbol || '');
   // identificar el último símbolo direccional (si existe)
   const directionalSet = new Set(['←','→','↑','↓','↖','↗','↘','↙']);
@@ -23,8 +40,8 @@ export function checkSpecialMoves(self) {
     if (directionalSet.has(bufSymbols[i])) { lastDirInBuffer = bufSymbols[i]; break; }
   }
 
-  for (const moveName in specialDefs) {
-    const def = specialDefs[moveName];
+  for (const moveName in defsMap) {
+    const def = defsMap[moveName];
     if (!def || !Array.isArray(def.seq)) continue;
 
     // construir secuencia efectiva según facing (si facing === -1, espejar)
@@ -33,7 +50,6 @@ export function checkSpecialMoves(self) {
 
     // opción: exigir direction (forward/backward) — pero al espejar la secuencia ya queda correcta
     if (def.direction === 'forward') {
-      // si hay un símbolo direccional en el buffer y no coincide con forward relativo al facing, skip
       if (lastDirInBuffer) {
         const forwardSet = (self.facing === 1) ? new Set(['→','↘','↗']) : new Set(['←','↙','↖']);
         if (!forwardSet.has(lastDirInBuffer)) continue;
@@ -45,15 +61,11 @@ export function checkSpecialMoves(self) {
       }
     }
 
-    // match estricto: la cola del buffer debe coincidir exactamente con la secuencia
     if (Buffer.bufferEndsWith(self, seq)) {
       doSpecial(self, moveName);
       Buffer.bufferConsumeLast(self, seq.length);
       return;
     }
-
-    // si quieres permitir entradas con símbolos intermedios en algunos specials,
-    // usa Buffer.flexibleEndsWith(bufSymbols, seq) en lugar de bufferEndsWith.
   }
 }
 
