@@ -175,24 +175,32 @@ function drawCharacterSelect() {
 
         if (frameImg) {
           imageMode(CENTER);
-          // scale to fit cell with padding
+          // --- calcular ancho de un solo frame (srcFrameW) y mantener aspect ratio con respecto a ese frame ---
+          const frameCount = (idleLayer && idleLayer.length) ? idleLayer.length : 1;
+          const srcFrameW = Math.max(1, Math.floor(frameImg.width / frameCount));
+          const srcFrameH = frameImg.height;
           const maxW = cellSize - 12;
           const maxH = cellSize - 12;
-          const ratio = Math.min(maxW / frameImg.width, maxH / frameImg.height, 1);
-          const dw = Math.round(frameImg.width * ratio);
-          const dh = Math.round(frameImg.height * ratio);
-          image(frameImg, ix + cellSize/2, iy + cellSize/2, dw, dh);
+          const ratio = Math.min(maxW / srcFrameW, maxH / srcFrameH, 1);
+          const dw = Math.round(srcFrameW * ratio);
+          const dh = Math.round(srcFrameH * ratio);
+
+          // dibujar sólo el primer frame (recortando source usando srcFrameW)
+          image(
+            frameImg,
+            ix + cellSize/2, iy + cellSize/2,
+            dw, dh,
+            0, 0,
+            srcFrameW, srcFrameH
+          );
         } else {
           // placeholder
           fill(120);
           noStroke();
           ellipse(ix + cellSize/2, iy + cellSize/2, cellSize * 0.45);
         }
-        // name under sprite
-        fill(200);
-        textSize(10);
-        textAlign(CENTER, TOP);
-        text(charId.toUpperCase(), ix + cellSize/2, iy + cellSize - 16);
+
+        // (Ningún nombre aquí — se dibuja debajo del taunt)
       } else {
         // empty slot placeholder
         push();
@@ -207,34 +215,107 @@ function drawCharacterSelect() {
   }
 
   // draw taunt sprite: one on left representing jugador1 selection, one on right for jugador2
-  const tauntW = 56, tauntH = 56;
+  const baseTauntW = 56, baseTauntH = 56;
   // player1 taunt: show taunt of whatever character p1 currently has selected (if in first two slots)
-  const p1CharIdx = (p1SelIndex < choices.length) ? p1SelIndex : null;
-  if (p1CharIdx !== null) {
-    const assets = choices[p1CharIdx] === 'tyeman' ? _tyemanAssets : _sbluerAssets;
+  // si el jugador ya confirmó, usar su elección final (p1Choice/p2Choice),
+  // si no, usar el cursor (p1SelIndex/p2SelIndex)
+  const p1SelectedIdx = p1Confirmed ? (p1Choice < choices.length ? p1Choice : null)
+                                    : (p1SelIndex < choices.length ? p1SelIndex : null);
+  if (p1SelectedIdx !== null) {
+    const charId = choices[p1SelectedIdx];
+    const assets = charId === 'tyeman' ? _tyemanAssets : _sbluerAssets;
     const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
     const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
     if (tauntImg) {
       push();
       imageMode(CORNER);
       tint(255, 240);
-      image(tauntImg, gridX - tauntW - 18, gridY + (gridH - tauntH)/2, tauntW, tauntH);
+
+      // primer frame width
+      const tCount = (tauntLayer && tauntLayer.length) ? tauntLayer.length : 1;
+      const tSrcW = Math.max(1, Math.floor(tauntImg.width / tCount));
+      const tSrcH = tauntImg.height;
+
+      // mantener aspect ratio ajustando al "slot" baseTauntW/baseTauntH
+      const tRatio = Math.min(baseTauntW / tSrcW, baseTauntH / tSrcH, 1);
+      const tDrawW = Math.round(tSrcW * tRatio);
+      const tDrawH = Math.round(tSrcH * tRatio);
+
+      // calcular posición centrada dentro del area reservada a la izquierda
+      const leftSlotX = gridX - baseTauntW - 18;
+      const leftSlotY = gridY + Math.round((gridH - baseTauntH) / 2);
+
+      const tauntDestX = leftSlotX + Math.round((baseTauntW - tDrawW) / 2);
+      const tauntDestY = leftSlotY + Math.round((baseTauntH - tDrawH) / 2);
+
+      image(tauntImg, tauntDestX, tauntDestY, tDrawW, tDrawH, 0, 0, tSrcW, tSrcH);
+
+      // dibujar nombre debajo del taunt
       noTint();
+      fill(220);
+      textSize(12);
+      textAlign(CENTER, TOP);
+      text(charId.toUpperCase(), tauntDestX + tDrawW/2, tauntDestY + tDrawH + 6);
+
+      pop();
+    } else {
+      // placeholder box + name
+      push();
+      noFill();
+      stroke(120);
+      rect(gridX - baseTauntW - 18, gridY + Math.round((gridH - baseTauntH) / 2), baseTauntW, baseTauntH, 6);
+      fill(220);
+      textSize(12);
+      textAlign(CENTER, TOP);
+      text(choices[p1SelectedIdx].toUpperCase(), gridX - baseTauntW - 18 + baseTauntW/2, gridY + Math.round((gridH - baseTauntH) / 2) + baseTauntH + 6);
       pop();
     }
   }
-  // player2 taunt
-  const p2CharIdx = (p2SelIndex < choices.length) ? p2SelIndex : null;
-  if (p2CharIdx !== null) {
-    const assets = choices[p2CharIdx] === 'tyeman' ? _tyemanAssets : _sbluerAssets;
+
+  // player2 taunt (derecha)
+  const p2SelectedIdx = p2Confirmed ? (p2Choice < choices.length ? p2Choice : null)
+                                    : (p2SelIndex < choices.length ? p2SelIndex : null);
+  if (p2SelectedIdx !== null) {
+    const charId = choices[p2SelectedIdx];
+    const assets = charId === 'tyeman' ? _tyemanAssets : _sbluerAssets;
     const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
     const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
     if (tauntImg) {
       push();
       imageMode(CORNER);
       tint(255, 240);
-      image(tauntImg, gridX + gridW + 18, gridY + (gridH - tauntH)/2, tauntW, tauntH);
+
+      const tCount2 = (tauntLayer && tauntLayer.length) ? tauntLayer.length : 1;
+      const tSrcW2 = Math.max(1, Math.floor(tauntImg.width / tCount2));
+      const tSrcH2 = tauntImg.height;
+      const tRatio2 = Math.min(baseTauntW / tSrcW2, baseTauntH / tSrcH2, 1);
+      const tDrawW2 = Math.round(tSrcW2 * tRatio2);
+      const tDrawH2 = Math.round(tSrcH2 * tRatio2);
+
+      const rightSlotX = gridX + gridW + 18;
+      const rightSlotY = gridY + Math.round((gridH - baseTauntH) / 2);
+
+      const tauntDestX2 = rightSlotX + Math.round((baseTauntW - tDrawW2) / 2);
+      const tauntDestY2 = rightSlotY + Math.round((baseTauntH - tDrawH2) / 2);
+
+      image(tauntImg, tauntDestX2, tauntDestY2, tDrawW2, tDrawH2, 0, 0, tSrcW2, tSrcH2);
+
       noTint();
+      fill(220);
+      textSize(12);
+      textAlign(CENTER, TOP);
+      text(charId.toUpperCase(), tauntDestX2 + tDrawW2/2, tauntDestY2 + tDrawH2 + 6);
+
+      pop();
+    } else {
+      push();
+      noFill();
+      stroke(120);
+      rect(gridX + gridW + 18, gridY + Math.round((gridH - baseTauntH) / 2), baseTauntW, baseTauntH, 6);
+      fill(220);
+      textSize(12);
+      textAlign(CENTER, TOP);
+      text(choices[p2SelectedIdx].toUpperCase(), gridX + gridW + 18 + baseTauntW/2, gridY + Math.round((gridH - baseTauntH) / 2) + baseTauntH + 6);
       pop();
     }
   }
@@ -252,9 +333,18 @@ function drawCharacterSelect() {
     rect(ix - 4, iy - 4, cellSize + 8, cellSize + 8, 8);
     pop();
   }
-  // blue = jugador1, red = jugador2
-  drawCursorAt(p1SelIndex, color(80,150,255));
-  drawCursorAt(p2SelIndex, color(255,80,80));
+ 
+  // Si ambos cursores están sobre la misma celda y NINGUNO confirmó, dibujar borde que parpadee entre azul y rojo.
+  if (!p1Confirmed && !p2Confirmed && p1SelIndex === p2SelIndex) {
+    const blinkMs = 300; // intervalo de cambio (ms)
+    const blinkOn = Math.floor(millis() / blinkMs) % 2 === 0;
+    const blinkColor = blinkOn ? color(80,150,255) : color(255,80,80);
+    drawCursorAt(p1SelIndex, blinkColor);
+  } else {
+    // dibujar únicamente los cursores de los jugadores que NO han confirmado aún
+    if (!p1Confirmed) drawCursorAt(p1SelIndex, color(80,150,255));
+    if (!p2Confirmed) drawCursorAt(p2SelIndex, color(255,80,80));
+  }
 
   // confirmations overlay
   if (p1Confirmed) {
