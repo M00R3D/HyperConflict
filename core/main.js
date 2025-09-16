@@ -462,6 +462,33 @@ function handleSelectionInput() {
   }
 }
 
+let pauseStartTime = 0;
+let totalPausedTime = 0;
+
+function compensatePauseTimers(dt) {
+  // Compensar timers de los jugadores
+  [player1, player2].forEach(p => {
+    if (!p) return;
+    if (typeof p.attackStartTime === 'number') p.attackStartTime += dt;
+    if (typeof p.hitStartTime === 'number') p.hitStartTime += dt;
+    if (typeof p.blockStunStartTime === 'number') p.blockStunStartTime += dt;
+    if (typeof p._supersaltoStart === 'number') p._supersaltoStart += dt;
+    if (typeof p.dashStartTime === 'number') p.dashStartTime += dt;
+    if (typeof p.dashLightStart === 'number') p.dashLightStart += dt;
+    // Si tienes otros timers personalizados, agrégalos aquí
+  });
+
+  // Compensar timers de los proyectiles
+  projectiles.forEach(proj => {
+    if (!proj) return;
+    if (typeof proj._lastUpdate === 'number') proj._lastUpdate += dt;
+    if (typeof proj._spawnTimer === 'number') proj._spawnTimer += dt;
+    if (typeof proj.spawnedAt === 'number') proj.spawnedAt += dt;
+    if (typeof proj.age === 'number') proj.age += dt;
+    // Si tienes otros timers personalizados, agrégalos aquí
+  });
+}
+
 function draw() {
   // si estamos en pantalla de selección, manejarla primero
   if (selectionActive) {
@@ -500,6 +527,15 @@ function draw() {
 
   // toggle PAUSA con Enter
   if (typeof keysPressed !== 'undefined' && keysPressed['enter']) {
+    if (!PAUSED) {
+      // Se va a pausar
+      pauseStartTime = millis();
+    } else {
+      // Se va a despausar
+      const dt = millis() - pauseStartTime;
+      totalPausedTime += dt;
+      compensatePauseTimers(dt);
+    }
     PAUSED = !PAUSED;
     keysPressed['enter'] = false;
   }
