@@ -184,6 +184,17 @@ class Projectile {
         // pequeño jitter horizontal para efecto 'llama' (opcional, suave)
         this.x += Math.sin(this.age / 120) * 0.18;
         if (t >= 1) this.toRemove = true;
+
+        // --- AVANZAR ANIMACIÓN DE FRAMES ---
+        if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+          this._frameTimer++;
+          // Avanza lentamente: usa toda la duración del proyectil para recorrer todos los frames
+          const n = this.framesByLayer[0].length;
+          // Frame actual según el progreso de vida (t)
+          this.frameIndex = Math.floor(t * (n - 1));
+          // Si quieres que la animación sea un loop, usa esto en vez de la línea anterior:
+          // this.frameIndex = Math.floor((this.age / this.frameDelay) % n);
+        }
       } else if (this.typeId === 5) {
         // BUN behaviour: move outwards until maxRange or collision sets returning
         const moveAmount = (this.speed || 6) * (dt / 16);
@@ -362,7 +373,13 @@ class Projectile {
   }
 
   getHitbox() {
-    return { x: this.x - this.w / 2, y: this.y - this.h / 2, w: this.w, h: this.h };
+    const def = PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
+    return {
+      x: this.x + def.offsetX,
+      y: this.y + def.offsetY,
+      w: def.w,
+      h: def.h
+    };
   }
 
   hits(fighter) {
@@ -381,4 +398,15 @@ class Projectile {
   }
 }
 
-export { Projectile };
+// Hitboxes por tipo de proyectil (puedes modificar aquí)
+const PROJECTILE_HITBOXES = {
+  1: { offsetX: 2, offsetY: -6, w: 34, h: 32 },   // hadouken parabólico
+  2: { offsetX: -16, offsetY: -16, w: 32, h: 32 },   // fireball
+  3: { offsetX: -12, offsetY: -12, w: 24, h: 24 },   // shuriken
+  4: { offsetX: -10, offsetY: -18, w: 20, h: 36 },   // tats barrera
+  5: { offsetX: 1, offsetY: 0,  w: 18, h: 6  },    // bun
+  // default para otros tipos
+  default: { offsetX: -8, offsetY: -8, w: 16, h: 16 }
+};
+
+export { Projectile, PROJECTILE_HITBOXES };

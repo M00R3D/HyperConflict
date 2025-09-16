@@ -758,6 +758,23 @@ function draw() {
     if (p && typeof p.display === 'function') p.display();
   }
 
+  // --- Mostrar hitboxes de proyectiles si está activado el overlay ---
+  if (window.SHOW_DEBUG_OVERLAYS) {
+    for (let i = 0; i < projectiles.length; i++) {
+      const p = projectiles[i];
+      if (!p) continue;
+      const hb = (typeof p.getHitbox === 'function') ? p.getHitbox() : null;
+      if (hb) {
+        push();
+        noFill();
+        stroke(0, 255, 255, 180); // color cian para distinguir
+        strokeWeight(1.5);
+        rect(hb.x, hb.y, hb.w, hb.h);
+        pop();
+      }
+    }
+  }
+
   pop();
 
   drawHealthBars(player1, player2);
