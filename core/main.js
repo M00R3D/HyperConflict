@@ -8,6 +8,42 @@ import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
 import { drawBackground } from '../ui/background.js';
 import { applyHitstop, isHitstopActive } from './hitstop.js';
 import { registerSpecialsForChar } from '../../entities/fighter/specials.js';
+import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
+
+// --- REGISTRO DE STATS Y ACCIONES ---
+registerStatsForChar('tyeman', {
+  maxSpeed: 3,
+  runMaxSpeed: 6,
+  acceleration: 1.1,
+  runAcceleration: 1.11,
+  friction: 0.1,
+  runFriction: 0.081
+});
+registerActionsForChar('tyeman', {
+  punch: { duration: 400, frameDelay: 6 },
+  punch2: { duration: 400, frameDelay: 6 },
+  punch3: { duration: 800, frameDelay: 5 },
+  kick: { duration: 400, frameDelay: 6 },
+  kick2: { duration: 700, frameDelay: 6 },
+  kick3: { duration: 1000, frameDelay: 6 }
+});
+
+registerStatsForChar('sbluer', {
+  maxSpeed: 2.4,
+  runMaxSpeed: 5.0,
+  acceleration: 0.9,
+  runAcceleration: 0.95,
+  friction: 0.12,
+  runFriction: 0.06
+});
+registerActionsForChar('sbluer', {
+  punch: { duration: 700, frameDelay: 7 },
+  punch2: { duration: 1000, frameDelay: 6 },
+  punch3: { duration: 1000, frameDelay: 6 },
+  kick: { duration: 700, frameDelay: 7 },
+  kick2: { duration: 1000, frameDelay: 6 },
+  kick3: { duration: 1000, frameDelay: 6 }
+});
 
 let player1, player2;
 let projectiles = [];
@@ -68,17 +104,19 @@ function tryCreatePlayers() {
   const tyeman = _tyemanAssets;
   const sbluer = _sbluerAssets;
 
+  const p1Stats = getStatsForChar(choices[p1Choice]);
+  const p2Stats = getStatsForChar(choices[p2Choice]);
+  const p1Actions = getActionsForChar(choices[p1Choice]);
+  const p2Actions = getActionsForChar(choices[p2Choice]);
+
   player1 = new Fighter({
-    x: 100, col: color(255,100,100), id: 'p1', charId: choices[p1Choice],
+    x: 100,
+    col: color(255,100,100),
+    id: 'p1',
+    charId: choices[p1Choice],
     assets: choices[p1Choice] === 'tyeman' ? tyeman : sbluer,
-    actions: {
-      punch: { duration: 200, frameDelay: 1 }, /* override o extiende */
-      punch: { duration: 400, frameDelay: 4 },
-      punch2: { duration: 400, frameDelay: 4 },
-      punch3: { duration: 500, frameDelay: 6 },
-      kick: { duration: 400, frameDelay: 7 },
-      kick2: { duration: 400, frameDelay: 6 }
-    }
+    actions: p1Actions,
+    ...p1Stats
   });
 
   player2 = new Fighter({
@@ -87,26 +125,11 @@ function tryCreatePlayers() {
     id: 'p2',
     charId: choices[p2Choice],
     assets: choices[p2Choice] === 'tyeman' ? tyeman : sbluer,
-    actions: {
-      // overrides para alargar ataques de sbluer
-      punch: { duration: 700, frameDelay: 7 },
-      punch2: { duration: 1000, frameDelay: 6 },
-      punch3: { duration: 1000, frameDelay: 6 },
-      kick: { duration: 700, frameDelay: 7 },
-      kick2: { duration: 1000, frameDelay: 6 },
-      kick3: { duration: 1000, frameDelay: 6 },
-    }
+    actions: p2Actions,
+    ...p2Stats
   });
 
-  // ajustar parámetros de movimiento de player2 para que corra/camine más lento que p1
-  player2.maxSpeed = 2.4;      // velocidad de caminata
-  player2.runMaxSpeed = 5.0;   // velocidad de correr
-  player2.acceleration = 0.9;  // aceleración al andar
-  player2.runAcceleration = 0.95; // aceleración al correr
-  // opcional: ajustar fricción para cambiar sensación
-  player2.friction = 0.12;
-  player2.runFriction = 0.06;
-  
+  // ASIGNAR OPONENTES MUTUAMENTE PARA AUTO-FACING
   player1.opponent = player2;
   player2.opponent = player1;
 

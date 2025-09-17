@@ -14,6 +14,8 @@ class Fighter {
     // opts: { x, col, id, charId, assets, actions }
     const { x = 0, col = color(255), id = 'p?', charId = 'default', assets = {}, actions = {} } = opts;
     Init.initBase(this, x, col, id);
+    // aplicar stats personalizados si vienen en opts
+    Object.assign(this, opts);
     this.charId = charId;
     // usar assets y actions provistos
     Init.initFrames(this, {

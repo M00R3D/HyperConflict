@@ -133,15 +133,15 @@ export function hit(self, attacker = null) {
   self.setState(stateName);
 
   // Empujón ligero del atacante hacia adelante para facilitar encadenes
-  if (attacker && attacker !== self) {
-    const followPushMap = { punch2: 1.6, punch3: 2.6, kick2: 1.2, kick3: 2.0 };
-    const boost = followPushMap[attacker.attackType] || 0;
-    if (boost > 0) {
-      attacker.vx = (attacker.vx || 0) + boost * (attacker.facing || 1);
-      const cap = (attacker.runActive ? attacker.runMaxSpeed : attacker.maxSpeed) * 2;
-      attacker.vx = constrain(attacker.vx, -cap, cap);
-    }
-  }
+  // if (attacker && attacker !== self) {
+  //   const followPushMap = { punch2: 1.6, punch3: 2.6, kick2: 1.2, kick3: 2.0 };
+  //   const boost = followPushMap[attacker.attackType] || 0;
+  //   if (boost > 0) {
+  //     attacker.vx = (attacker.vx || 0) + boost * (attacker.facing || 1);
+  //     const cap = (attacker.runActive ? attacker.runMaxSpeed : attacker.maxSpeed) * 2;
+  //     attacker.vx = constrain(attacker.vx, -cap, cap);
+  //   }
+  // }
 }
 
 export function updateAttackState(self) {

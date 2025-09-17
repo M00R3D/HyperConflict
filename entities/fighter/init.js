@@ -16,10 +16,10 @@ export function initBase(self, x, col, id) {
 
   self.acceleration = 1.1;
   self.runAcceleration = 1.11;
-  self.maxSpeed = 4;
-  self.runMaxSpeed = 10;
+  self.maxSpeed = 3;
+  self.runMaxSpeed = 6;
   self.friction = 0.1;
-  self.runFriction = 0.051;
+  self.runFriction = 0.081;
   self.runActive = false;
   // multiplicador para aumentar la fricción durante ataques de tipo "grounded" (hadouken/tats)
   self.groundedAttackFrictionMultiplier = 6;
@@ -124,17 +124,17 @@ export function initHitboxes(self) {
     fall:   { offsetX: 7, offsetY: 0, w: 22, h: 32 },
     crouch: { offsetX: 0, offsetY: 16, w: 32, h: 16 },
     crouchwalk: { offsetX: 0, offsetY: 16, w: 32, h: 16 },
-    punch:  { offsetX: -4, offsetY: 0, w: 32, h: 29 },
-    punch2: { offsetX: -4, offsetY: 0, w: 32, h: 29 },
+    punch:  { offsetX: 4, offsetY: 0, w: 26, h: 29 },
+    punch2: { offsetX: 4, offsetY: 0, w: 26, h: 29 },
     punch3: { offsetX: -4, offsetY: 0, w: 32, h: 29 },
     kick:   { offsetX: 0, offsetY: 1, w: 32, h: 34 },
     hit:    { offsetX: 7, offsetY: 0, w: 22, h: 32 },
     hadouken: { offsetX: 10, offsetY: 10, w: 12, h: 12 }
   };
   self.attackHitboxes = {
-    punch: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
-    punch2: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
-    punch3: { offsetX: 28, offsetY: 13, w: 10, h: 10 },
+    punch: { offsetX: 18, offsetY: 7, w: 20, h: 20 },
+    punch2: { offsetX: 18, offsetY: 7, w: 23, h: 20 },
+    punch3: { offsetX: 20, offsetY: 7, w: 23, h: 20 },
     kick:  { offsetX: 25, offsetY: 10, w: 30, h: 15 },
     hadouken: { offsetX: 0, offsetY: 0, w: 20, h: 20 },
     tats: { offsetX: 20, offsetY: 4, w: 18, h: 24 }

@@ -22,6 +22,38 @@ export function updateMovement(self) {
     return; // omite el resto del movimiento normal
   }
 
+  // --- FORZAR QUIETO EN TODOS LOS ATAQUES ---
+  if (
+    self.state.current === "punch" ||
+    self.state.current === "punch2" ||
+    self.state.current === "punch3" ||
+    self.state.current === "kick" ||
+    self.state.current === "kick2" ||
+    self.state.current === "kick3"
+  ) {
+    self.vx = 0;
+  }
+
+  // --- CORTAR DASH SI ENTRA EN ATAQUE ---
+  if (
+    self.state.current === "punch" ||
+    self.state.current === "punch2" ||
+    self.state.current === "punch3" ||
+    self.state.current === "kick" ||
+    self.state.current === "kick2" ||
+    self.state.current === "kick3"
+  ) {
+    if (self._wasInDash) {
+      // Si venía de dash, lo cortamos
+      self.state.current = self.attackType || self.state.current;
+      self.dashDirection = 0;
+      self.dashStartTime = 0;
+      self.runActive = false;
+    }
+    self.vx = 0;
+  }
+  self._wasInDash = (self.state.current === "dash");
+
   const acc = self.runActive ? self.runAcceleration : self.acceleration;
   const maxSpd = self.runActive ? self.runMaxSpeed : self.maxSpeed;
   // base friction según si corre o no
@@ -41,8 +73,19 @@ export function updateMovement(self) {
 
   // Si estás en estado 'hit', NO permitimos controlar vx ni girar con las teclas
   if (!self.isHit) {
-    if (self.keys.left && self.state.current !== "fall" && self.state.current !== "jump") self.vx -= acc;
-    if (self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") self.vx += acc;
+    // NO permitir modificar vx durante ataques
+    const isAttackingState = (
+      self.state.current === "punch" ||
+      self.state.current === "punch2" ||
+      self.state.current === "punch3" ||
+      self.state.current === "kick" ||
+      self.state.current === "kick2" ||
+      self.state.current === "kick3"
+    );
+    if (!isAttackingState) {
+      if (self.keys.left && self.state.current !== "fall" && self.state.current !== "jump") self.vx -= acc;
+      if (self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") self.vx += acc;
+    }
     if (!self.keys.left && !self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") {
       if (self.vx > 0) self.vx = Math.max(0, self.vx - effectiveFriction);
       if (self.vx < 0) self.vx = Math.min(0, self.vx + effectiveFriction);
