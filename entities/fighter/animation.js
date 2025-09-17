@@ -35,6 +35,8 @@ export function setState(self, newState) {
     case 'crouchBlock':      self.currentFramesByLayer = self.crouchBlockFramesByLayer; break;
     case 'blockStun': self.currentFramesByLayer = self.blockStunFramesByLayer || self.blockFramesByLayer; break;
     case 'crouchBlockStun': self.currentFramesByLayer = self.crouchBlockStunFramesByLayer || self.crouchBlockFramesByLayer; break;
+    case 'grab':      self.currentFramesByLayer = self.grabFramesByLayer; break;
+    case 'grabbed':    self.currentFramesByLayer = self.grabbedFramesByLayer; break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 

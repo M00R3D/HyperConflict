@@ -43,7 +43,9 @@ async function loadTyemanAssets() {
   dashLight: await loadOrNull('src/tyeman/tyeman_dash_light.piskel'),
   taunt: await loadOrNull('src/tyeman/tyeman_taunt.piskel'),
   block: await loadOrNull('src/tyeman/tyeman_block.piskel'),
-  crouchBlock: await loadOrNull('src/tyeman/tyeman_crouch_block.piskel')
+  crouchBlock: await loadOrNull('src/tyeman/tyeman_crouch_block.piskel'),
+  grab: await loadOrNull('src/tyeman/tyeman_grab.piskel'),
+  grabbed: await loadOrNull('src/tyeman/tyeman_grabbed.piskel'),
   };
 }
  
@@ -75,7 +77,9 @@ async function loadSbluerAssets() {
   dashLight: await loadOrNull('src/sbluer/sbluer_dash_light.piskel'),
   taunt: await loadOrNull('src/sbluer/sbluer_taunt.piskel'),
   block: await loadOrNull('src/sbluer/sbluer_block.piskel'),
-  crouchBlock: await loadOrNull('src/sbluer/sbluer_crouch_block.piskel')
+  crouchBlock: await loadOrNull('src/sbluer/sbluer_crouch_block.piskel'),
+  grab: await loadOrNull('src/sbluer/sbluer_grab.piskel'),
+  grabbed: await loadOrNull('src/sbluer/sbluer_grabbed.piskel'),
   };
 }
  

@@ -33,7 +33,9 @@ class Fighter {
       // NEW: shor / bun proj / bun string
       shor: assets.shor,
       bunProj: assets.bunProj,
-      bunString: assets.bunString
+      bunString: assets.bunString,
+      grabFramesByLayer: assets.grabFramesByLayer,
+      grabbedFramesByLayer: assets.grabbedFramesByLayer,
     });
     // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
     // (se fusionarán por llave con las acciones por defecto más abajo)
@@ -67,7 +69,10 @@ class Fighter {
       blockStun: { anim: this.blockFramesByLayer, frameDelay: 10, duration: 540 }, // <-- agregado
       crouchBlockStun: { anim: this.crouchBlockFramesByLayer, frameDelay: 10, duration: 540 }, // <-- agregado
       // NEW: bun special visual using shor frames
-      bun: { anim: this.shorFramesByLayer, frameDelay: 6, duration: 700 }
+      bun: { anim: this.shorFramesByLayer, frameDelay: 6, duration: 700 },
+      grab: { anim: this.grabFramesByLayer, frameDelay: 6, duration: 500 },
+      grabbed: { anim: this.grabbedFramesByLayer, frameDelay: 6, duration: 500 },
+      // dashLight: { anim: this.dashLightFramesByLayer, frameDelay: 10, duration: 300 }, // <-- nuevo estado intermedio (no usado)
     };
 
     // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)
