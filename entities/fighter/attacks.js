@@ -224,7 +224,14 @@ export function hit(self, attacker = null) {
 export function updateAttackState(self) {
   const now = millis();
   if (self.attacking && (now - self.attackStartTime > self.attackDuration)) {
-    self.attacking = false; self.attackType = null;
+    // Mantener el estado de ataque mientras el grab esté en holding,
+    // para que el grabber permanezca en el último frame hasta soltarlo.
+    if (self.attackType === 'grab' && self._grabHolding) {
+      return;
+    }
+
+    self.attacking = false;
+    self.attackType = null;
     // limpiar lista de objetivos al terminar la activación
     if (self._hitTargets) { self._hitTargets.clear(); self._hitTargets = null; }
   }

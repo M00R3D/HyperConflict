@@ -77,12 +77,19 @@ export function addInputFromKey(self, keyName) {
   if (self.id === 'p1') {
     if (keyName === 'i') { addInput(self, 'P'); return; }
     if (keyName === 'o') { addInput(self, 'K'); return; }
-    if (keyName === 'u') { addInput(self, 'G'); return; } // <-- NUEVO: grab para p1
+    // grab input only if not currently grabbed / locked
+    if (keyName === 'u') {
+      if (self._grabLock || (self.state && self.state.current === 'grabbed')) return;
+      addInput(self, 'G'); return;
+    }
     if (keyName === ' ') { addInput(self, 'T'); return; }
   } else {
     if (keyName === 'b') { addInput(self, 'P'); return; }
     if (keyName === 'n') { addInput(self, 'K'); return; }
-    if (keyName === 'v') { addInput(self, 'G'); return; } // <-- NUEVO: grab para p2
+    if (keyName === 'v') {
+      if (self._grabLock || (self.state && self.state.current === 'grabbed')) return;
+      addInput(self, 'G'); return;
+    }
     if (keyName === 'backspace') { addInput(self, 'T'); return; }
   }
 

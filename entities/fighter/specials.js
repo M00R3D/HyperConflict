@@ -72,12 +72,15 @@ export function checkSpecialMoves(self) {
 
 export function doSpecial(self, moveName) {
   if (moveName === 'grab') {
-    if (self.attacking || self.state.current === 'grab') return;
+    // No permitir grab si ya estamos atacando, en hit, ya en grab, o si estamos siendo agarrados
+    if (self.attacking || self.isHit || self._grabLock || (self.state && (self.state.current === 'grab' || self.state.current === 'grabbed'))) return;
     self.setState('grab');
     self.attacking = true;
     self.attackType = 'grab';
     self.attackStartTime = millis();
     self.attackDuration = (self.actions.grab && self.actions.grab.duration) || 500;
+    // asegurar set de objetivos para esta activación
+    self._hitTargets = new Set();
     return;
   }
   if (moveName === 'hadouken') {

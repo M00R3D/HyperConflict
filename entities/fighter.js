@@ -98,7 +98,8 @@ class Fighter {
     }
 }
     this.grab = () => {
-      if (this.state.current === 'grab' || this.isHit || this.attacking) return;
+      // Prevent starting a grab if already grabbed/locked/hit/attacking
+      if (this.state.current === 'grab' || this.state.current === 'grabbed' || this.isHit || this._grabLock || this.attacking) return;
       this.setState('grab');
       this.attacking = true;
       this.attackType = 'grab';
@@ -136,6 +137,15 @@ class Fighter {
     // de teclas presionadas/soltadas.
     if (this.state && (this.state.current === 'blockStun' || this.state.current === 'crouchBlockStun')) {
       // no procesar buffer ni specials; conservar _prevOnGround para compatibilidad y salir.
+      return;
+    }
+
+    // Si somos EL QUE AGARRÓ y estamos en holding, no permitir caminar ni cambiar facing.
+    // Esto impide dash/walk/facing changes mientras mantiene la espera del botón de soltar
+    // (la lógica de liberación usa keysPressed[ 'u' | 'v' ] en update()).
+    if (this.state && this.state.current === 'grab' && this._grabHolding) {
+      // aún llamamos a Buffer.trimBuffer para mantener limpieza, pero no procesamos inputs
+      this.trimBuffer();
       return;
     }
 
@@ -367,6 +377,19 @@ class Fighter {
           this.opponent.vx = 7 * pushDir;
           this.opponent.vy = -5;
         }
+        // LIMPIEZA COMPLETA DEL ESTADO DEL AGARRADOR para permitir reintentar inmediatamente
+        this.setState('idle');
+        this.attacking = false;
+        this.attackType = null;
+        this.attackStartTime = 0;
+        this.attackDuration = 0;
+        if (this._hitTargets) { this._hitTargets.clear(); this._hitTargets = null; }
+        // desbloquear inputs y combos residuales
+        if (this.inputLockedByKey) for (const k in this.inputLockedByKey) this.inputLockedByKey[k] = false;
+        // quitar cualquier 'G' sobrante del buffer (evita que el primer intento tras soltar sea ignorado)
+        try { Buffer.bufferConsumeLast(this, 1); } catch (e) {}
+        // también limpiar el inputBuffer por si quedó basura (opcional)
+        // this.inputBuffer = [];
         this.setState('idle');
         this.attacking = false;
         this.attackType = null;
