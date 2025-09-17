@@ -278,6 +278,4 @@ export function display(self) {
       // console.warn('debug draw failed', e);
     }
   }  
-
 }
-

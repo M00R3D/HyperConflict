@@ -71,6 +71,15 @@ export function checkSpecialMoves(self) {
 }
 
 export function doSpecial(self, moveName) {
+  if (moveName === 'grab') {
+    if (self.attacking || self.state.current === 'grab') return;
+    self.setState('grab');
+    self.attacking = true;
+    self.attackType = 'grab';
+    self.attackStartTime = millis();
+    self.attackDuration = (self.actions.grab && self.actions.grab.duration) || 500;
+    return;
+  }
   if (moveName === 'hadouken') {
     self.setState('hadouken');
     self.attackType = 'hadouken';

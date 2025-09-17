@@ -3,8 +3,8 @@
 
 let playerRefs = { p1: null, p2: null };
 let playersReady = false;
-const p1ControlKeys = new Set(['w','a','s','d','i','o',' ']);
-const p2ControlKeys = new Set(['arrowup','arrowleft','arrowdown','arrowright','b','n','backspace']);
+const p1ControlKeys = new Set(['w','a','s','d','i','o',' ', 'u']); // <-- agregar 'u' para grab
+const p2ControlKeys = new Set(['arrowup','arrowleft','arrowdown','arrowright','b','n','backspace', 'v']); // <-- agregar 'v' para grab
 
 // estado de teclas (exportado)
 let keysDown = {};

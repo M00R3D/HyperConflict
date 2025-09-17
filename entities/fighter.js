@@ -25,17 +25,15 @@ class Fighter {
       kick2FramesByLayer: assets.kick2, kick3FramesByLayer: assets.kick3, crouchFramesByLayer: assets.crouch,
       crouchWalkFramesByLayer: assets.crouchWalk, hitFramesByLayer: assets.hit, hit2FramesByLayer: assets.hit2, hit3FramesByLayer: assets.hit3,
       shootFramesByLayer: assets.shoot, projectileFramesByLayer: assets.projectile,
-      // nuevo orden: primero ANIM de "tats" (personaje), luego frames del proyectil "tats"
       tatsFramesByLayer: assets.tats, tatsProjFramesByLayer: assets.tatsProjFramesByLayer,
-      dashLightFramesByLayer: assets.dashLight, // <-- nuevo parámetro antes del dash final
-      dashFramesByLayer: assets.dash, // <-- existente
+      dashLightFramesByLayer: assets.dashLight,
+      dashFramesByLayer: assets.dash,
       tauntFramesByLayer: assets.taunt, blockFramesByLayer: assets.block, crouchBlockFramesByLayer: assets.crouchBlock,
-      // NEW: shor / bun proj / bun string
       shor: assets.shor,
       bunProj: assets.bunProj,
       bunString: assets.bunString,
-      grabFramesByLayer: assets.grabFramesByLayer,
-      grabbedFramesByLayer: assets.grabbedFramesByLayer,
+      grabFramesByLayer: assets.grab,           // <-- CORRECTO
+      grabbedFramesByLayer: assets.grabbed,     // <-- CORRECTO
     });
     // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
     // (se fusionarán por llave con las acciones por defecto más abajo)
@@ -99,6 +97,14 @@ class Fighter {
         this.setState('idle');
     }
 }
+    this.grab = () => {
+      if (this.state.current === 'grab' || this.isHit || this.attacking) return;
+      this.setState('grab');
+      this.attacking = true;
+      this.attackType = 'grab';
+      this.attackStartTime = millis();
+      this.attackDuration = (this.actions.grab && this.actions.grab.duration) || 500;
+    };
   }
 
   // delegados
@@ -219,6 +225,26 @@ class Fighter {
    handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
    
    update() {
+    // Si estamos siendo agarrados, congelar en 'grabbed' y no procesar lógica normal
+    if (this._grabLock) {
+      this.vx = 0; this.vy = 0;
+      // mantener estado grabbed y animación
+      this.setState('grabbed');
+      Anim.updateAnimation(this);
+      if (this.grabbedBy) {
+        // mantener posición relativa al quien agarro (si existe referencia)
+        const grabber = this.grabbedBy;
+        const offsetX = (typeof grabber._grabVictimOffsetX === 'number') ? grabber._grabVictimOffsetX : ((grabber.facing === 1) ? (grabber.w - 6) : (-this.w + 6));
+        this.x = grabber.x + offsetX;
+        this.y = grabber.y;
+        this.vx = 0; this.vy = 0;
+      }
+      // avanzar timers mínimos para evitar que todo quede congelado por siempre
+      if (this.state) this.state.timer = (this.state.timer || 0) + 1;
+      this.frameTimer = (this.frameTimer || 0) + 1;
+      return;
+    }
+
     // Manejo de supersalto: restaurar gravedad cuando expire el efecto
     if (this._supersaltoActive) {
       const elapsed = millis() - (this._supersaltoStart || 0);
@@ -241,8 +267,7 @@ class Fighter {
     Movement.updateMovement(this);
 
     this.checkSpecialMoves();
-
-    // <-- NUEVO: Priorizar block-stun para que ninguna otra rama sobreescriba el estado
+    // Priorizar block-stun para que ninguna otra rama sobreescriba el estado
     if (this.state && (this.state.current === 'blockStun' || this.state.current === 'crouchBlockStun')) {
       // mantener animación/timers hasta que exitHitIfElapsed determine el fin
       Anim.updateAnimation(this);
@@ -302,6 +327,53 @@ class Fighter {
       this.setState("walk");
     } else {
       this.setState("idle");
+    }
+
+    // --- lógica de agarre (grab) ---
+    if (this.state.current === 'grab' && this._grabHolding) {
+      // Congelar en último frame
+      if (this.grabFramesByLayer && this.grabFramesByLayer[0]?.length) {
+        this.frameIndex = this.grabFramesByLayer[0].length - 1;
+      } else {
+        this.frameIndex = 0;
+      }
+
+      // Mantener al oponente pegado cada frame si existe
+      if (this.opponent && this.opponent._grabLock) {
+        const offsetX = (typeof this._grabVictimOffsetX === 'number') ? this._grabVictimOffsetX : ((this.facing === 1) ? (this.w - 6) : (-this.opponent.w + 6));
+        this.opponent.x = this.x + offsetX;
+        this.opponent.y = this.y;
+        this.opponent.vx = 0;
+        this.opponent.vy = 0;
+        // asegurar estado grabbed
+        this.opponent.setState('grabbed');
+      }
+
+      // Esperar botón de grab para soltar
+      const grabKey = this.id === 'p1' ? 'u' : 'v';
+      if (keysPressed[grabKey]) {
+        this._grabHolding = false;
+        // Liberar al oponente si está agarrado
+        if (this.opponent && this.opponent.state.current === 'grabbed') {
+          this.opponent._grabLock = false;
+          this.opponent.grabbedBy = null;
+          // lanzar como hit3
+          this.opponent.setState('hit3');
+          this.opponent.isHit = true;
+          this.opponent.hitLevel = 3;
+          this.opponent.hitStartTime = millis();
+          this.opponent.hitDuration = 520;
+          const pushDir = this.facing || 1;
+          this.opponent.vx = 7 * pushDir;
+          this.opponent.vy = -5;
+        }
+        this.setState('idle');
+        this.attacking = false;
+        this.attackType = null;
+        delete this._grabVictimOffsetX;
+      }
+      // No avanzar animación ni lógica normal
+      return;
     }
 
     Anim.updateAnimation(this);

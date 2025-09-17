@@ -77,10 +77,12 @@ export function addInputFromKey(self, keyName) {
   if (self.id === 'p1') {
     if (keyName === 'i') { addInput(self, 'P'); return; }
     if (keyName === 'o') { addInput(self, 'K'); return; }
+    if (keyName === 'u') { addInput(self, 'G'); return; } // <-- NUEVO: grab para p1
     if (keyName === ' ') { addInput(self, 'T'); return; }
   } else {
     if (keyName === 'b') { addInput(self, 'P'); return; }
     if (keyName === 'n') { addInput(self, 'K'); return; }
+    if (keyName === 'v') { addInput(self, 'G'); return; } // <-- NUEVO: grab para p2
     if (keyName === 'backspace') { addInput(self, 'T'); return; }
   }
 
@@ -220,7 +222,7 @@ export function resetCombosIfExpired(self) {
 
 // input handling lite (delegates)
 export function handleInput(self) {
-  if (self.isHit) return;
+  if (self.isHit || self._grabLock) return;
 
   const setRunTap = (dir, keyName) => {
     if (keysDown[keyName] && !self.keys[dir] && !self.isHit) {
@@ -242,6 +244,8 @@ export function handleInput(self) {
     self.crouching = keysDown['s'];
     if (keysPressed['i']) self.attack('i');
     if (keysPressed['o']) self.attack('o');
+    // removed direct immediate grab call - rely on buffer + specials
+    // if (keysPressed['u']) self.grab && self.grab();
     if (keysUp['i'] || keysUp['o']) { self.inputLockedByKey['i'] = false; self.inputLockedByKey['o'] = false; }
   } else {
     setRunTap('left', 'arrowleft'); setRunTap('right', 'arrowright');
@@ -249,6 +253,8 @@ export function handleInput(self) {
     self.crouching = keysDown['arrowdown'];
     if (keysPressed['b']) self.attack('b');
     if (keysPressed['n']) self.attack('n');
+    // removed direct immediate grab call - rely on buffer + specials
+    // if (keysPressed['v']) self.grab && self.grab();
     if (keysUp['b'] || keysUp['n']) { self.inputLockedByKey['b'] = false; self.inputLockedByKey['n'] = false; }
   }
 }

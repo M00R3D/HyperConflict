@@ -28,11 +28,88 @@ export function attack(self, key) {
 
 export function attackHits(self, opponent) {
   if (!self.attacking) return false;
-  // asegurar estructura _hitTargets
   if (!self._hitTargets) self._hitTargets = new Set();
-
-  // si ya fue golpeado por esta activación, no volver a reportar hit
   if (opponent && opponent.id && self._hitTargets.has(opponent.id)) return false;
+
+  // --- GRAB: solo en el último frame (mejorado para sincronía temporal) ---
+  if (self.attackType === 'grab') {
+    const action = self.actions.grab || {};
+    const totalFrames = (self.grabFramesByLayer && self.grabFramesByLayer[0]?.length) || 1;
+
+    // calcular frame aproximado a partir del tiempo transcurrido para cubrir el caso
+    // en que el main loop pregunta por colisiones antes de que anim.update haya incrementado frameIndex.
+    const elapsed = millis() - (self.attackStartTime || 0);
+    let approxFrameIndex = 0;
+    if (totalFrames > 1 && action.duration) {
+      approxFrameIndex = Math.floor((elapsed / Math.max(1, action.duration)) * totalFrames);
+      approxFrameIndex = Math.max(0, Math.min(totalFrames - 1, approxFrameIndex));
+    }
+
+    const effectiveFrameIndex = Math.max((self.frameIndex || 0), approxFrameIndex);
+
+    // sólo activo cuando alcanzamos el último frame efectivo
+    if ((effectiveFrameIndex + 1) < totalFrames) return false;
+
+    const atkHB = self.getAttackHitbox();
+    if (!atkHB) return false;
+    const oppHB = opponent.getCurrentHitbox();
+    const collided = (
+      atkHB.x < oppHB.x + oppHB.w &&
+      atkHB.x + atkHB.w > oppHB.x &&
+      atkHB.y < oppHB.y + oppHB.h &&
+      atkHB.y + atkHB.h > oppHB.y
+    );
+    // Solo si el oponente NO está bloqueando ni en crouchBlock
+    if (
+      collided &&
+      !opponent.blocking &&
+      (!opponent.state || (opponent.state.current !== 'block' && opponent.state.current !== 'crouchBlock'))
+    ) {
+      // Marcar como agarrado (evita multi-hit)
+      if (opponent && opponent.id) self._hitTargets.add(opponent.id);
+
+      // LIMPIAR flags previos del oponente para evitar caer en hit
+      opponent.attacking = false;
+      opponent.attackType = null;
+      opponent.attackStartTime = 0;
+      opponent._hitTargets = null;
+      // liberar locks de inputs previas del oponente
+      if (opponent.inputLockedByKey) {
+        for (const k in opponent.inputLockedByKey) opponent.inputLockedByKey[k] = false;
+      }
+      opponent.isHit = false; opponent.hitLevel = 0;
+
+      // Posicionar al rival junto al agarrador (visual de levantar)
+      const offsetX = (self.facing === 1) ? (self.w - 6) : (-opponent.w + 6);
+      opponent.x = self.x + offsetX;
+      opponent.y = self.y;
+      opponent.vx = 0;
+      opponent.vy = 0;
+
+      // forzar timer / frame para que la animación grabbed empiece consistente
+      if (opponent.state) opponent.state.timer = 0;
+      opponent.frameIndex = 0;
+
+      // Cambiar estado del oponente a grabbed y bloquearlo
+      opponent.setState('grabbed');
+      opponent.grabbedBy = self;
+      opponent._grabLock = true;
+
+      // además guardar referencia clara para que el grabber pueda mantener la posición
+      self._grabHolding = true;
+      self._grabVictimOffsetX = offsetX;
+
+      // El que agarra queda en el último frame y en holding
+      self._grabHolding = true;
+      self.vx = 0;
+      self.vy = 0;
+      // prevenir que el grabber pierda su attacking flag hasta que suelte
+      self.attacking = true;
+      self.attackType = 'grab';
+      return true;
+    }
+    return false;
+  }
 
   const atkHB = self.getAttackHitbox();
   if (!atkHB) return false;

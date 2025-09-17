@@ -87,6 +87,10 @@ export function initFrames(self, frames) {
   self.shorFramesByLayer = frames.shor || [];
   self.bunProjFramesByLayer = frames.bunProj || null;
   self.bunStringFramesByLayer = frames.bunString || null;
+
+  // --- AGREGAR ESTAS LÍNEAS ---
+  self.grabFramesByLayer = frames.grabFramesByLayer || [];
+  self.grabbedFramesByLayer = frames.grabbedFramesByLayer || [];
 }
 
 export function initComboAndInput(self) {
@@ -101,7 +105,7 @@ export function initComboAndInput(self) {
     i: ['punch', 'punch2', 'punch3'],
     o: ['kick', 'kick2', 'kick3'],
     b: ['punch', 'punch2', 'punch3'],
-    n: ['kick', 'kick2', 'kick3']
+    n: ['kick', 'kick2', 'kick3'],
   };
 
   self.comboStepByKey = {};
@@ -137,7 +141,9 @@ export function initHitboxes(self) {
     punch3: { offsetX: 20, offsetY: 7, w: 23, h: 20 },
     kick:  { offsetX: 25, offsetY: 10, w: 30, h: 15 },
     hadouken: { offsetX: 0, offsetY: 0, w: 20, h: 20 },
-    tats: { offsetX: 20, offsetY: 4, w: 18, h: 24 }
+    tats: { offsetX: 20, offsetY: 4, w: 18, h: 24 },
+    // grab ampliada: más ancho y alto para cubrir variaciones de sprite/pose
+    grab: { offsetX: 10, offsetY: 4, w: 32, h: 32 }, // <-- AUMENTADA
   };
 }
 

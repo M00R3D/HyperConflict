@@ -25,7 +25,8 @@ registerActionsForChar('tyeman', {
   punch3: { duration: 800, frameDelay: 5 },
   kick: { duration: 400, frameDelay: 6 },
   kick2: { duration: 700, frameDelay: 6 },
-  kick3: { duration: 1000, frameDelay: 6 }
+  kick3: { duration: 1000, frameDelay: 6 },
+  grab: { duration: 500, frameDelay: 3 }
 });
 
 registerStatsForChar('sbluer', {
@@ -42,7 +43,8 @@ registerActionsForChar('sbluer', {
   punch3: { duration: 1000, frameDelay: 6 },
   kick: { duration: 700, frameDelay: 7 },
   kick2: { duration: 1000, frameDelay: 6 },
-  kick3: { duration: 1000, frameDelay: 6 }
+  kick3: { duration: 1000, frameDelay: 6 },
+  grab: { duration: 500, frameDelay: 3 }
 });
 
 let player1, player2;
@@ -77,6 +79,9 @@ async function setup() {
   createCanvas(800, 400);
   // instalar listeners de input desde el inicio para que el menú detecte teclas
   initInput(); // <-- ADICIÓN
+
+  // mostrar hit/attack hitboxes en pantalla para debug (desactivar cuando confirmes)
+  window.SHOW_DEBUG_OVERLAYS = true;
 
   // bandera global para debug overlays (asegura valor por defecto)
   window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
@@ -139,14 +144,16 @@ function tryCreatePlayers() {
     bun: { seq: ['→','↓','↘','P'], direction: 'forward' },
     ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
     taunt: { seq: ['T'], direction: 'any' },
-    supersalto: { seq: ['↓','↑'], direction: 'any' }
+    supersalto: { seq: ['↓','↑'], direction: 'any' },
+    grab: { seq: ['G'], direction: 'any' }
   });
 
   registerSpecialsForChar('sbluer', {
     // sbluer podría tener un special exclusivo (ejemplo)
     shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
     supersalto: { seq: ['↓','↑'], direction: 'any' },
-    taunt: { seq: ['T'], direction: 'any' }
+    taunt: { seq: ['T'], direction: 'any' },
+    grab: { seq: ['G'], direction: 'any' }
   });
   
   // asegurar facing inicial basado en la posición relativa (source of truth = Fighter.facing)
@@ -577,39 +584,54 @@ function draw() {
     };
 
     if (player1 && typeof player1.attackHits === 'function' && player1.attackHits(player2)) {
-      if (player2.blocking && isAttackerInFront(player1, player2)) {
-        applyHitstop(240); // feedback corto por bloqueo
-        // entrar en block-stun (usar crouchBlockStun si está agachado)
-        const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
-        player2.blockStunStartTime = millis();
-        player2.blockStunDuration = player2.crouching
-          ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
-          : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
-        player2.setState && player2.setState(stunState);
-        player2.vx = 0;
-      } else {
-        const atk = player1.attackType;
-        const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 180;
+      const atk = player1.attackType;
+      // si es grab, attackHits ya aplicó grabbed; no ejecutar hit()
+      if (atk === 'grab') {
+        const hs = (player1.actions && player1.actions.grab && player1.actions.grab.hitstop) || 120;
         applyHitstop(hs);
-        player2.hit(player1);
+      } else {
+        if (player2.blocking && isAttackerInFront(player1, player2)) {
+          // manejar bloqueo (tu lógica existente)
+          // ...existing code for block handling...
+          applyHitstop(240); // feedback corto por bloqueo
+          // entrar en block-stun (usar crouchBlockStun si está agachado)
+          const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
+          player2.blockStunStartTime = millis();
+          player2.blockStunDuration = player2.crouching
+            ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
+            : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
+          player2.setState && player2.setState(stunState);
+          player2.vx = 0;
+        } else {
+          const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 180;
+          applyHitstop(hs);
+          player2.hit(player1);
+        }
       }
     }
 
     if (player2 && typeof player2.attackHits === 'function' && player2.attackHits(player1)) {
-      if (player1.blocking && isAttackerInFront(player2, player1)) {
-        applyHitstop(240);
-        const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
-        player1.blockStunStartTime = millis();
-        player1.blockStunDuration = player1.crouching
-          ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
-          : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
-        player1.setState && player1.setState(stunState);
-        player1.vx = 0;
-      } else {
-        const atk = player2.attackType;
-        const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 180;
+      const atk = player2.attackType;
+      if (atk === 'grab') {
+        const hs = (player2.actions && player2.actions.grab && player2.actions.grab.hitstop) || 120;
         applyHitstop(hs);
-        player1.hit(player2);
+      } else {
+        if (player1.blocking && isAttackerInFront(player2, player1)) {
+          // manejar bloqueo (tu lógica existente)
+          // ...existing code for block handling...
+          applyHitstop(240);
+          const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
+          player1.blockStunStartTime = millis();
+          player1.blockStunDuration = player1.crouching
+            ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
+            : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
+          player1.setState && player1.setState(stunState);
+          player1.vx = 0;
+        } else {
+          const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 180;
+          applyHitstop(hs);
+          player1.hit(player2);
+        }
       }
     }
    }

@@ -2,6 +2,13 @@
 import * as Hitbox from './hitbox.js';
 
 export function updateMovement(self) {
+  // Si estás agarrado por otro, no ejecutar arreglo de movimiento (quedarte inmóvil)
+  if (self._grabLock) {
+    self.vx = 0;
+    self.vy = 0;
+    return;
+  }
+
   // DASH: movimiento especial
   if (self.state.current === "dash") {
     // target smooth velocity (usa los valores de configuración del fighter)
@@ -30,6 +37,7 @@ export function updateMovement(self) {
     self.state.current === "kick" ||
     self.state.current === "kick2" ||
     self.state.current === "kick3"
+    || self.state.current === "grab" || self.state.current === "grabbed"
   ) {
     self.vx = 0;
   }
