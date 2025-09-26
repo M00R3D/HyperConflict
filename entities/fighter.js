@@ -131,55 +131,99 @@ class Fighter {
 
   checkSpecialMoves() { Specials.checkSpecialMoves(this); }
 
-  attack(key) { Attacks.attack(this, key); }
-  // wrapped attack: deduct stamina according to input key (p1: 'i' = punch, 'o' = kick; p2: 'b'/'n')
   attack(key) {
-    // Consume stamina PARTIAL para ataques normales (no bloquear la acción si falta parte)
+    // Delegar a módulo Attacks si existe (seguridad)
     try {
-      const k = (typeof key === 'string') ? key.toLowerCase() : '';
-      let actionName = null;
-      if (k === 'i' || k === 'b') actionName = 'punch';
-      else if (k === 'o' || k === 'n') actionName = 'kick';
+      if (typeof Attacks !== 'undefined' && typeof Attacks.attack === 'function') {
+        Attacks.attack(this, key);
+      }
+    } catch (e) { /* silent */ }
+  }
 
-      if (actionName && typeof this.stamina === 'number' && this.stamina > 0) {
-        const cost = Math.max(0, this.staminaCosts?.[actionName] || 0);
-        const consume = Math.min(this.stamina, cost);
-        if (consume > 0) {
-          this.stamina = Math.max(0, this.stamina - consume);
-          try { this._staminaConsumedAt = millis(); this._staminaRegenAccum = 0; this._staminaRegenLastTime = millis(); } catch (e) {}
+  attackHits(opponent) { return (typeof Attacks !== 'undefined' && typeof Attacks.attackHits === 'function') ? Attacks.attackHits(this, opponent) : false; }
+  shoot() { try { if (typeof Attacks !== 'undefined' && typeof Attacks.shoot === 'function') Attacks.shoot(this); } catch (e) {} }
+
+  // unified hit handler: delega a Attacks.hit (si existe) y procesa bloqueo/hit localmente
+  hit(attacker = null) {
+    // seguridad: nada que procesar
+    if (!attacker) return;
+
+    // guardar hp antes de delegados externos por si acaso (otros módulos podrían modificar hp)
+    const hpBefore = (typeof this.hp === 'number') ? this.hp : null;
+
+    // delegar a Attacks.hit si existe (efectos/partículas/sonidos)
+    try { if (typeof Attacks !== 'undefined' && typeof Attacks.hit === 'function') Attacks.hit(this, attacker); } catch (e) {}
+
+    // sanity: el atacante debe declarar tipo de ataque para decidir comportamiento
+    if (!attacker || typeof attacker.attackType !== 'string') return;
+    const atk = String(attacker.attackType || '').toLowerCase();
+    const attackIsBlockable = (attacker.unblockable !== true);
+
+    // considerar estados que actúan como bloqueo: bandera blocking + estados block / crouchBlock
+    // y también blockStun / crouchBlockStun: mientras esté en cualquiera de estos NO debe recibir daño.
+    const inBlockingState = !!(
+      this.blocking ||
+      this.state?.current === 'block' ||
+      this.state?.current === 'crouchBlock' ||
+      this.state?.current === 'blockStun' ||
+      this.state?.current === 'crouchBlockStun'
+    );
+
+    // Si está en bloqueo y el ataque puede bloquearse, ANULA cualquier daño aplicado y aplica block-stun.
+    if (inBlockingState && attackIsBlockable) {
+      // revertir HP si algún otro código lo redujo
+      if (hpBefore !== null && typeof this.hp === 'number') {
+        this.hp = hpBefore;
+      }
+      // refrescar/establecer blockStun timers sin marcar isHit
+      this.blockStunStartTime = millis();
+      const dur = (this.crouching ? (this.crouchBlockStunDuration || 540) : (this.blockStunDuration || 540));
+      this.blockStunDuration = Math.max(this.blockStunDuration || 0, dur);
+      try {
+        if (this.crouching) this.setState('crouchBlockStun');
+        else this.setState('blockStun');
+      } catch (e) {}
+      // notificar al atacante/attacks que fue bloqueado (si existe hook)
+      try { if (typeof Attacks !== 'undefined' && typeof Attacks.onBlock === 'function') Attacks.onBlock(this, attacker); } catch (e) {}
+      return;
+    }
+
+    // Si no está bloqueando -> procesar hit normal (solo para golpes cuerpo a cuerpo/hit)
+    if (typeof this.hp === 'number') {
+      // Solo manejar golpes tipo punch/kick/hit aquí si otros módulos no lo hicieron.
+      // Si Attacks.hit ya aplicó daño, asumimos que ya está reflejado en this.hp.
+      // Aun así, asegurar banderas de isHit / hitStartTime / animación.
+      if (atk.startsWith('punch') || atk.startsWith('kick') || atk.startsWith('hit')) {
+        // marcar hit state y tiempos si no está ya marcado
+        this.isHit = true;
+        this.hitStartTime = this.hitStartTime || millis();
+        this.hitLevel = attacker.hitLevel || this.hitLevel || 1;
+        const levelDurMap = {
+          1: (this.actions?.hit1?.duration || 500),
+          2: (this.actions?.hit2?.duration || 700),
+          3: (this.actions?.hit3?.duration || 1000)
+        };
+        this.hitDuration = levelDurMap[this.hitLevel] || (this.hitDuration || 260);
+
+        // set animation state correspondiente (hit1/2/3 preferido)
+        try {
+          const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3');
+          this.setState(s);
+        } catch (e) {}
+
+        // Si HP llegó a 0 -> forzar knockdown / limpiar flags
+        if (this.hp <= 0) {
+          this.hp = 0;
+          this.alive = false;
+          this.blocking = false;
+          this.blockStunStartTime = 0;
+          this.attacking = false;
+          this.isHit = false;
+          try { this.setState('knocked'); } catch (e) {}
         }
       }
-      if (typeof Attacks !== 'undefined' && Attacks.attack) Attacks.attack(this, key);
-    } catch (e) {
-      if (typeof Attacks !== 'undefined' && Attacks.attack) Attacks.attack(this, key);
     }
   }
-  attackHits(opponent) { return Attacks.attackHits(this, opponent); }
-  shoot() { Attacks.shoot(this); }
-
-  // unified hit handler: delega a Attacks.hit (si existe) y reduce 1 cuarto sólo para golpes/patadas
-  hit(attacker = null) {
-    try {
-      if (typeof Attacks !== 'undefined' && Attacks.hit) Attacks.hit(this, attacker);
-    } catch (e) { /* ignore */ }
-
-    // debug: mostrar cuando recibimos hit (si hay attacker)
-    if (attacker && attacker.id) {
-      // console.log(`[FIGHTER.hit] ${this.id} received hit from ${attacker.id} (attackType=${attacker.attackType}) hp-before=${this.hp}`);
-    }
-
-    // asegurar que hp existe y que el atacante indica tipo de ataque
-    if (typeof this.hp === 'number' && attacker && typeof attacker.attackType === 'string') {
-      const atk = attacker.attackType.toLowerCase();
-      // considerar punch/kick (incluye punch2/punch3/kick2/kick3)
-      if (atk.startsWith('punch') || atk.startsWith('kick')) {
-        const prev = this.hp;
-        this.hp = Math.max(0, this.hp - 1); // cada golpe/patada quita 1 cuarto
-        // console.log(`[FIGHTER.hit] ${this.id} hp ${prev} -> ${this.hp} (-1 quarter)`);
-      }
-    }
-  }
-
   getCurrentHitbox() { return Hitbox.getCurrentHitbox(this); }
   getAttackHitbox() { return Hitbox.getAttackHitbox(this); }
   getKeysForSymbol(sym) { return Hitbox.getKeysForSymbol(this, sym); }
@@ -188,6 +232,10 @@ class Fighter {
     // guardar si estábamos en suelo antes de procesar inputs,
     // para que specials puedan detectar supersalto aún cuando Buffer ponga onGround=false
     this._prevOnGround = !!this.onGround;
+
+    // Si estamos técnicamente "muertos" (HP <= 0) no procesar inputs ni permitir bloqueo.
+    // Evita que un actor sin HP entre en block u otros estados de control.
+    if (typeof this.hp === 'number' && this.hp <= 0) return;
 
     // Si estamos en block-stun forzado, IGNORAR completamente inputs (movimiento/ataque/dash).
     // Esto asegura que el stun dure exactamente la duración declarada en init, independientemente

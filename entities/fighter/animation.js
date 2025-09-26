@@ -2,6 +2,16 @@
 export function setState(self, newState) {
   // NO cambiar de estado si está en pausa o durante hitstop
   if (window.PAUSED || window.HITSTOP_ACTIVE) return;
+
+  // Protección: si estamos en bloqueo, NO permitir que el estado pase a un "hit".
+  // Esto evita transiciones a 'hit', 'hit1', 'hit2', 'hit3' cuando el personaje está bloqueando.
+  if (typeof newState === 'string' && newState.startsWith('hit')) {
+    // si está bloqueando en suelo o en crouch, ignorar intentos de poner hit
+    if (self && (self.blocking || self.state?.current === 'block' || self.state?.current === 'crouchBlock')) {
+      return;
+    }
+  }
+
   if (self.state && self.state.current === newState) return;
   self.state = self.state || { current: null, timer: 0 };
   self.state.current = newState;
@@ -73,6 +83,16 @@ export function updateAnimation(self) {
 export function exitHitIfElapsed(self) {
   // NO procesar salidas de hit mientras hay hitstop (mantener freeze consistente)
   if (window.PAUSED || window.HITSTOP_ACTIVE) return;
+
+  // Si el fighter llegó a 0 HP durante cualquier parte del flujo, forzar knockdown inmediato.
+  if (typeof self.hp === 'number' && self.hp <= 0) {
+    try { self.setState('knocked'); } catch (e) {}
+    // limpiar marcas de stun/tiempo
+    self.blockStunStartTime = 0;
+    self.isHit = false;
+    return;
+  }
+
   if (self.isHit && millis() - self.hitStartTime >= self.hitDuration) {
     self.isHit = false; self.setState("idle");
     // limpiar cualquier marca de lanzamiento al terminar el hit/launch

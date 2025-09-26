@@ -9,6 +9,17 @@ export function updateMovement(self) {
     return;
   }
 
+  // Si estamos en block sobre el suelo, aplicar fricción fuerte / detener movimiento.
+  // Esto hace que el block se sienta como una postura estable y evita drift.
+  if ((self.blocking || self.state?.current === 'block' || self.state?.current === 'crouchBlock') && self.onGround) {
+    // frenar vx de forma agresiva
+    const stopFactor = 0.6;
+    self.vx = lerp(self.vx || 0, 0, stopFactor);
+    if (Math.abs(self.vx) < 0.05) self.vx = 0;
+    self.runActive = false;
+    // no devolvemos early: mantener otras lógicas como collision/grav etc.
+  }
+
   // NEW: respetar cooldown después de salir de grab — bloquear física/movimiento durante ese periodo
   const grabExitStart = self._grabExitCooldownStart || 0;
   const grabExitDur = self._grabExitCooldownDuration || 220;

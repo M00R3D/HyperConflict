@@ -64,6 +64,14 @@ const MAX_HP_QUARTERS = 24;
 let _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
 let _prevHp = { p1: null, p2: null };
 
+// NEW: hitstop tracking to compensate timers when hitstop ends
+let _hsPrevActive = false;
+let _hsStartedAt = 0;
+
+// NEW: blockstun zoom state (smooth quick zoom, no screenshake)
+let _prevBlockstun = { p1: false, p2: false };
+let _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, playerId: null };
+
 // NEW: calcular frames de hitstop dinámicamente según vida restante.
 // Base 3 frames, y sumar 2 frames por cada cuarto de corazón que falte.
 function computeFramesPerHitFor(player) {
@@ -686,24 +694,39 @@ let totalPausedTime = 0;
 function compensatePauseTimers(dt) {
   // Compensar timers de los jugadores
   [player1, player2].forEach(p => {
-    if (!p) return;
-    if (typeof p.attackStartTime === 'number') p.attackStartTime += dt;
-    if (typeof p.hitStartTime === 'number') p.hitStartTime += dt;
-    if (typeof p.blockStunStartTime === 'number') p.blockStunStartTime += dt;
-    if (typeof p._supersaltoStart === 'number') p._supersaltoStart += dt;
-    if (typeof p.dashStartTime === 'number') p.dashStartTime += dt;
-    if (typeof p.dashLightStart === 'number') p.dashLightStart += dt;
-    // Si tienes otros timers personalizados, agrégalos aquí
+    if (!p || typeof dt !== 'number' || dt <= 0) return;
+    try {
+      // tiempos de ataques/efectos
+      if (typeof p.attackStartTime === 'number') p.attackStartTime += dt;
+      if (typeof p.hitStartTime === 'number') p.hitStartTime += dt;
+      if (typeof p.blockStunStartTime === 'number') p.blockStunStartTime += dt;
+      if (typeof p._supersaltoStart === 'number') p._supersaltoStart += dt;
+      if (typeof p.dashStartTime === 'number') p.dashStartTime += dt;
+      if (typeof p.dashLightStart === 'number') p.dashLightStart += dt;
+      if (typeof p._launchedStart === 'number') p._launchedStart += dt;
+      if (typeof p._staminaLastRegen === 'number') p._staminaLastRegen += dt;
+      if (typeof p._staminaRegenLastTime === 'number') p._staminaRegenLastTime += dt;
+      if (typeof p._staminaConsumedAt === 'number') p._staminaConsumedAt += dt;
+      // dashLight frozen metadata (if any)
+      if (p._dashLightFrozen && typeof p._dashLightFrozen.pauseAt === 'number') {
+        p._dashLightFrozen.pauseAt += dt;
+      }
+    } catch (e) {
+      /* ignore per-player compensation errors */
+    }
   });
 
   // Compensar timers de los proyectiles
   projectiles.forEach(proj => {
-    if (!proj) return;
-    if (typeof proj._lastUpdate === 'number') proj._lastUpdate += dt;
-    if (typeof proj._spawnTimer === 'number') proj._spawnTimer += dt;
-    if (typeof proj.spawnedAt === 'number') proj.spawnedAt += dt;
-    if (typeof proj.age === 'number') proj.age += dt;
-    // Si tienes otros timers personalizados, agrégalos aquí
+    if (!proj || typeof dt !== 'number' || dt <= 0) return;
+    try {
+      if (typeof proj._lastUpdate === 'number') proj._lastUpdate += dt;
+      if (typeof proj._spawnTimer === 'number') proj._spawnTimer += dt;
+      if (typeof proj.spawnedAt === 'number') proj.spawnedAt += dt;
+      if (typeof proj.age === 'number') proj.age += dt;
+    } catch (e) {
+      /* ignore per-projectile compensation errors */
+    }
   });
 }
 
@@ -748,6 +771,53 @@ function draw() {
   // sincronizar variable global para que otros módulos la lean
   window.PAUSED = PAUSED;
 
+  // --- Detect hitstop transitions to compensate timers when it ends ---
+  // hsActive is computed below later in draw(), but we need to check its transition
+  // compute current hitstop active state using public helper if available
+  let hsActive = false;
+  try {
+    if (typeof isHitstopActive === 'function') hsActive = isHitstopActive();
+  } catch (e) { hsActive = false; }
+
+  if (hsActive && !_hsPrevActive) {
+    // hitstop started now
+    _hsStartedAt = millis();
+  } else if (!hsActive && _hsPrevActive) {
+    // hitstop ended -> compensate timers by the frozen duration
+    const dur = Math.max(0, millis() - (_hsStartedAt || millis()));
+    if (dur > 0) compensatePauseTimers(dur);
+    _hsStartedAt = 0;
+  }
+  _hsPrevActive = hsActive;
+
+  // --- Detect blockStun start to trigger a quick smooth zoom (no screenshake) ---
+  // check both players and start a brief zoom when blockStun begins
+  try {
+    const p1BS = player1 && player1.state && (player1.state.current === 'blockStun' || player1.state.current === 'crouchBlockStun');
+    const p2BS = player2 && player2.state && (player2.state.current === 'blockStun' || player2.state.current === 'crouchBlockStun');
+
+    if (p1BS && !_prevBlockstun.p1) {
+      _blockstunZoom.active = true;
+      _blockstunZoom.start = millis();
+      _blockstunZoom.playerId = player1.id;
+      // optional: scale target by remaining HP to add drama when low HP
+      _blockstunZoom.targetAdd = 0.14;
+      _blockstunZoom.duration = 360;
+    }
+    if (p2BS && !_prevBlockstun.p2) {
+      _blockstunZoom.active = true;
+      _blockstunZoom.start = millis();
+      _blockstunZoom.playerId = player2.id;
+      _blockstunZoom.targetAdd = 0.14;
+      _blockstunZoom.duration = 360;
+    }
+
+    _prevBlockstun.p1 = !!p1BS;
+    _prevBlockstun.p2 = !!p2BS;
+  } catch (e) {
+    // ignore detection errors
+  }
+
   // toggle debug overlays with '1' key (press 1 to toggle)
   if (typeof keysPressed !== 'undefined' && (keysPressed['1'] || keysPressed['Digit1'])) {
     window.SHOW_DEBUG_OVERLAYS = !window.SHOW_DEBUG_OVERLAYS;
@@ -755,7 +825,10 @@ function draw() {
     keysPressed['1'] = false;
     keysPressed['Digit1'] = false;
   }
-
+  
+  // nota: asegúrate de que la variable hsActive usada mas abajo
+  // para condicionales coincide con la que hemos calculado aquí:
+  const hsActiveFinal = hsActive;
   // toggle PAUSA con Enter
   if (typeof keysPressed !== 'undefined' && keysPressed['enter']) {
     if (!PAUSED) {
@@ -812,8 +885,8 @@ function draw() {
    }
  
    // --- Si hay hitstop o pausa, evitamos updates de lógica ---
-   const hsActive = isHitstopActive();
-   if (!hsActive && !PAUSED) {
+   const hsActiveCheck = hsActiveFinal;
+   if (!hsActiveCheck && !PAUSED) {
     if (player1 && typeof player1.update === 'function') player1.update();
     if (player2 && typeof player2.update === 'function') player2.update();
 
@@ -948,7 +1021,7 @@ function draw() {
     cam = updateCamera(player1, player2, cam);
   } else {
     // DURANTE HITSTOP: NO avanzar timers ni física — la sensación de "pause" es total.
-    // (antes aquí se avanzaban timers mínimos; lo removemos para un freeze visual total)
+    // (antes aquí se avanzaban timers mínimos; lo removimos para un freeze visual total)
     // Si no estamos en hitstop pero sí en PAUSED, se dejó fuera arriba.
     // No-op
   }
@@ -1003,6 +1076,21 @@ function draw() {
       shakeX = (Math.sin(phase * 1.3) + Math.sin(phase * 0.67)) * xAmp * 0.45;
       shakeY = (Math.cos(phase * 1.1) + Math.cos(phase * 0.5)) * yAmp * 0.45;
       zoomAdd = _hitEffect.zoom * ease;
+    }
+  }
+
+  // --- APPLY BLOCKSTUN ZOOM (smooth, NO screenshake) ---
+  if (_blockstunZoom.active) {
+    const bev = millis() - _blockstunZoom.start;
+    if (bev >= (_blockstunZoom.duration || 0)) {
+      _blockstunZoom.active = false;
+    } else {
+      // fast in, slower out easing
+      const t = constrain(bev / (_blockstunZoom.duration || 1), 0, 1);
+      // ease: fast ramp up, smooth ease-out
+      const eased = 1 - Math.pow(1 - Math.min(1, t * 1.6), 3);
+      zoomAdd += (_blockstunZoom.targetAdd || 0.14) * eased;
+      // ensure no screenshake: do NOT modify shakeX/shakeY here
     }
   }
 

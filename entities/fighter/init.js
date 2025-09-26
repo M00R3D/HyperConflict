@@ -9,6 +9,9 @@ export function initBase(self, x, col, id) {
   self.hp = 24;
   self.id = id;
 
+  // alive flag: false cuando HP llega a 0 (usa en lógica de input/estados)
+  self.alive = true;
+
   self.vx = 0;
   self.vy = 0;
   self.gravity = 0.3;
