@@ -138,6 +138,23 @@ class Fighter {
         Attacks.attack(this, key);
       }
     } catch (e) { /* silent */ }
+
+    // Consumir 1 unidad de stamina al iniciar un ataque melee (punch / kick).
+    // Nos aseguramos de consumirlo una sola vez por inicio de ataque usando attackStartTime.
+    try {
+      const meleeNames = ['punch','punch2','punch3','kick','kick2','kick3'];
+      const atype = String(this.attackType || '').toLowerCase();
+      if (meleeNames.includes(atype) && this.attacking) {
+        const lastConsumedForStart = this._lastStaminaConsumedForAttackStart || 0;
+        if (this.attackStartTime && lastConsumedForStart !== this.attackStartTime) {
+          if (typeof this.stamina === 'number') {
+            this.stamina = Math.max(0, this.stamina - 1); // restar 1 STA al ejecutor
+            this._staminaConsumedAt = millis();
+          }
+          this._lastStaminaConsumedForAttackStart = this.attackStartTime;
+        }
+      }
+    } catch (e) { /* silent */ }
   }
 
   attackHits(opponent) { return (typeof Attacks !== 'undefined' && typeof Attacks.attackHits === 'function') ? Attacks.attackHits(this, opponent) : false; }
@@ -223,6 +240,17 @@ class Fighter {
       const damageQuarters = (typeof attacker.damageQuarters === 'number') ? attacker.damageQuarters : 1;
       this.hp = Math.max(0, this.hp - damageQuarters);
     }
+
+    // NUEVO: Si el ataque es un punch/kick, el golpeado pierde 2 STA
+    try {
+      const meleeHits = ['punch','punch2','punch3','kick','kick2','kick3'];
+      if (meleeHits.includes(atk)) {
+        if (typeof this.stamina === 'number') {
+          this.stamina = Math.max(0, this.stamina - 2); // restar 2 STA al golpeado
+          this._staminaConsumedAt = millis();
+        }
+      }
+    } catch (e) { /* silent */ }
 
     // marcar hit state y tiempos
     this.isHit = true;

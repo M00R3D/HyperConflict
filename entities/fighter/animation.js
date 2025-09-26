@@ -13,6 +13,10 @@ export function setState(self, newState) {
   }
 
   if (self.state && self.state.current === newState) return;
+
+  // Guardar estado previo para detectar salidas de ataques
+  const prevState = self.state?.current;
+
   self.state = self.state || { current: null, timer: 0 };
   self.state.current = newState;
   self.state.timer = 0;
@@ -59,6 +63,30 @@ export function setState(self, newState) {
   // inicializa índices/timers de animación
   self.frameIndex = 0;
   self.frameTimer = 0;
+
+  // Si SALIMOS de un estado de ataque importante, evitar que la regeneración nos devuelva
+  // instantáneamente lo gastado: marcar consumo reciente y resetar acumulador/lastTime.
+  try {
+    // Añadimos estados de "hit" y launch para evitar picos de regeneración al salir de ellos
+    const attackStates = new Set([
+      'punch','punch2','punch3','kick','kick2','kick3',
+      'hadouken','tats','bun','grab','taunt','shoot',
+      // hit-related states
+      'hit','hit1','hit2','hit3','flyback','flyup',
+      'knocking','knocked','recovery'
+    ]);
+    const wasInAttack = attackStates.has(prevState);
+    const nowInAttack = attackStates.has(newState);
+    if (wasInAttack && !nowInAttack) {
+      // marca consumo reciente para pausar regen durante el tiempo configurado
+      self._staminaConsumedAt = millis();
+      // reset acumulador y lastTime para evitar que se acumule un delta grande mientras estaba atacando/hit
+      self._staminaRegenAccum = 0;
+      self._staminaRegenLastTime = millis();
+    }
+  } catch (e) {
+    /* silent */
+  }
 }
 
 export function updateAnimation(self) {
