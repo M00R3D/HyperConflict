@@ -35,15 +35,21 @@ export function display(self) {
 
       if (frameCount > 1 && imgCandidate.width && imgCandidate.height && imgCandidate.width >= imgCandidate.height * frameCount) {
         const frameWidth = Math.round(imgCandidate.width / frameCount);
+        // round all coordinates/sizes to avoid fractional sampling that causes blur
+        const dstX = Math.round(self.x);
+        const dstY = Math.round(self.y);
+        const dstW = Math.round(self.w);
+        const dstH = Math.round(self.h);
+        const srcX = Math.round(frameWidth * fi);
         image(
           imgCandidate,
-          self.x, self.y,
-          self.w, self.h,
-          frameWidth * fi, 0,
+          dstX, dstY,
+          dstW, dstH,
+          srcX, 0,
           frameWidth, imgCandidate.height
         );
       } else {
-        image(imgCandidate, self.x, self.y, self.w, self.h);
+        image(imgCandidate, Math.round(self.x), Math.round(self.y), Math.round(self.w), Math.round(self.h));
       }
     }
     pop();
@@ -216,9 +222,14 @@ export function display(self) {
       const frameCount2 = (dashFrames[0]?.length) || 1;
       if (frameCount2 > 1 && img.width && img.height && img.width >= img.height * frameCount2) {
         const frameWidth = Math.round(img.width / frameCount2);
-        image(img, -self.w / 2, -self.h / 2, self.w, self.h, frameWidth * fi2, 0, frameWidth, img.height);
+        const dstX = Math.round(-self.w / 2);
+        const dstY = Math.round(-self.h / 2);
+        const dstW = Math.round(self.w);
+        const dstH = Math.round(self.h);
+        const srcX = Math.round(frameWidth * fi2);
+        image(img, dstX, dstY, dstW, dstH, srcX, 0, frameWidth, img.height);
       } else {
-        image(img, -self.w / 2, -self.h / 2, self.w, self.h);
+        image(img, Math.round(-self.w / 2), Math.round(-self.h / 2), Math.round(self.w), Math.round(self.h));
       }
     }
 

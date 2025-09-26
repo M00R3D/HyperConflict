@@ -96,17 +96,24 @@ function drawHealthBars(p1, p2, heartFrames) {
 
     // wrapper to draw an image (with optional src cropping) respecting flip & shake
     const blit = (srcImg, sx, sy, sW, sH, dxLocal, dyLocal, dW, dH) => {
-      const finalX = dxLocal + (shakeOffset.x || 0);
-      const finalY = dyLocal + (shakeOffset.y || 0);
+      // round everything to integers for crisp nearest-neighbor sampling
+      const finalX = Math.round(dxLocal + (shakeOffset.x || 0));
+      const finalY = Math.round(dyLocal + (shakeOffset.y || 0));
+      const dstW = Math.round(dW);
+      const dstH = Math.round(dH);
+      const srcX = Math.round(sx);
+      const srcY = Math.round(sy);
+      const srcW = Math.max(1, Math.round(sW));
+      const srcH = Math.max(1, Math.round(sH));
       if (flip) {
         push();
         // flip horizontally around the heart rect
-        translate(finalX + dW, finalY);
+        translate(finalX + dstW, finalY);
         scale(-1, 1);
-        image(srcImg, 0, 0, dW, dH, sx, sy, sW, sH);
+        image(srcImg, 0, 0, dstW, dstH, srcX, srcY, srcW, srcH);
         pop();
       } else {
-        image(srcImg, finalX, finalY, dW, dH, sx, sy, sW, sH);
+        image(srcImg, finalX, finalY, dstW, dstH, srcX, srcY, srcW, srcH);
       }
     };
 

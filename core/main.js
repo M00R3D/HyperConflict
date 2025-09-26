@@ -78,6 +78,11 @@ let p2SelIndex = 1; // 0..5 cursor pos for jugador2
 
 async function setup() {
   createCanvas(800, 400);
+  // Force pixel-perfect rendering for pixel-art: disable smoothing and use 1:1 pixel density
+  // (important on high-DPI displays and when scaling sprites)
+  pixelDensity(1);
+  noSmooth();
+  if (typeof drawingContext !== 'undefined' && drawingContext) drawingContext.imageSmoothingEnabled = false;
   // instalar listeners de input desde el inicio para que el menú detecte teclas
   initInput(); // <-- ADICIÓN
 
