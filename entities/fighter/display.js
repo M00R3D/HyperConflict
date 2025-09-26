@@ -2,7 +2,8 @@
 export function display(self) {
   // freeze state text during pause so the UI label doesn't change while paused
   let stateText = (self.state && self.state.current) || 'idle';
-  const isPausedTop = !!window.PAUSED;
+  // treat hitstop as a pause for display freezing as well
+  const isPausedTop = !!window.PAUSED || !!window.HITSTOP_ACTIVE;
   if (isPausedTop) {
     if (self._stateTextFrozen == null) self._stateTextFrozen = stateText;
     stateText = self._stateTextFrozen;
@@ -65,7 +66,7 @@ export function display(self) {
 
   // ---------- FREEZE dashLight COMPLETELY while PAUSED ----------
   // use the top-level pause value (avoid redeclaring). `isPausedTop` set near the top.
-  const isPaused = !!window.PAUSED
+  const isPaused = !!window.PAUSED || !!window.HITSTOP_ACTIVE;
 
   // mantener la luz visible si está activa; no hacemos fade por pausa (se congela visible)
   const targetVisual = lightActive ? 1 : 0;

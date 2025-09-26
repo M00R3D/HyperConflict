@@ -64,6 +64,17 @@ const MAX_HP_QUARTERS = 24;
 let _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
 let _prevHp = { p1: null, p2: null };
 
+// NEW: calcular frames de hitstop dinámicamente según vida restante.
+// Base 3 frames, y sumar 2 frames por cada cuarto de corazón que falte.
+function computeFramesPerHitFor(player) {
+  const base = 3;
+  const perQuarterBonus = 2;
+  const maxQ = (typeof MAX_HP_QUARTERS === 'number') ? MAX_HP_QUARTERS : 24;
+  const hpNow = (player && typeof player.hp === 'number') ? player.hp : maxQ;
+  const missing = Math.max(0, maxQ - hpNow);
+  return base + (missing * perQuarterBonus);
+}
+
 function startDamageEffect(player, quartersRemoved) {
   if (!player) return;
   const now = millis();
@@ -73,7 +84,7 @@ function startDamageEffect(player, quartersRemoved) {
   // duración y magnitud escaladas por cuartos quitados y por lowFactor
   const duration = Math.min(500, 220 + 160 * Math.max(1, quartersRemoved));
   const baseMag = Math.min(100, 6 * Math.max(1, quartersRemoved) * (1 + lowFactor * 3)); // px (antes)
-  const mag = baseMag * 0.15; // reducir screenshake 85% -> mantener 15% de la magnitud original
+  const mag = baseMag * 0.065; // reducir screenshake 85% -> mantener 15% de la magnitud original
   const zoomAdd = Math.min(0.3, 0.035 * Math.max(1, quartersRemoved) * (1 + lowFactor * 4)); // fractional zoom add
   _hitEffect = { active: true, start: now, end: now + duration, duration, mag, zoom: zoomAdd, targetPlayerId: player.id };
 }
@@ -721,8 +732,21 @@ function draw() {
     return;
   }
 
-   // sincronizar variable global para que otros módulos la lean
-   window.PAUSED = PAUSED;
+  // SHORT-CIRCUIT: Si hay hitstop frame-freeze activo, dibujar la captura y terminar el frame
+  try {
+    if (typeof drawFrozenHitstop === 'function' && drawFrozenHitstop()) {
+      // important: do NOT advance any game logic, timers or animation while frame-freeze is drawing.
+      // Just clear one-frame flags and return early so HUD/characters/camera remain visually frozen.
+      clearFrameFlags();
+      // Ensure global paused-like flag is set (hitstop module already sets it) and return.
+      return;
+    }
+  } catch (e) {
+    // si falla, continuar normalmente (no romper el loop)
+  }
+
+  // sincronizar variable global para que otros módulos la lean
+  window.PAUSED = PAUSED;
 
   // toggle debug overlays with '1' key (press 1 to toggle)
   if (typeof keysPressed !== 'undefined' && (keysPressed['1'] || keysPressed['Digit1'])) {
@@ -787,7 +811,7 @@ function draw() {
     }
    }
  
-   // Si hay hitstop o pausa, evitamos updates de lógica
+   // --- Si hay hitstop o pausa, evitamos updates de lógica ---
    const hsActive = isHitstopActive();
    if (!hsActive && !PAUSED) {
     if (player1 && typeof player1.update === 'function') player1.update();
@@ -923,25 +947,32 @@ function draw() {
 
     cam = updateCamera(player1, player2, cam);
   } else {
-    // durante hitstop avanzamos timers mínimos (si no está pausado)
-    if (!PAUSED) {
-      if (player1 && typeof player1.updateDuringHitstop === 'function') player1.updateDuringHitstop();
-      if (player2 && typeof player2.updateDuringHitstop === 'function') player2.updateDuringHitstop();
-    }
+    // DURANTE HITSTOP: NO avanzar timers ni física — la sensación de "pause" es total.
+    // (antes aquí se avanzaban timers mínimos; lo removemos para un freeze visual total)
+    // Si no estamos en hitstop pero sí en PAUSED, se dejó fuera arriba.
+    // No-op
   }
 
   // --- Detectar cambios de HP después de la lógica / colisiones ---
+  // Al detectar pérdida de HP, usar frame-based hitstop (23 frames)
   if (player1) {
-    if (_prevHp.p1 == null) _prevHp.p1 = player1.hp;
-    else if (player1.hp < _prevHp.p1) {
+    if (_prevHp.p1 == null) {
+      _prevHp.p1 = player1.hp;
+    } else if (player1.hp < _prevHp.p1) {
+      // usar frame-based hitstop calculado dinámicamente según vida restante
+      const framesPerHit = computeFramesPerHitFor(player1);
       startDamageEffect(player1, _prevHp.p1 - player1.hp);
+      try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p1 = player1.hp;
   }
   if (player2) {
-    if (_prevHp.p2 == null) _prevHp.p2 = player2.hp;
-    else if (player2.hp < _prevHp.p2) {
+    if (_prevHp.p2 == null) {
+      _prevHp.p2 = player2.hp;
+    } else if (player2.hp < _prevHp.p2) {
+      const framesPerHit = computeFramesPerHitFor(player2);
       startDamageEffect(player2, _prevHp.p2 - player2.hp);
+      try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p2 = player2.hp;
   }
@@ -1010,6 +1041,13 @@ function draw() {
   }
 
   pop();
+
+  // --- NEW: if a frame-based hitstop was requested earlier, capture the just-rendered frame now ---
+  try {
+    if (typeof capturePendingHitstopSnapshot === 'function') capturePendingHitstopSnapshot();
+  } catch (e) {
+    // ignore capture errors, continue
+  }
 
   drawHealthBars(player1, player2, _heartFrames, _bootFrames);
   drawInputQueues(player1, player2);

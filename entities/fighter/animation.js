@@ -1,7 +1,7 @@
 // entities/fighter/animation.js
 export function setState(self, newState) {
-  // NO cambiar de estado si está en pausa
-  if (window.PAUSED) return;
+  // NO cambiar de estado si está en pausa o durante hitstop
+  if (window.PAUSED || window.HITSTOP_ACTIVE) return;
   if (self.state && self.state.current === newState) return;
   self.state = self.state || { current: null, timer: 0 };
   self.state.current = newState;
@@ -52,8 +52,8 @@ export function setState(self, newState) {
 }
 
 export function updateAnimation(self) {
-  // NO avanzar animación si está en pausa
-  if (window.PAUSED) return;
+  // NO avanzar animación si está en pausa o durante hitstop
+  if (window.PAUSED || window.HITSTOP_ACTIVE) return;
   if (!self.currentFramesByLayer) return;
 
   // determina delay por acción si existe mapping actions, fallback a 6
@@ -71,7 +71,8 @@ export function updateAnimation(self) {
 }
 
 export function exitHitIfElapsed(self) {
-  if (window.PAUSED) return; // <--- agrega esto
+  // NO procesar salidas de hit mientras hay hitstop (mantener freeze consistente)
+  if (window.PAUSED || window.HITSTOP_ACTIVE) return;
   if (self.isHit && millis() - self.hitStartTime >= self.hitDuration) {
     self.isHit = false; self.setState("idle");
     // limpiar cualquier marca de lanzamiento al terminar el hit/launch
