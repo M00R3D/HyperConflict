@@ -185,43 +185,75 @@ class Fighter {
       } catch (e) {}
       // notificar al atacante/attacks que fue bloqueado (si existe hook)
       try { if (typeof Attacks !== 'undefined' && typeof Attacks.onBlock === 'function') Attacks.onBlock(this, attacker); } catch (e) {}
+      // interrumpe cadena de hits (block rompe el combo que escala hitLevel)
+      this._consecutiveHits = 0;
+      this._consecutiveHitAt = 0;
       return;
     }
 
-    // Si no está bloqueando -> procesar hit normal (solo para golpes cuerpo a cuerpo/hit)
-    if (typeof this.hp === 'number') {
-      // Solo manejar golpes tipo punch/kick/hit aquí si otros módulos no lo hicieron.
-      // Si Attacks.hit ya aplicó daño, asumimos que ya está reflejado en this.hp.
-      // Aun así, asegurar banderas de isHit / hitStartTime / animación.
-      if (atk.startsWith('punch') || atk.startsWith('kick') || atk.startsWith('hit')) {
-        // marcar hit state y tiempos si no está ya marcado
-        this.isHit = true;
-        this.hitStartTime = this.hitStartTime || millis();
-        this.hitLevel = attacker.hitLevel || this.hitLevel || 1;
-        const levelDurMap = {
-          1: (this.actions?.hit1?.duration || 500),
-          2: (this.actions?.hit2?.duration || 700),
-          3: (this.actions?.hit3?.duration || 1000)
-        };
-        this.hitDuration = levelDurMap[this.hitLevel] || (this.hitDuration || 260);
+    // --- No está bloqueando -> procesar hit normal ---
+    if (typeof this.hp !== 'number') return;
 
-        // set animation state correspondiente (hit1/2/3 preferido)
-        try {
-          const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3');
-          this.setState(s);
-        } catch (e) {}
+    const now = millis();
+    const chainWindow = 800; // ms: ventana para considerar golpes "consecutivos" (ajusta a gusto)
 
-        // Si HP llegó a 0 -> forzar knockdown / limpiar flags
-        if (this.hp <= 0) {
-          this.hp = 0;
-          this.alive = false;
-          this.blocking = false;
-          this.blockStunStartTime = 0;
-          this.attacking = false;
-          this.isHit = false;
-          try { this.setState('knocked'); } catch (e) {}
-        }
-      }
+    // resetar cadena si pasó mucho tiempo desde el último golpe
+    if (!this._consecutiveHitAt || (now - (this._consecutiveHitAt || 0)) > chainWindow) {
+      this._consecutiveHits = 0;
+    }
+
+    // Si el atacante forzó un nivel (p. ej. shoryuken), respetarlo; si no, incrementar por cadena
+    let resolvedHitLevel = null;
+    if (typeof attacker.forcedHitLevel === 'number') {
+      resolvedHitLevel = Math.max(1, Math.min(3, Math.floor(attacker.forcedHitLevel)));
+      // reset or set consecutive tracking to match forced level
+      this._consecutiveHits = resolvedHitLevel;
+      this._consecutiveHitAt = now;
+    } else {
+      // incrementar la cuenta de golpes consecutivos del defensor
+      this._consecutiveHits = (this._consecutiveHits || 0) + 1;
+      if (this._consecutiveHits > 3) this._consecutiveHits = 3;
+      this._consecutiveHitAt = now;
+      resolvedHitLevel = this._consecutiveHits;
+    }
+
+    // Si Attacks.hit ya aplicó daño externamente, no volver a aplicarlo.
+    // Si no se aplicó daño (hpBefore === this.hp), aplicamos daño básico desde attacker.damageQuarters o fallback 1.
+    if (hpBefore !== null && typeof this.hp === 'number' && this.hp === hpBefore) {
+      const damageQuarters = (typeof attacker.damageQuarters === 'number') ? attacker.damageQuarters : 1;
+      this.hp = Math.max(0, this.hp - damageQuarters);
+    }
+
+    // marcar hit state y tiempos
+    this.isHit = true;
+    this.hitStartTime = millis();
+    this.hitLevel = resolvedHitLevel || 1;
+
+    const levelDurMap = {
+      1: (this.actions?.hit1?.duration || 500),
+      2: (this.actions?.hit2?.duration || 700),
+      3: (this.actions?.hit3?.duration || 1000)
+    };
+    this.hitDuration = levelDurMap[this.hitLevel] || (this.hitDuration || 260);
+
+    // set animation state correspondiente (hit1/2/3 preferido)
+    try {
+      const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3');
+      this.setState(s);
+    } catch (e) {}
+
+    // Si HP llega a 0 forzar knockdown y limpiar estados que podrían bloquear transiciones
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.alive = false;
+      this.blocking = false;
+      this.blockStunStartTime = 0;
+      this.attacking = false;
+      this.isHit = false;
+      // reset consecutive hits on death
+      this._consecutiveHits = 0;
+      this._consecutiveHitAt = 0;
+      try { this.setState('knocked'); } catch (e) {}
     }
   }
   getCurrentHitbox() { return Hitbox.getCurrentHitbox(this); }
