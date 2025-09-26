@@ -30,6 +30,7 @@ export function updateMovement(self) {
   }
 
   // --- FORZAR QUIETO EN TODOS LOS ATAQUES ---
+  if( self.state.current === "grab" || self.state.current === "grabbed"){self.vx=0;}
   if (
     self.state.current === "punch" ||
     self.state.current === "punch2" ||
@@ -37,9 +38,9 @@ export function updateMovement(self) {
     self.state.current === "kick" ||
     self.state.current === "kick2" ||
     self.state.current === "kick3"
-    || self.state.current === "grab" || self.state.current === "grabbed"
   ) {
-    self.vx = 0;
+    if(self.vx>0 && self.vy==0) self.vx -= 0.04;
+    else if(self.vx<0 && self.vy==0) self.vx += 0.04;
   }
 
   // --- CORTAR DASH SI ENTRA EN ATAQUE ---
@@ -58,7 +59,8 @@ export function updateMovement(self) {
       self.dashStartTime = 0;
       self.runActive = false;
     }
-    self.vx = 0;
+    if(self.vx>0 && self.vy==0) self.vx -= 0.1;
+    else if(self.vx<0 && self.vy==0) self.vx += 0.1;
   }
   self._wasInDash = (self.state.current === "dash");
 
