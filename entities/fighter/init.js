@@ -70,9 +70,9 @@ export function initFrames(self, frames) {
   self.crouchFramesByLayer = frames.crouchFramesByLayer;
   self.crouchWalkFramesByLayer = frames.crouchWalkFramesByLayer;
   self.hitFramesByLayer = frames.hitFramesByLayer;
-  self.hit1FramesByLayer = frames.hit1FramesByLayer || frames.hitFramesByLayer || [];
-  self.hit2FramesByLayer = frames.hit2FramesByLayer || frames.hitFramesByLayer || [];
-  self.hit3FramesByLayer = frames.hit3FramesByLayer || frames.hitFramesByLayer || [];
+  self.hit1FramesByLayer = frames.hit1FramesByLayer || self.hitFramesByLayer || [];
+  self.hit2FramesByLayer = frames.hit2FramesByLayer || self.hitFramesByLayer || [];
+  self.hit3FramesByLayer = frames.hit3FramesByLayer || self.hitFramesByLayer || [];
   self.shootFramesByLayer = frames.shootFramesByLayer;
   self.projectileFramesByLayer = frames.projectileFramesByLayer;
   self.dashLightFramesByLayer = frames.dashLightFramesByLayer || [];
@@ -89,6 +89,10 @@ export function initFrames(self, frames) {
   self.bunStringFramesByLayer = frames.bunString || null;
 
   // --- AGREGAR ESTAS LÍNEAS ---
+  // ensure flyback/flyup frames are assigned (prevent falling back to generic 'hit' frames)
+  self.flybackFramesByLayer = frames.flybackFramesByLayer || frames.flyback || [];
+  self.flyupFramesByLayer = frames.flyupFramesByLayer || frames.flyup || [];
+
   self.grabFramesByLayer = frames.grabFramesByLayer || [];
   self.grabbedFramesByLayer = frames.grabbedFramesByLayer || [];
 }

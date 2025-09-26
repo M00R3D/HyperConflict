@@ -71,6 +71,10 @@ export function exitHitIfElapsed(self) {
   if (window.PAUSED) return; // <--- agrega esto
   if (self.isHit && millis() - self.hitStartTime >= self.hitDuration) {
     self.isHit = false; self.setState("idle");
+    // limpiar cualquier marca de lanzamiento al terminar el hit/launch
+    if (self._launched) { delete self._launched; delete self._launchedStart; delete self._launchedDuration; }
+    // limpiar supresión para que futuros hits se comporten normalmente
+    if (self._suppressHitState) delete self._suppressHitState;
   }
 
   // manejar expiración de blockStun / crouchBlockStun

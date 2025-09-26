@@ -9,6 +9,30 @@ export function updateMovement(self) {
     return;
   }
 
+  // NEW: respetar cooldown después de salir de grab — bloquear física/movimiento durante ese periodo
+  const grabExitStart = self._grabExitCooldownStart || 0;
+  const grabExitDur = self._grabExitCooldownDuration || 220;
+  if (grabExitStart && (millis() - grabExitStart) < grabExitDur) {
+    self.vx = 0;
+    self.vy = 0;
+    // Reset directional flags to avoid residual run/jump
+    self.keys = self.keys || { left: false, right: false, up: false };
+    self.keys.left = false; self.keys.right = false; self.keys.up = false;
+    self.runActive = false;
+    return;
+  }
+
+  // Si somos quienes estamos SOSTENIENDO un grab, bloquear TODO movimiento hasta soltar
+  if (self.state && self.state.current === 'grab' && self._grabHolding) {
+    self.vx = 0;
+    self.vy = 0;
+    // asegurarse de que no quede run activo ni flags de dirección
+    self.keys = self.keys || { left: false, right: false, up: false };
+    self.keys.left = false; self.keys.right = false; self.keys.up = false;
+    self.runActive = false;
+    return;
+  }
+
   // DASH: movimiento especial
   if (self.state.current === "dash") {
     // target smooth velocity (usa los valores de configuración del fighter)
@@ -113,7 +137,26 @@ export function updateMovement(self) {
 
   self.vx = constrain(self.vx, -maxSpd, maxSpd);
   self.x += self.vx;
-
+  
+  // allow larger horizontal speeds while launched / heavily launched (do not clamp the initial knockback)
+  // Si estamos en lanzamiento explícito (_launched) o en hitLevel 3, ampliar el tope horizontal
+  if (self._launched || (self.isHit && self.hitLevel === 3)) {
+    // cap más generoso para conservar picos altos de knockback
+    const launchCap = Math.max(Math.abs(self.vx), (self.runMaxSpeed || 6) * 5, 36);
+    // si la velocidad actual excede el maxSpd, permitir que persista hasta launchCap
+    self.vx = constrain(self.vx, -launchCap, launchCap);
+    // reducir la fricción horizontal durante el vuelo para que no "frene" tan rápido
+    // si estamos lanzados dejamos que la velocidad persista más tiempo
+    if (!self.keys.left && !self.keys.right) {
+      // aplicar muy poca fricción mientras _launched
+      if (self._launched) {
+        if (self.vx > 0) self.vx = Math.max(0, self.vx - ((self.friction || 0.1) * 0.02));
+        else if (self.vx < 0) self.vx = Math.min(0, self.vx + ((self.friction || 0.1) * 0.02));
+      }
+    }
+    // aplicar posición base (no sumamos extra para evitar teleporte)
+  }
+  
   // push para evitar superposición con oponente
   if (self.opponent) {
     const selfDashing = (self.state && self.state.current) === "dash";
@@ -150,7 +193,8 @@ export function updateMovement(self) {
   }
 
   // gravedad y salto
-  self.vy += self.gravity;
+  if(self.state.current === "flyback" || self.state.current === "flyup") { self.vy += (self.gravity/4*3); }
+  else{ self.vy += self.gravity; }
   self.y += self.vy;
   if (self.y >= height - 72) { self.y = height - 72; self.vy = 0; self.onGround = true; }
   else self.onGround = false;

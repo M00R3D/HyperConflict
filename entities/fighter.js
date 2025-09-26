@@ -155,6 +155,16 @@ class Fighter {
       return;
     }
 
+    // NEW: si salimos recientemente de un grab, bloquear inputs/movimiento durante un breve cooldown
+    // Esto evita que el que lanzó pueda moverse inmediatamente y que inputs residuales interfieran con el lanzamiento.
+    const grabExitStart = this._grabExitCooldownStart || 0;
+    const grabExitDur = this._grabExitCooldownDuration || 220; // ms por defecto
+    if (grabExitStart && (millis() - grabExitStart) < grabExitDur) {
+      // mantener buffer limpio y no procesar nuevos inputs hasta que expire el cooldown
+      this.trimBuffer();
+      return;
+    }
+    
     Buffer.handleInput(this);
     // detectar specials inmediatamente después de que el buffer reciba el input
     // (permite activar supersalto antes de que la asignación de vy "normal" quede final)
@@ -318,8 +328,17 @@ class Fighter {
       this.state.timer++;
       Anim.exitHitIfElapsed(this);
       return; // Salta el resto de la prioridad de estados
+    } else if (this._launched) {
+      // mostrar la animación de lanzamiento (flyup/flyback) mientras dure el lanzamiento
+      this.setState(this._launched);
+      // opcional: si el tiempo de lanzamiento expiró, quitar la marca (se limpiará definitivamente en exitHitIfElapsed)
+      if (this._launchedStart && this._launchedDuration && (millis() - this._launchedStart >= this._launchedDuration)) {
+        delete this._launched;
+        delete this._launchedStart;
+        delete this._launchedDuration;
+      }
     } else if (this.isHit) {
-      // respetar niveles de hit: hit1 / hit2 / hit3 si existen
+      // respetar niveles de hit: hit1 / hit2 / hit3 si existen (caso normal)
       const lvl = this.hitLevel || 1;
       const stateName = 'hit' + Math.max(1, Math.min(3, lvl));
       this.setState(stateName);
@@ -365,15 +384,140 @@ class Fighter {
         this.opponent.setState('grabbed');
       }
 
-      // Esperar botón de grab para soltar
+      // Asegurar que el que agarra no pueda moverse hasta que termine el grab
+      // (evita jump/run/walk justo antes/durante de aventar)
+      this.vx = 0;
+      this.vy = 0;
+      this.keys.left = false;
+      this.keys.right = false;
+      this.keys.up = false;
+      this.runActive = false;
+
+      // Permitir "aventar" al rival mientras se mantiene el botón de grab:
+      // - tecla IZQ/DER -> flyback (horizontal) con mayor knockback
+      // - tecla ARRIBA   -> flyup (vertical) con mayor loft
+      let throwDir = null;
+      if (this.id === 'p1') {
+        if (keysPressed['a']) throwDir = 'left';
+        else if (keysPressed['w']) throwDir = 'up';
+        else if (keysPressed['d']) throwDir = 'right';
+      } else {
+        if (keysPressed['arrowleft']) throwDir = 'left';
+        else if (keysPressed['arrowup']) throwDir = 'up';
+        else if (keysPressed['arrowright']) throwDir = 'right';
+      }
+
+      if (throwDir) {
+        // consumir el input para evitar retriggers
+        if (this.id === 'p1') {
+          keysPressed['a'] = false; keysPressed['w'] = false; keysPressed['d'] = false;
+        } else {
+          keysPressed['arrowleft'] = false; keysPressed['arrowup'] = false; keysPressed['arrowright'] = false;
+        }
+
+        // bloquear movimiento adicional del lanzador durante el frame del throw
+        this.vx = 0;
+        this.vy = 0;
+        this.keys.left = false;
+        this.keys.right = false;
+        this.keys.up = false;
+        this.runActive = false;
+
+        // marcar que dejamos de sostener antes de aplicar efectos (pero ya congelados)
+        this._grabHolding = false;
+
+        // Liberar y aplicar lanzamiento exagerado al oponente si existe
+        if (this.opponent && this.opponent.state.current === 'grabbed') {
+          const victim = this.opponent;
+          victim._grabLock = false;
+          victim.grabbedBy = null;
+
+          // efectos comunes de lanzamiento
+          victim.isHit = true;
+          victim.hitLevel = 3;
+          victim.hitStartTime = millis();
+          // duración de hit/launch muy ampliada para que la animación y movimiento persistan
+          victim.hitDuration = Math.max(victim.hitDuration || 760, 1400);
+
+          // marcar que se le lanzó para evitar que la lógica de hit sobrescriba la animación
+          victim._suppressHitState = true;
+
+          if (throwDir === 'up') {
+            // lanzamiento vertical fuerte -> usar flyup
+            try { victim.setState('flyup'); } catch (e) {}
+            // velocidades muy exageradas (ajusta si lo deseas)
+            victim.vx = 0;
+            victim.vy = -6; // loft muy alto
+            // marcar lanzamiento para que update() priorice flyup animation
+            victim._launched = 'flyup';
+            victim._launchedStart = millis();
+            victim._launchedDuration = victim.hitDuration || 1600;
+            // mantener isHit = true para hitstop/colisiones pero suprimir cambio a hit3
+            victim.isHit = true;
+
+            // evitar que otras rutinas reemplacen la animación por hit1/2/3
+            victim._suppressHitState = true;
+            // orientar sprite hacia dirección del impulso vertical por consistencia
+            // no forzamos facing horizontal aquí
+          } else {
+            // lanzamiento horizontal exagerado -> usar flyback
+            try { victim.setState('flyback'); } catch (e) {}
+            // decidir signo en base a la tecla presionada (left/right)
+            const dir = (throwDir === 'left') ? -1 : 1;
+            // velocidades muy exageradas (ajusta si lo deseas)
+            // horizontal fuerte para notarse claramente (se permite un pico alto)
+            victim.vx = dir * 16;
+            // loft también mayor para efecto dramático
+            victim.vy = -6;
+            // marcar lanzamiento para que update() priorice flyback animation y dure más
+            victim._launched = 'flyback';
+            victim._launchedStart = millis();
+            victim._launchedDuration = victim.hitDuration || 1600;
+            // asegurar que el estado visual no se reemplace por hit3
+            victim._suppressHitState = true;
+            // ajustar facing para que la animación "flyback" se vea correcta (girada si es hacia adelante)
+            victim.facing = (victim.vx >= 0) ? 1 : -1;
+          }
+        }
+
+        // LIMPIEZA COMPLETA DEL ESTADO DEL AGARRADOR para permitir reintentar inmediatamente
+        this.setState('idle');
+        this.attacking = false;
+        this.attackType = null;
+        this.attackStartTime = 0;
+        this.attackDuration = 0;
+        if (this._hitTargets) { this._hitTargets.clear(); this._hitTargets = null; }
+        // desbloquear inputs y combos residuales
+        if (this.inputLockedByKey) for (const k in this.inputLockedByKey) this.inputLockedByKey[k] = false;
+        // quitar cualquier 'G' sobrante del buffer (evita que el primer intento tras soltar sea ignorado)
+        try { Buffer.bufferConsumeLast(this, 1); } catch (e) {}
+        this.setState('idle');
+        this.attacking = false;
+        this.attackType = null;
+        delete this._grabVictimOffsetX;
+
+        // START grab exit cooldown: evita movimiento/inputs inmediatos tras soltar/aventar
+        this._grabExitCooldownStart = millis();
+        this._grabExitCooldownDuration = this._grabExitCooldownDuration || 260; // ms (ajustable)
+
+        // salir sin procesar la espera normal por boton de liberacion
+        return;
+      }
+
+      // Esperar botón de grab para soltar (comportamiento por defecto)
       const grabKey = this.id === 'p1' ? 'u' : 'v';
       if (keysPressed[grabKey]) {
         this._grabHolding = false;
+        // Asegurar limpieza de movimiento del que suelta
+        this.vx = 0;
+        this.vy = 0;
+        this.keys.left = false; this.keys.right = false; this.keys.up = false; this.runActive = false;
+
         // Liberar al oponente si está agarrado
         if (this.opponent && this.opponent.state.current === 'grabbed') {
           this.opponent._grabLock = false;
           this.opponent.grabbedBy = null;
-          // lanzar como hit3
+          // lanzar como hit3 (comportamiento existente)
           this.opponent.setState('hit3');
           this.opponent.isHit = true;
           this.opponent.hitLevel = 3;
@@ -390,16 +534,15 @@ class Fighter {
         this.attackStartTime = 0;
         this.attackDuration = 0;
         if (this._hitTargets) { this._hitTargets.clear(); this._hitTargets = null; }
-        // desbloquear inputs y combos residuales
         if (this.inputLockedByKey) for (const k in this.inputLockedByKey) this.inputLockedByKey[k] = false;
-        // quitar cualquier 'G' sobrante del buffer (evita que el primer intento tras soltar sea ignorado)
         try { Buffer.bufferConsumeLast(this, 1); } catch (e) {}
-        // también limpiar el inputBuffer por si quedó basura (opcional)
-        // this.inputBuffer = [];
         this.setState('idle');
         this.attacking = false;
         this.attackType = null;
         delete this._grabVictimOffsetX;
+        // START grab exit cooldown for normal release as well
+        this._grabExitCooldownStart = millis();
+        this._grabExitCooldownDuration = this._grabExitCooldownDuration || 260; // ms
       }
       // No avanzar animación ni lógica normal
       return;
@@ -428,11 +571,17 @@ class Fighter {
     // Forzar salida de isHit si por alguna razón no se limpió (protección)
     if (this.isHit && (millis() - (this.hitStartTime || 0) >= (this.hitDuration || 0))) {
       this.isHit = false;
+      // limpiar marca de launched si existía (terminó el launch)
+      if (this._launched) { delete this._launched; delete this._launchedStart; delete this._launchedDuration; }
       // restablecer estado base según direcciones sostenidas
       const stillDir = this.keys && (this.keys.left || this.keys.right);
       this.runActive = !!stillDir;
       if (this.runActive && stillDir) this.setState('run');
       else this.setState('idle');
+    }
+    // Durante hitstop ligero (updateDuringHitstop) o hit normal, limpiar suppression si expiró el launched safety window
+    if (this._suppressHitState && this._launchedStart && (millis() - this._launchedStart > (this._launchedDuration || 1600) + 120)) {
+      delete this._suppressHitState;
     }
 
     // aplicar física mínima para que el golpeado reciba knockback y no quede inmóvil.
@@ -443,7 +592,10 @@ class Fighter {
     // aplicar fricción ligera horizontal (para evitar drift infinito)
     // reducir fricción horizontal si es hit3 (menos desaceleración)
     let minFriction = 0.04;
-    if (this.hitLevel === 3) minFriction *= 0.15; // 15% de la fricción normal -> vuela más
+    if (this.hitLevel === 3) minFriction *= 0.12; // menos fricción para hit3
+    // si fue lanzado explícitamente, reducir aun más la fricción para mantener velocidad alta
+    if (this._launched) minFriction *= 0.06;
+
     if (this.vx > 0.01) this.vx = Math.max(0, this.vx - minFriction);
     if (this.vx < -0.01) this.vx = Math.min(0, this.vx + minFriction);
 
