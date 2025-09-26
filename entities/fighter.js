@@ -126,8 +126,29 @@ class Fighter {
   attack(key) { Attacks.attack(this, key); }
   attackHits(opponent) { return Attacks.attackHits(this, opponent); }
   shoot() { Attacks.shoot(this); }
-  // forward attacker optional param so attacks logic knows who hit us
-  hit(attacker = null) { Attacks.hit(this, attacker); }
+
+  // unified hit handler: delega a Attacks.hit (si existe) y reduce 1 cuarto sólo para golpes/patadas
+  hit(attacker = null) {
+    try {
+      if (typeof Attacks !== 'undefined' && Attacks.hit) Attacks.hit(this, attacker);
+    } catch (e) { /* ignore */ }
+
+    // debug: mostrar cuando recibimos hit (si hay attacker)
+    if (attacker && attacker.id) {
+      console.log(`[FIGHTER.hit] ${this.id} received hit from ${attacker.id} (attackType=${attacker.attackType}) hp-before=${this.hp}`);
+    }
+
+    // asegurar que hp existe y que el atacante indica tipo de ataque
+    if (typeof this.hp === 'number' && attacker && typeof attacker.attackType === 'string') {
+      const atk = attacker.attackType.toLowerCase();
+      // considerar punch/kick (incluye punch2/punch3/kick2/kick3)
+      if (atk.startsWith('punch') || atk.startsWith('kick')) {
+        const prev = this.hp;
+        this.hp = Math.max(0, this.hp - 1); // cada golpe/patada quita 1 cuarto
+        console.log(`[FIGHTER.hit] ${this.id} hp ${prev} -> ${this.hp} (-1 quarter)`);
+      }
+    }
+  }
 
   getCurrentHitbox() { return Hitbox.getCurrentHitbox(this); }
   getAttackHitbox() { return Hitbox.getAttackHitbox(this); }

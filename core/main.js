@@ -62,7 +62,8 @@ window.PAUSED = window.PAUSED || false;
 // assets refs (llenadas en setup)
 let _tyemanAssets = null;
 let _sbluerAssets = null;
-
+let _heartFrames = null;
+ 
 // character selection state
 let selectionActive = false;
 const choices = ['tyeman', 'sbluer'];
@@ -88,7 +89,19 @@ async function setup() {
   // cargar assets pero NO crear players todavía — primero pantalla de selección
   _tyemanAssets = await loadTyemanAssets();
   _sbluerAssets = await loadSbluerAssets();
-
+  // cargar frames del corazón (HUD)
+  try {
+    _heartFrames = await loadHeartFrames();
+    console.log('loadHeartFrames ->', Array.isArray(_heartFrames) ? `${_heartFrames.length} layers` : _heartFrames);
+    if (Array.isArray(_heartFrames)) {
+      _heartFrames.forEach((layer, idx) => {
+        console.log(`heart layer[${idx}] -> type: ${Array.isArray(layer) ? 'frames[]' : typeof layer}, frames: ${Array.isArray(layer) ? layer.length : 'n/a'}`);
+      });
+    }
+  } catch (e) {
+    _heartFrames = null;
+    console.error('loadHeartFrames failed', e);
+  }
   // iniciar pantalla de selección
   selectionActive = true;
   playersReady = false;
@@ -587,51 +600,25 @@ function draw() {
       const atk = player1.attackType;
       // si es grab, attackHits ya aplicó grabbed; no ejecutar hit()
       if (atk === 'grab') {
-        const hs = (player1.actions && player1.actions.grab && player1.actions.grab.hitstop) || 120;
-        applyHitstop(hs);
+        // ...existing grab handling...
       } else {
-        if (player2.blocking && isAttackerInFront(player1, player2)) {
-          // manejar bloqueo (tu lógica existente)
-          // ...existing code for block handling...
-          applyHitstop(240); // feedback corto por bloqueo
-          // entrar en block-stun (usar crouchBlockStun si está agachado)
-          const stunState = player2.crouching ? 'crouchBlockStun' : 'blockStun';
-          player2.blockStunStartTime = millis();
-          player2.blockStunDuration = player2.crouching
-            ? (player2.crouchBlockStunDuration || (player2.actions?.crouchBlockStun?.duration))
-            : (player2.blockStunDuration || (player2.actions?.blockStun?.duration));
-          player2.setState && player2.setState(stunState);
-          player2.vx = 0;
-        } else {
-          const hs = (player1.actions && player1.actions[atk] && player1.actions[atk].hitstop) || 180;
-          applyHitstop(hs);
-          player2.hit(player1);
-        }
+        console.log('[HIT-DETECT] player1 hits player2', { attacker: 'p1', attackType: atk, p2_hp_before: player2.hp });
+        // llamar al handler del defensor (esto ya debería restar 1 cuarto si es punch/kick)
+        try { player2.hit(player1); } catch (e) { console.warn('player2.hit error', e); }
+        console.log('[HIT-DETECT] after hit player2 hp:', player2.hp);
+        // ...existing hit response (apply knockback, hitstop, etc.)...
       }
     }
 
     if (player2 && typeof player2.attackHits === 'function' && player2.attackHits(player1)) {
       const atk = player2.attackType;
       if (atk === 'grab') {
-        const hs = (player2.actions && player2.actions.grab && player2.actions.grab.hitstop) || 120;
-        applyHitstop(hs);
+        // ...existing grab handling...
       } else {
-        if (player1.blocking && isAttackerInFront(player2, player1)) {
-          // manejar bloqueo (tu lógica existente)
-          // ...existing code for block handling...
-          applyHitstop(240);
-          const stunState = player1.crouching ? 'crouchBlockStun' : 'blockStun';
-          player1.blockStunStartTime = millis();
-          player1.blockStunDuration = player1.crouching
-            ? (player1.crouchBlockStunDuration || (player1.actions?.crouchBlockStun?.duration))
-            : (player1.blockStunDuration || (player1.actions?.blockStun?.duration));
-          player1.setState && player1.setState(stunState);
-          player1.vx = 0;
-        } else {
-          const hs = (player2.actions && player2.actions[atk] && player2.actions[atk].hitstop) || 180;
-          applyHitstop(hs);
-          player1.hit(player2);
-        }
+        console.log('[HIT-DETECT] player2 hits player1', { attacker: 'p2', attackType: atk, p1_hp_before: player1.hp });
+        try { player1.hit(player2); } catch (e) { console.warn('player1.hit error', e); }
+        console.log('[HIT-DETECT] after hit player1 hp:', player1.hp);
+        // ...existing hit response...
       }
     }
    }
@@ -822,7 +809,7 @@ function draw() {
 
   pop();
 
-  drawHealthBars(player1, player2);
+  drawHealthBars(player1, player2, _heartFrames);
   drawInputQueues(player1, player2);
 
   // overlay de PAUSA

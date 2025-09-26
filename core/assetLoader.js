@@ -88,3 +88,15 @@ async function loadSbluerAssets() {
 }
  
 export { loadTyemanAssets, loadSbluerAssets };
+
+// HEARTS (HUD) asset loader
+export async function loadHeartFrames() {
+  return await loadOrNull('src/hearth/hearth_red.piskel');
+}
+
+// Expose loader on window in case modules are loaded into global scope (fallback)
+if (typeof window !== 'undefined') {
+  if (typeof window.loadTyemanAssets === 'undefined') window.loadTyemanAssets = loadTyemanAssets;
+  if (typeof window.loadSbluerAssets === 'undefined') window.loadSbluerAssets = loadSbluerAssets;
+  if (typeof window.loadHeartFrames === 'undefined') window.loadHeartFrames = loadHeartFrames;
+}

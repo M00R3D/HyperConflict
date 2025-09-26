@@ -5,7 +5,8 @@ export function initBase(self, x, col, id) {
   self.w = 32;
   self.h = 32;
   self.col = col;
-  self.hp = 10;
+  // now store health as quarters: 6 hearts * 4 = 24 quarters total
+  self.hp = 24;
   self.id = id;
 
   self.vx = 0;
