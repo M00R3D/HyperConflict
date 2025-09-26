@@ -63,6 +63,7 @@ window.PAUSED = window.PAUSED || false;
 let _tyemanAssets = null;
 let _sbluerAssets = null;
 let _heartFrames = null;
+let _slotAssets = null; // { empty, rounderP1, rounderP2 }
  
 // character selection state
 let selectionActive = false;
@@ -94,6 +95,14 @@ async function setup() {
   // cargar assets pero NO crear players todavía — primero pantalla de selección
   _tyemanAssets = await loadTyemanAssets();
   _sbluerAssets = await loadSbluerAssets();
+  // cargar assets de slots (pantalla de selección)
+  try {
+    _slotAssets = await loadSlotAssets();
+    console.log('loadSlotAssets ->', _slotAssets);
+  } catch (e) {
+    _slotAssets = null;
+    console.warn('loadSlotAssets failed', e);
+  }
   // cargar frames del corazón (HUD)
   try {
     _heartFrames = await loadHeartFrames();
@@ -208,10 +217,36 @@ function drawCharacterSelect() {
       const iy = gridY + r * (cellSize + cellGap);
 
       push();
-      // cell background
+      // cell background: intentar dibujar imagen de slot (estirada al tamaño de la celda).
       noStroke();
-      fill(18, 22, 30);
-      rect(ix, iy, cellSize, cellSize, 6);
+      // Siempre usar slot_empty.piskel como fondo del slot (estirado al tamaño de la celda).
+      // Si no se cargó, caerá en el rectángulo redondeado legacy.
+      let slotImg = null;
+      try {
+        if (_slotAssets && _slotAssets.empty) {
+          const res = _slotAssets.empty;
+          if (Array.isArray(res)) {
+            const layer = res.find(l => Array.isArray(l) && l.length > 0);
+            if (layer && layer.length > 0) slotImg = layer[0];
+          }
+        }
+      } catch (e) { slotImg = null; }
+
+      if (slotImg && slotImg.width && slotImg.height) {
+        push();
+        imageMode(CORNER);
+        const dx = Math.round(ix);
+        const dy = Math.round(iy);
+        const dw = Math.round(cellSize);
+        const dh = Math.round(cellSize);
+        // estirar la imagen completa para cubrir la celda (src completa)
+        image(slotImg, dx, dy, dw, dh, 0, 0, slotImg.width, slotImg.height);
+        pop();
+      } else {
+        // fallback: rect redondeada si no hay imagen disponible
+        fill(18, 22, 30);
+        rect(ix, iy, cellSize, cellSize, 6);
+      }
 
       // if this slot maps to a character (only first two slots)
       if (idx < choices.length) {
@@ -368,30 +403,117 @@ function drawCharacterSelect() {
     }
   }
 
-  // draw selection cursors (blue for p1, red for p2)
-  function drawCursorAt(index, colr) {
-    const r = Math.floor(index / cols);
-    const c = index % cols;
-    const ix = gridX + c * (cellSize + cellGap);
-    const iy = gridY + r * (cellSize + cellGap);
-    push();
-    noFill();
-    stroke(colr);
-    strokeWeight(4);
-    rect(ix - 4, iy - 4, cellSize + 8, cellSize + 8, 8);
-    pop();
-  }
+  // draw selection cursors (replaced: now use slot_rounder_p1 / slot_rounder_p2 animated sprites)
+  function drawCursorAt(index, playerId, forcedFi = null, baseFrameCountOverride = null) {
+     const r = Math.floor(index / cols);
+     const c = index % cols;
+     const ix = gridX + c * (cellSize + cellGap);
+     const iy = gridY + r * (cellSize + cellGap);
  
-  // Si ambos cursores están sobre la misma celda y NINGUNO confirmó, dibujar borde que parpadee entre azul y rojo.
+     push();
+     noTint();
+     imageMode(CORNER);
+ 
+     // choose the rounder asset based on playerId ('p1' or 'p2')
+     let framesArr = null;
+     try {
+       if (_slotAssets) {
+         const res = (playerId === 'p1') ? _slotAssets.rounderP1
+                   : (playerId === 'p2') ? _slotAssets.rounderP2
+                   : null;
+         if (res && Array.isArray(res)) {
+           // pick first non-empty layer (the loader returns layers[] = frames[])
+           const layer = res.find(l => Array.isArray(l) && l.length > 0);
+           if (layer && layer.length > 0) framesArr = layer;
+         }
+       }
+     } catch (e) { framesArr = null; }
+ 
+     if (framesArr && framesArr.length > 0) {
+      // animate at high speed (allow forcedFi / override when caller wants precise sync)
+      const frameMs = 36; // normal cursor FPS (can be overridden by caller)
+ 
+      // Determine logical frame count:
+      let baseFrameCount = baseFrameCountOverride || Math.max(1, framesArr.length);
+      const sheetCandidate = framesArr[0];
+      if (baseFrameCount === 1 && sheetCandidate && sheetCandidate.width && sheetCandidate.height) {
+        const internal = Math.max(1, Math.round(sheetCandidate.width / sheetCandidate.height));
+        baseFrameCount = internal;
+      }
+ 
+      // compute frame index (allow caller to force it)
+      let fi = (typeof forcedFi === 'number') ? (forcedFi % baseFrameCount) : (Math.floor(millis() / frameMs) % baseFrameCount);
+      // if P2 and we don't have a forced index, offset start by half to desync visual when drawn alone
+      if (playerId === 'p2' && forcedFi === null) {
+        const halfOffset = Math.floor(baseFrameCount / 2);
+        fi = (fi + halfOffset) % baseFrameCount;
+      }
+ 
+      const candidate = (framesArr[fi]) ? framesArr[fi] : framesArr[0];
+ 
+       // compute drawing rect (slightly larger than the slot to act like a border/ring)
+       const pad = 6;
+       const dx = Math.round(ix - pad);
+       const dy = Math.round(iy - pad);
+       const dw = Math.round(cellSize + pad * 2);
+       const dh = Math.round(cellSize + pad * 2);
+ 
+       if (candidate && candidate.width && candidate.height) {
+         // If candidate itself is a spritesheet (width >= height * N), slice subframe.
+         // Determine internal frame count inside this image.
+         const internalFrames = Math.max(1, Math.round(candidate.width / candidate.height));
+         if (internalFrames > 1) {
+           // If framesArr had multiple entries, internalFrames may still be >1 (handle robustly)
+           // Use fi modulo internalFrames to pick subframe.
+           const subIndex = fi % internalFrames;
+           const srcW = Math.round(candidate.width / internalFrames);
+           const srcX = Math.round(subIndex * srcW);
+           image(candidate, dx, dy, dw, dh, srcX, 0, srcW, candidate.height);
+         } else {
+           // simple single-frame image
+           image(candidate, dx, dy, dw, dh, 0, 0, candidate.width, candidate.height);
+         }
+       } else {
+         // fallback border
+         noFill();
+         stroke(playerId === 'p1' ? color(80,150,255) : color(255,80,80));
+         strokeWeight(4);
+         rect(ix - 4, iy - 4, cellSize + 8, cellSize + 8, 8);
+       }
+     } else {
+       // fallback: legacy rect border using player colour
+       noFill();
+       stroke(playerId === 'p1' ? color(80,150,255) : color(255,80,80));
+       strokeWeight(4);
+       rect(ix - 4, iy - 4, cellSize + 8, cellSize + 8, 8);
+     }
+ 
+     pop();
+   }
+ 
+  // Si ambos cursores están sobre la misma celda y NINGUNO confirmó, dibujar alternancia rápida entre P1/P2
   if (!p1Confirmed && !p2Confirmed && p1SelIndex === p2SelIndex) {
-    const blinkMs = 300; // intervalo de cambio (ms)
-    const blinkOn = Math.floor(millis() / blinkMs) % 2 === 0;
-    const blinkColor = blinkOn ? color(80,150,255) : color(255,80,80);
-    drawCursorAt(p1SelIndex, blinkColor);
+    // Joint-slot fast alternation: much faster and frame-synced so visuals don't "cut".
+    const jointFrameMs = 18;      // much faster frame step for joint mode
+    const alternationMs = 90;     // alternate which player is shown every 90ms
+
+    // load both frame arrays to compute a common baseFrameCount
+    const p1Frames = (_slotAssets?.rounderP1 || []).find(l => Array.isArray(l) && l.length > 0) || [];
+    const p2Frames = (_slotAssets?.rounderP2 || []).find(l => Array.isArray(l) && l.length > 0) || [];
+    let baseCount = Math.max(1, p1Frames.length || 0, p2Frames.length || 0);
+    // if only a single sheet exists, detect internal frames by width/height
+    if (baseCount === 1) {
+      const cand = p1Frames[0] || p2Frames[0];
+      if (cand && cand.width && cand.height) baseCount = Math.max(1, Math.round(cand.width / cand.height));
+    }
+
+    const jointFi = Math.floor(millis() / jointFrameMs) % baseCount;
+    const showP1 = Math.floor(millis() / alternationMs) % 2 === 0;
+    drawCursorAt(p1SelIndex, showP1 ? 'p1' : 'p2', jointFi, baseCount);
   } else {
-    // dibujar únicamente los cursores de los jugadores que NO han confirmado aún
-    if (!p1Confirmed) drawCursorAt(p1SelIndex, color(80,150,255));
-    if (!p2Confirmed) drawCursorAt(p2SelIndex, color(255,80,80));
+    // dibujar únicamente los cursores de los jugadores que NO han confirmado aún (modo normal)
+    if (!p1Confirmed) drawCursorAt(p1SelIndex, 'p1');
+    if (!p2Confirmed) drawCursorAt(p2SelIndex, 'p2');
   }
 
   // confirmations overlay

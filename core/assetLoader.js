@@ -89,6 +89,15 @@ async function loadSbluerAssets() {
  
 export { loadTyemanAssets, loadSbluerAssets };
 
+// SLOT assets (selection screen)
+export async function loadSlotAssets() {
+  return {
+    empty: await loadOrNull('src/slots/slot_empty.piskel'),
+    rounderP1: await loadOrNull('src/slots/slot_rounder_p1.piskel'),
+    rounderP2: await loadOrNull('src/slots/slot_rounder_p2.piskel'),
+  };
+}
+
 // HEARTS (HUD) asset loader
 export async function loadHeartFrames() {
   return await loadOrNull('src/hearth/hearth_red.piskel');
@@ -99,4 +108,5 @@ if (typeof window !== 'undefined') {
   if (typeof window.loadTyemanAssets === 'undefined') window.loadTyemanAssets = loadTyemanAssets;
   if (typeof window.loadSbluerAssets === 'undefined') window.loadSbluerAssets = loadSbluerAssets;
   if (typeof window.loadHeartFrames === 'undefined') window.loadHeartFrames = loadHeartFrames;
+  if (typeof window.loadSlotAssets === 'undefined') window.loadSlotAssets = loadSlotAssets;
 }

@@ -152,8 +152,14 @@ function drawHealthBars(p1, p2, heartFrames) {
     const state = _getHeartState(player, heartsCount);
 
     for (let i = 0; i < heartsCount; i++) {
-      // remaining quarters for this heart (0..4)
-      const remaining = Math.max(0, Math.min(quartersPerHeart, hp - i * quartersPerHeart));
+      // choose logical heart index so hearts always decrement from the rightmost heart
+      // For P1 (alignRight=false) logicalIndex = i (left->right).
+      // For P2 (alignRight=true) logicalIndex = heartsCount-1-i so we map the rightmost drawn
+      // heart to the highest logical index and ensure quarters are removed from the right.
+      const logicalIndex = alignRight ? (heartsCount - 1 - i) : i;
+      // remaining quarters for this logical heart (0..4)
+      const remaining = Math.max(0, Math.min(quartersPerHeart, hp - logicalIndex * quartersPerHeart));
+
       // desired frame index: 0 = full (4 quarters), last = empty (0 quarters)
       const frameIndex = Math.max(0, Math.min(quartersPerHeart, (quartersPerHeart - remaining)));
 
