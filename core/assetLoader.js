@@ -48,6 +48,9 @@ async function loadTyemanAssets() {
   crouchBlock: await loadOrNull('src/tyeman/tyeman_crouch_block.piskel'),
   grab: await loadOrNull('src/tyeman/tyeman_grab.piskel'),
   grabbed: await loadOrNull('src/tyeman/tyeman_grabbed.piskel'),
+  knocking: await loadOrNull('src/tyeman/tyeman_knocking.piskel'),
+  knocked: await loadOrNull('src/tyeman/tyeman_knocked.piskel'),
+  recovery: await loadOrNull('src/tyeman/tyeman_recovery.piskel'),
   };
 }
  
@@ -84,6 +87,9 @@ async function loadSbluerAssets() {
   crouchBlock: await loadOrNull('src/sbluer/sbluer_crouch_block.piskel'),
   grab: await loadOrNull('src/sbluer/sbluer_grab.piskel'),
   grabbed: await loadOrNull('src/sbluer/sbluer_grabbed.piskel'),
+  knocking: await loadOrNull('src/sbluer/sbluer_knocking.piskel'),
+  knocked: await loadOrNull('src/sbluer/sbluer_knocked.piskel'),
+  recovery: await loadOrNull('src/sbluer/sbluer_recovery.piskel'),
   };
 }
  

@@ -35,6 +35,9 @@ class Fighter {
       bunString: assets.bunString,
       grabFramesByLayer: assets.grab,           // <-- CORRECTO
       grabbedFramesByLayer: assets.grabbed,     // <-- CORRECTO
+      knockingFramesByLayer: assets.knocking, // <-- AGREGADO
+      knockedFramesByLayer: assets.knocked,   // <-- AGREGADO
+      recoveryFramesByLayer: assets.recovery, // <-- AGREGADO
     });
     // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
     // (se fusionarán por llave con las acciones por defecto más abajo)
@@ -76,6 +79,9 @@ class Fighter {
       bun: { anim: this.shorFramesByLayer, frameDelay: 6, duration: 700 },
       grab: { anim: this.grabFramesByLayer, frameDelay: 6, duration: 500 },
       grabbed: { anim: this.grabbedFramesByLayer, frameDelay: 6, duration: 500 },
+      knocking: { anim: this.knockingFramesByLayer, frameDelay: 10, duration: 600 }, // <-- nuevo estado intermedio (no usado)
+      knocked: { anim: this.knockedFramesByLayer, frameDelay: 10, duration: 800 }, // <-- nuevo estado intermedio (no usado)
+      recovery: { anim: this.recoveryFramesByLayer, frameDelay: 10, duration: 600 }, // <-- nuevo estado intermedio (no usado)
       // dashLight: { anim: this.dashLightFramesByLayer, frameDelay: 10, duration: 300 }, // <-- nuevo estado intermedio (no usado)
     };
 

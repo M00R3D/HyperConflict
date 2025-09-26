@@ -96,6 +96,10 @@ export function initFrames(self, frames) {
 
   self.grabFramesByLayer = frames.grabFramesByLayer || [];
   self.grabbedFramesByLayer = frames.grabbedFramesByLayer || [];
+
+  self.knockingFramesByLayer = frames.knockingFramesByLayer || [];
+  self.knockedFramesByLayer = frames.knockedFramesByLayer || [];
+  self.recoveryFramesByLayer = frames.recoveryFramesByLayer || [];
 }
 
 export function initComboAndInput(self) {

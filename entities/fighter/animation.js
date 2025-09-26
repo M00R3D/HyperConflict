@@ -40,6 +40,9 @@ export function setState(self, newState) {
     case 'crouchBlockStun': self.currentFramesByLayer = self.crouchBlockStunFramesByLayer || self.crouchBlockFramesByLayer; break;
     case 'grab':      self.currentFramesByLayer = self.grabFramesByLayer; break;
     case 'grabbed':    self.currentFramesByLayer = self.grabbedFramesByLayer; break;
+    case 'knocking':  self.currentFramesByLayer = self.knockingFramesByLayer || self.hitFramesByLayer; break;
+    case 'knocked':   self.currentFramesByLayer = self.knockedFramesByLayer || self.hitFramesByLayer; break;
+    case 'recovery':  self.currentFramesByLayer = self.recoveryFramesByLayer || self.hitFramesByLayer; break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 
