@@ -28,6 +28,9 @@ export function setState(self, newState) {
     case 'hit1':      self.currentFramesByLayer = self.hit1FramesByLayer || self.hitFramesByLayer; break;
     case 'hit2':      self.currentFramesByLayer = self.hit2FramesByLayer || self.hitFramesByLayer; break;
     case 'hit3':      self.currentFramesByLayer = self.hit3FramesByLayer || self.hitFramesByLayer; break;
+    case 'flyback':  self.currentFramesByLayer = self.flybackFramesByLayer || self.hitFramesByLayer; break;
+    case 'flyup':    self.currentFramesByLayer = self.flyupFramesByLayer || self.hitFramesByLayer; break;
+    case 'shoot':     self.currentFramesByLayer = self.shootFramesByLayer; break;
     case 'hadouken':  self.currentFramesByLayer = self.shootFramesByLayer; break;
     case 'dash':      self.currentFramesByLayer = self.dashFramesByLayer; break;
     case 'taunt':      self.currentFramesByLayer = self.tauntFramesByLayer; break;

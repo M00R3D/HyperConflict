@@ -24,6 +24,7 @@ class Fighter {
       punch2FramesByLayer: assets.punch2, punch3FramesByLayer: assets.punch3, kickFramesByLayer: assets.kick,
       kick2FramesByLayer: assets.kick2, kick3FramesByLayer: assets.kick3, crouchFramesByLayer: assets.crouch,
       crouchWalkFramesByLayer: assets.crouchWalk, hitFramesByLayer: assets.hit, hit2FramesByLayer: assets.hit2, hit3FramesByLayer: assets.hit3,
+      flybackFramesByLayer: assets.flyback, flyupFramesByLayer: assets.flyup,
       shootFramesByLayer: assets.shoot, projectileFramesByLayer: assets.projectile,
       tatsFramesByLayer: assets.tats, tatsProjFramesByLayer: assets.tatsProjFramesByLayer,
       dashLightFramesByLayer: assets.dashLight,
@@ -59,6 +60,11 @@ class Fighter {
       crouch:  { anim: this.crouchFramesByLayer, frameDelay: 10 },
       crouchwalk: { anim: this.crouchWalkFramesByLayer, frameDelay: 10 },
       hit:     { anim: this.hitFramesByLayer, frameDelay: 10 },
+      hit1:    { anim: this.hit1FramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 500 },
+      hit2:    { anim: this.hit2FramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 700 },
+      hit3:    { anim: this.hit3FramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 1000 },
+      flyback: { anim: this.flybackFramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 800 },
+      flyup:   { anim: this.flyupFramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 800 },
       hadouken: { anim: this.shootFramesByLayer, frameDelay: 6, duration: 600 },
       dash:    { anim: this.dashFramesByLayer, frameDelay: 10, duration: 1200 }, // <-- agregado
       taunt:  { anim: this.tauntFramesByLayer, frameDelay: 10, duration: 800 }, // <-- agregado
