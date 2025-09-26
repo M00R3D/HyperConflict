@@ -109,10 +109,16 @@ export async function loadHeartFrames() {
   return await loadOrNull('src/hearth/hearth_red.piskel');
 }
 
+// BOOTS (HUD) asset loader
+export async function loadBootFrames() {
+  return await loadOrNull('src/hearth/boot_green.piskel');
+}
+
 // Expose loader on window in case modules are loaded into global scope (fallback)
 if (typeof window !== 'undefined') {
   if (typeof window.loadTyemanAssets === 'undefined') window.loadTyemanAssets = loadTyemanAssets;
   if (typeof window.loadSbluerAssets === 'undefined') window.loadSbluerAssets = loadSbluerAssets;
   if (typeof window.loadHeartFrames === 'undefined') window.loadHeartFrames = loadHeartFrames;
+  if (typeof window.loadBootFrames === 'undefined') window.loadBootFrames = loadBootFrames;
   if (typeof window.loadSlotAssets === 'undefined') window.loadSlotAssets = loadSlotAssets;
 }

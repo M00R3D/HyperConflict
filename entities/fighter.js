@@ -38,6 +38,8 @@ class Fighter {
       knockingFramesByLayer: assets.knocking, // <-- AGREGADO
       knockedFramesByLayer: assets.knocked,   // <-- AGREGADO
       recoveryFramesByLayer: assets.recovery, // <-- AGREGADO
+
+      
     });
     // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
     // (se fusionarán por llave con las acciones por defecto más abajo)
@@ -130,6 +132,28 @@ class Fighter {
   checkSpecialMoves() { Specials.checkSpecialMoves(this); }
 
   attack(key) { Attacks.attack(this, key); }
+  // wrapped attack: deduct stamina according to input key (p1: 'i' = punch, 'o' = kick; p2: 'b'/'n')
+  attack(key) {
+    // Consume stamina PARTIAL para ataques normales (no bloquear la acción si falta parte)
+    try {
+      const k = (typeof key === 'string') ? key.toLowerCase() : '';
+      let actionName = null;
+      if (k === 'i' || k === 'b') actionName = 'punch';
+      else if (k === 'o' || k === 'n') actionName = 'kick';
+
+      if (actionName && typeof this.stamina === 'number' && this.stamina > 0) {
+        const cost = Math.max(0, this.staminaCosts?.[actionName] || 0);
+        const consume = Math.min(this.stamina, cost);
+        if (consume > 0) {
+          this.stamina = Math.max(0, this.stamina - consume);
+          try { this._staminaConsumedAt = millis(); this._staminaRegenAccum = 0; this._staminaRegenLastTime = millis(); } catch (e) {}
+        }
+      }
+      if (typeof Attacks !== 'undefined' && Attacks.attack) Attacks.attack(this, key);
+    } catch (e) {
+      if (typeof Attacks !== 'undefined' && Attacks.attack) Attacks.attack(this, key);
+    }
+  }
   attackHits(opponent) { return Attacks.attackHits(this, opponent); }
   shoot() { Attacks.shoot(this); }
 
@@ -141,7 +165,7 @@ class Fighter {
 
     // debug: mostrar cuando recibimos hit (si hay attacker)
     if (attacker && attacker.id) {
-      console.log(`[FIGHTER.hit] ${this.id} received hit from ${attacker.id} (attackType=${attacker.attackType}) hp-before=${this.hp}`);
+      // console.log(`[FIGHTER.hit] ${this.id} received hit from ${attacker.id} (attackType=${attacker.attackType}) hp-before=${this.hp}`);
     }
 
     // asegurar que hp existe y que el atacante indica tipo de ataque
@@ -151,7 +175,7 @@ class Fighter {
       if (atk.startsWith('punch') || atk.startsWith('kick')) {
         const prev = this.hp;
         this.hp = Math.max(0, this.hp - 1); // cada golpe/patada quita 1 cuarto
-        console.log(`[FIGHTER.hit] ${this.id} hp ${prev} -> ${this.hp} (-1 quarter)`);
+        // console.log(`[FIGHTER.hit] ${this.id} hp ${prev} -> ${this.hp} (-1 quarter)`);
       }
     }
   }
@@ -642,11 +666,30 @@ class Fighter {
 
   display() { Display.display(this); }
 
+  // helper: attempt to consume stamina by name (cost uses staminaCosts map)
+  consumeStaminaFor(actionName) {
+    if (typeof this.stamina !== 'number' || !this.staminaCosts) return false;
+    const cost = Math.max(0, (this.staminaCosts[actionName] || 0));
+    if (cost <= 0) return true;
+    // si no hay suficiente stamina, devolver false (no consumir)
+    if (this.stamina < cost) return false;
+    this.stamina = Math.max(0, this.stamina - cost);
+    // registrar tiempo de consumo para pausar regen un rato y resetar acumulador
+    try {
+      this._staminaConsumedAt = millis();
+      this._staminaRegenAccum = 0;
+      this._staminaRegenLastTime = millis();
+    } catch (e) {}
+    return true;
+  }
+
   dash(dir) {
     // small cooldown guard (opcional)
     if (millis() - (this.lastDashTime || 0) < (this.dashCooldown || 0)) return;
+    // comprobar stamina suficiente para dash (8 cuartos)
+    const ok = (typeof this.consumeStaminaFor === 'function') ? this.consumeStaminaFor('dash') : true;
+    if (!ok) return; // no hay stamina suficiente -> no dash
     this.lastDashTime = millis();
-
     this.setState("dash");
     this.dashDirection = dir || this.facing || 1;
     this.dashStartTime = millis();
@@ -656,7 +699,7 @@ class Fighter {
     // fuerza un pequeño impulso inicial para responsividad (mejora feel)
     const initialBoost = (this.dashSpeed || 14) * 0.6;
     this.vx = initialBoost * this.dashDirection;
-
+    // (la stamina ya se consumió en la comprobación previa)
     // dash light: dura un poco más que el dash y sirve para el overlay visual
     this.dashLightStart = this.dashStartTime;
     // duración total de la luz (incluye fase post-dash donde se encoge verticalmente)

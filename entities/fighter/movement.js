@@ -200,6 +200,35 @@ export function updateMovement(self) {
   else self.onGround = false;
 
   self.x = constrain(self.x, 0, width - self.w);
+
+  // Regeneración de stamina: si no estamos atacando, no en hit, y no en dash, regenerar por ticks
+  try {
+    if (typeof self.stamina === 'number' && !(self.attacking || self.isHit || self.state?.current === 'dash')) {
+      const now = millis();
+      const pause = self._staminaRegenPauseMs || 600;
+      // si se consumió recientemente no regenerar y resetear acumulador
+      if (self._staminaConsumedAt && (now - self._staminaConsumedAt) < pause) {
+        self._staminaRegenAccum = 0;
+        self._staminaRegenLastTime = now;
+      } else {
+        const tick = self._staminaRegenTickMs || 350;
+        // inicializar acumulador/lastTime defensivamente
+        self._staminaRegenAccum = self._staminaRegenAccum || 0;
+        self._staminaRegenLastTime = self._staminaRegenLastTime || now;
+        // sumar tiempo real transcurrido (ms) al acumulador
+        const delta = Math.max(0, now - self._staminaRegenLastTime);
+        self._staminaRegenAccum += delta;
+        self._staminaRegenLastTime = now;
+        // cuando el acumulador supera el tick, entregar exactamente 1 cuarto y restar el tick
+        if (self._staminaRegenAccum >= tick) {
+          self._staminaRegenAccum -= tick;
+          self.stamina = Math.min(self.staminaMax || 16, (self.stamina || 0) + 1);
+          // actualizar marca de último regen para compatibilidad con otros checks
+          self._staminaLastRegen = now;
+        }
+      }
+    }
+  } catch (e) {}
 }
 
 export function autoFace(self, opponent) {

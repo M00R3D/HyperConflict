@@ -41,11 +41,35 @@ export function initBase(self, x, col, id) {
   self.currentFramesByLayer = [];
   self.crouching = false;
   self.blocking = false;
+  
+  // STAMINA: 4 boots × 4 quarters each = 16 quarters total
+  self.staminaMax = 4 * 4; // 16 quarters
+  self.stamina = self.staminaMax;
+  // regeneration config: 1 quarter por tick. Hacer tick un poco más lento para refill claro.
+  // Nota: movement.update limitará a 1 paso por frame para evitar "saltos" instantáneos.
+  self._staminaRegenTickMs = 350; // ms por cuarto (aprox 2.85 cuartos/s)
+  self._staminaLastRegen = millis();
+  // timestamp del último consumo de stamina para pausar la regeneración unos ms
+  self._staminaConsumedAt = 0;
+  // cuanto tiempo esperar después de consumir antes de permitir regen (ms)
+  self._staminaRegenPauseMs = 600;
+  // optional: per-action stamina costs (quarters)
+  self.staminaCosts = {
+    punch: 1,
+    kick: 2,
+    heavy: 3,
+    grab: 2,
+    // dash consume 2 botas = 8 cuartos
+    dash: 8,
+    // poderes consumen 1 bota = 4 cuartos
+    hadouken: 4,
+    bun: 4
+  };
 
   self.attacking = false;
   self.attackStartTime = 0;
   self.attackDuration = 400;
-
+  
   self.isHit = false;
   self.hitStartTime = 0;
   self.hitDuration = 260;

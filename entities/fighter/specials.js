@@ -1,4 +1,4 @@
-// entities/fighter/specials.js
+ // entities/fighter/specials.js
 import { Projectile } from '../../entities/projectile.js';
 import { projectiles } from '../../core/main.js';
 import * as Hitbox from './hitbox.js';
@@ -81,9 +81,13 @@ export function doSpecial(self, moveName) {
     self.attackDuration = (self.actions.grab && self.actions.grab.duration) || 500;
     // asegurar set de objetivos para esta activación
     self._hitTargets = new Set();
+    // consume stamina for grab
+    try { if (self.consumeStaminaFor) self.consumeStaminaFor('grab'); } catch (e) {}
     return;
   }
   if (moveName === 'hadouken') {
+    // require stamina before starting special (hadouken costs 4 quarters)
+    if (typeof self.consumeStaminaFor === 'function' && !self.consumeStaminaFor('hadouken')) return;
     self.setState('hadouken');
     self.attackType = 'hadouken';
     self.attacking = true;
@@ -93,11 +97,12 @@ export function doSpecial(self, moveName) {
     const dir = self.facing === 1 ? 1 : -1;
     const px = Math.round(self.x + (dir === 1 ? self.w + 4 : -4));
     const py = Math.round(self.y + self.h / 2 - 6);
-    const p = new Projectile(px, py, dir, 1, self.id, null, {}, self.projectileFramesByLayer);
+    const p = new Projectile(px, py, dir, 1, self.id, self.id, {}, self.projectileFramesByLayer);
     projectiles.push(p);
   } else if (moveName === 'shoryuken') {
     self.setState('punch3'); self.attackType = 'punch3'; self.attacking = true;
     self.attackStartTime = millis(); self.attackDuration = self.actions.punch3.duration || 800;
+    try { if (self.consumeStaminaFor) self.consumeStaminaFor('heavy'); } catch (e) {}
   } else if (moveName === 'tatsumaki') {
     self.setState('kick3'); self.attackType = 'kick3'; self.attacking = true;
     self.attackStartTime = millis(); self.attackDuration = self.actions.kick3.duration || 600;
@@ -180,6 +185,8 @@ export function doSpecial(self, moveName) {
     self.attackStartTime = millis();
     self.attackDuration = 1700; // 1700 ms = 1.7s
   } else if (moveName === 'bun') {
+    // require stamina before bun (4 quarters)
+    if (typeof self.consumeStaminaFor === 'function' && !self.consumeStaminaFor('bun')) return;
     // visual: usar anim 'bun' (shor-like) si existe
     try { if (self.shorFramesByLayer && self.shorFramesByLayer.length) self.setState('bun'); else self.setState('punch3'); } catch(e){}
 
@@ -199,29 +206,22 @@ export function doSpecial(self, moveName) {
       speed: 8,
       maxRange: 380,
       persistent: false,
-      // dimensiones lógicas deseadas para dibujar el bun pequeño (ajustadas a 7x3)
       w: 18, h: 6,
       frameDelay: 6,
-      // escala visual del sprite (separada de w/h lógicas). Dejar 1 para que respete w/h.
       spriteScale: 1.0,
-      // parámetros de la cuerda (opcional)
       stringW: 6,
       stringH: 2,
       stringFrameDelay: 6,
-      // ORIGEN configurable (relativo a self.x / self.y)
-      offsetX: defaultOffsetX +(-14*self.facing), // por defecto, delante del fighter
+      offsetX: defaultOffsetX +(-14*self.facing),
       offsetY: defaultOffsetY+6
     };
 
-    // calcular origen usando opts (permite sobrescribir offsetX/offsetY desde fuera)
     const px = Math.round(self.x + (opts.offsetX || 0));
     const py = Math.round(self.y + (opts.offsetY || 0));
 
-    // pasar frames del proyectil y string via resources
     const bunFrames = (self.bunProjFramesByLayer && self.bunProjFramesByLayer.length) ? self.bunProjFramesByLayer : null;
     const stringFrames = (self.bunStringFramesByLayer && self.bunStringFramesByLayer.length) ? self.bunStringFramesByLayer : null;
     const p = new Projectile(px, py, dir, 5, self.id, { string: stringFrames }, opts, bunFrames);
-    // guardar referencia del owner para dibujo de cuerda y cálculos
     p._ownerRef = self;
     projectiles.push(p);
     return;

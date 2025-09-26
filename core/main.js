@@ -64,6 +64,7 @@ let _tyemanAssets = null;
 let _sbluerAssets = null;
 let _heartFrames = null;
 let _slotAssets = null; // { empty, rounderP1, rounderP2 }
+let _bootFrames = null;
  
 // character selection state
 let selectionActive = false;
@@ -98,7 +99,7 @@ async function setup() {
   // cargar assets de slots (pantalla de selección)
   try {
     _slotAssets = await loadSlotAssets();
-    console.log('loadSlotAssets ->', _slotAssets);
+    // console.log('loadSlotAssets ->', _slotAssets);
   } catch (e) {
     _slotAssets = null;
     console.warn('loadSlotAssets failed', e);
@@ -106,15 +107,28 @@ async function setup() {
   // cargar frames del corazón (HUD)
   try {
     _heartFrames = await loadHeartFrames();
-    console.log('loadHeartFrames ->', Array.isArray(_heartFrames) ? `${_heartFrames.length} layers` : _heartFrames);
+    // console.log('loadHeartFrames ->', Array.isArray(_heartFrames) ? `${_heartFrames.length} layers` : _heartFrames);
     if (Array.isArray(_heartFrames)) {
       _heartFrames.forEach((layer, idx) => {
-        console.log(`heart layer[${idx}] -> type: ${Array.isArray(layer) ? 'frames[]' : typeof layer}, frames: ${Array.isArray(layer) ? layer.length : 'n/a'}`);
+        // console.log(`heart layer[${idx}] -> frames: ${Array.isArray(layer) ? layer.length : 'n/a'}`);
       });
     }
   } catch (e) {
     _heartFrames = null;
     console.error('loadHeartFrames failed', e);
+  }
+  // cargar frames de botas (HUD)
+  try {
+    _bootFrames = await loadBootFrames();
+    // console.log('loadBootFrames ->', Array.isArray(_bootFrames) ? `${_bootFrames.length} layers` : _bootFrames);
+    if (Array.isArray(_bootFrames)) {
+      _bootFrames.forEach((layer, idx) => {
+        // console.log(`boot layer[${idx}] -> frames: ${Array.isArray(layer) ? layer.length : 'n/a'}`);
+      });
+    }
+  } catch (e) {
+    _bootFrames = null;
+    console.error('loadBootFrames failed', e);
   }
   // iniciar pantalla de selección
   selectionActive = true;
@@ -729,10 +743,10 @@ function draw() {
       if (atk === 'grab') {
         // ...existing grab handling...
       } else {
-        console.log('[HIT-DETECT] player1 hits player2', { attacker: 'p1', attackType: atk, p2_hp_before: player2.hp });
+        // console.log('[HIT-DETECT] player1 hits player2', { attacker: 'p1', attackType: atk, p2_hp_before: player2.hp });
         // llamar al handler del defensor (esto ya debería restar 1 cuarto si es punch/kick)
         try { player2.hit(player1); } catch (e) { console.warn('player2.hit error', e); }
-        console.log('[HIT-DETECT] after hit player2 hp:', player2.hp);
+        // console.log('[HIT-DETECT] after hit player2 hp:', player2.hp);
         // ...existing hit response (apply knockback, hitstop, etc.)...
       }
     }
@@ -742,9 +756,9 @@ function draw() {
       if (atk === 'grab') {
         // ...existing grab handling...
       } else {
-        console.log('[HIT-DETECT] player2 hits player1', { attacker: 'p2', attackType: atk, p1_hp_before: player1.hp });
+        // console.log('[HIT-DETECT] player2 hits player1', { attacker: 'p2', attackType: atk, p1_hp_before: player1.hp });
         try { player1.hit(player2); } catch (e) { console.warn('player1.hit error', e); }
-        console.log('[HIT-DETECT] after hit player1 hp:', player1.hp);
+        // console.log('[HIT-DETECT] after hit player1 hp:', player1.hp);
         // ...existing hit response...
       }
     }
@@ -936,7 +950,7 @@ function draw() {
 
   pop();
 
-  drawHealthBars(player1, player2, _heartFrames);
+  drawHealthBars(player1, player2, _heartFrames, _bootFrames);
   drawInputQueues(player1, player2);
 
   // overlay de PAUSA
