@@ -59,6 +59,25 @@ let appliedHUDAlpha = 1;
 // exponer pausa globalmente para display.js
 window.PAUSED = window.PAUSED || false;
 
+// --- DAMAGE / SCREEN SHAKE state (nuevo) ---
+const MAX_HP_QUARTERS = 24;
+let _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
+let _prevHp = { p1: null, p2: null };
+
+function startDamageEffect(player, quartersRemoved) {
+  if (!player) return;
+  const now = millis();
+  // cuánto "resalta" según vida restante: más efecto cuanto MENOS vida tenga
+  const remaining = Math.max(0, Math.min(MAX_HP_QUARTERS, player.hp));
+  const lowFactor = 1 - (remaining / MAX_HP_QUARTERS); // 0..1
+  // duración y magnitud escaladas por cuartos quitados y por lowFactor
+  const duration = Math.min(500, 220 + 160 * Math.max(1, quartersRemoved));
+  const baseMag = Math.min(100, 6 * Math.max(1, quartersRemoved) * (1 + lowFactor * 3)); // px (antes)
+  const mag = baseMag * 0.15; // reducir screenshake 85% -> mantener 15% de la magnitud original
+  const zoomAdd = Math.min(0.3, 0.035 * Math.max(1, quartersRemoved) * (1 + lowFactor * 4)); // fractional zoom add
+  _hitEffect = { active: true, start: now, end: now + duration, duration, mag, zoom: zoomAdd, targetPlayerId: player.id };
+}
+
 // assets refs (llenadas en setup)
 let _tyemanAssets = null;
 let _sbluerAssets = null;
@@ -204,6 +223,10 @@ function tryCreatePlayers() {
   initInput({ p1: player1, p2: player2, ready: true });
   playersReady = true;
   selectionActive = false;
+
+// guardar snapshots iniciales para detectar cambios posteriores
+_prevHp.p1 = player1.hp;
+_prevHp.p2 = player2.hp;
 }
 
 function drawCharacterSelect() {
@@ -234,7 +257,7 @@ function drawCharacterSelect() {
       // cell background: intentar dibujar imagen de slot (estirada al tamaño de la celda).
       noStroke();
       // Siempre usar slot_empty.piskel como fondo del slot (estirado al tamaño de la celda).
-      // Si no se cargó, caerá en el rectángulo redondeado legacy.
+      // Si no se cargó, caerá en el rectángulo redondeada legacy.
       let slotImg = null;
       try {
         if (_slotAssets && _slotAssets.empty) {
@@ -907,6 +930,22 @@ function draw() {
     }
   }
 
+  // --- Detectar cambios de HP después de la lógica / colisiones ---
+  if (player1) {
+    if (_prevHp.p1 == null) _prevHp.p1 = player1.hp;
+    else if (player1.hp < _prevHp.p1) {
+      startDamageEffect(player1, _prevHp.p1 - player1.hp);
+    }
+    _prevHp.p1 = player1.hp;
+  }
+  if (player2) {
+    if (_prevHp.p2 == null) _prevHp.p2 = player2.hp;
+    else if (player2.hp < _prevHp.p2) {
+      startDamageEffect(player2, _prevHp.p2 - player2.hp);
+    }
+    _prevHp.p2 = player2.hp;
+  }
+
   // render (siempre)
   push();
   // suavizar transición del zoom cuando se pausa/resume:
@@ -914,10 +953,32 @@ function draw() {
   const maxPauseZoom = 3;
   const pauseMultiplier = 2;
   const targetZoom = PAUSED ? Math.min((cam.zoom || 1) * pauseMultiplier, maxPauseZoom) : (cam.zoom || 1);
+
+  // --- calcular shake + zoom add si hay efecto activo ---
+  let shakeX = 0, shakeY = 0, zoomAdd = 0;
+  if (_hitEffect && _hitEffect.active) {
+    const now = millis();
+    const elapsed = now - _hitEffect.start;
+    if (elapsed >= _hitEffect.duration) {
+      _hitEffect.active = false;
+    } else {
+      const t = Math.max(0, Math.min(1, elapsed / _hitEffect.duration));
+      // ease out (strong at start, decay to 0)
+      const ease = Math.sin((1 - t) * Math.PI / 2);
+      const phase = now / 28;
+      // combinar senos para sensación orgánica
+      const xAmp = _hitEffect.mag * ease;
+      const yAmp = _hitEffect.mag * 0.55 * ease;
+      shakeX = (Math.sin(phase * 1.3) + Math.sin(phase * 0.67)) * xAmp * 0.45;
+      shakeY = (Math.cos(phase * 1.1) + Math.cos(phase * 0.5)) * yAmp * 0.45;
+      zoomAdd = _hitEffect.zoom * ease;
+    }
+  }
+
   // lerp suave hacia target (ajusta factor 0.08 para más/menos rapidez)
-  appliedCamZoom = lerp(appliedCamZoom, targetZoom, 0.08);
-  // aplicar cámara usando el zoom suavizado, sin modificar `cam` real
-  applyCamera({ x: cam.x, y: cam.y, zoom: appliedCamZoom });
+  appliedCamZoom = lerp(appliedCamZoom, targetZoom * (1 + zoomAdd), 0.08);
+  // aplicar cámara usando el zoom suavizado + offset de screen-shake, sin modificar `cam` real
+  applyCamera({ x: cam.x + shakeX, y: cam.y + shakeY, zoom: appliedCamZoom });
   drawBackground();
 
   fill(80, 50, 20);
