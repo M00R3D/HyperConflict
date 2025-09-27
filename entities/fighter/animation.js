@@ -112,9 +112,14 @@ export function exitHitIfElapsed(self) {
   // NO procesar salidas de hit mientras hay hitstop (mantener freeze consistente)
   if (window.PAUSED || window.HITSTOP_ACTIVE) return;
 
-  // Si el fighter llegó a 0 HP durante cualquier parte del flujo, forzar knockdown inmediato.
-  if (typeof self.hp === 'number' && self.hp <= 0) {
-    try { self.setState('knocked'); } catch (e) {}
+  // Si el fighter llegó a 0 stamina durante cualquier parte del flujo, forzar knockdown inmediato.
+  if (typeof self.stamina === 'number' && self.stamina <= 0) {
+    try { 
+      self.setState('knocked'); 
+    } catch (e) {}
+    // marcar inicio del knockdown y cooldown para poder romperlo con input del buffer
+    self._knockedStart = millis();
+    self._knockedBreakCooldown = 800; // ms
     // limpiar marcas de stun/tiempo
     self.blockStunStartTime = 0;
     self.isHit = false;
@@ -155,5 +160,28 @@ export function exitHitIfElapsed(self) {
     }
   } catch (e) {
     // no romper si hay error
+  }
+
+  // NEW: permitir romper knockdown tras cooldown con cualquier input presente en el buffer
+  try {
+    if (self.state && self.state.current === 'knocked') {
+      const start = self._knockedStart || 0;
+      const cooldown = (typeof self._knockedBreakCooldown === 'number') ? self._knockedBreakCooldown : 800;
+      if (start > 0 && (millis() - start) >= cooldown) {
+        const bufLen = (Array.isArray(self.inputBuffer) ? self.inputBuffer.length : 0);
+        if (bufLen > 0) {
+          // consumir opcionalmente el último input para evitar re-trigger inmediato (no obligatorio)
+          try { self.inputBuffer.pop(); } catch (e) {}
+          // salir a recovery (o idle según diseño)
+          try { self.setState('recovery'); } catch (e) {}
+          // limpiar marcas de knockdown
+          self._knockedStart = 0;
+          self._knockedBreakCooldown = 0;
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    /* silent */
   }
 }
