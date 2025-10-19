@@ -1,4 +1,4 @@
- // entities/fighter/specials.js
+// entities/fighter/specials.js
 import { Projectile } from '../../entities/projectile.js';
 import { projectiles } from '../../core/main.js';
 import * as Hitbox from './hitbox.js';
@@ -178,12 +178,30 @@ export function doSpecial(self, moveName) {
 
     return;
   } else if (moveName === 'taunt') {
+    // Si ya estamos ejecutando un taunt activo, no volver a activarlo
+    if (self.attacking && self.attackType === 'taunt') return;
+    // También proteger caso en que el estado visual ya esté en 'taunt'
+    if (self.state && self.state.current === 'taunt' && self.attacking) return;
+
     self.setState('taunt');
     // mantener la animación durante ~1.7s usando la mecánica de "attacking"
     self.attacking = true;
     self.attackType = 'taunt';
     self.attackStartTime = millis();
     self.attackDuration = 1700; // 1700 ms = 1.7s
+
+    // RECARGA: recuperar alrededor de 4 cuartos de stamina al hacer taunt
+    try {
+      if (typeof self.stamina === 'number' && typeof self.staminaMax === 'number') {
+        const regain = 4; // cuartos a recuperar
+        self.stamina = Math.min(self.staminaMax, (self.stamina || 0) + regain);
+        // reset acumulador de regen para evitar acumulaciones instantáneas
+        self._staminaRegenAccum = 0;
+        self._staminaRegenLastTime = millis();
+        self._staminaConsumedAt = millis(); // pausa breve de regen si hay lógica dependiente
+      }
+    } catch (e) { /* silent */ }
+    return;
   } else if (moveName === 'bun') {
     // require stamina before bun (4 quarters)
     if (typeof self.consumeStaminaFor === 'function' && !self.consumeStaminaFor('bun')) return;

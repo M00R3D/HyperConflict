@@ -294,6 +294,12 @@ class Fighter {
     // para que specials puedan detectar supersalto aún cuando Buffer ponga onGround=false
     this._prevOnGround = !!this.onGround;
 
+    // NEW: si estamos ejecutando un taunt (animación/lock), IGNORAR todos los inputs hasta que termine.
+    // Esto evita que mover/atacar o specials reemplacen el estado taunt mientras su animación/tiempo está activo.
+    if (this.state && this.state.current === 'taunt' && this.attacking) {
+      return;
+    }
+
     // Si estamos técnicamente "muertos" (HP <= 0) no procesar inputs ni permitir bloqueo.
     // Evita que un actor sin HP entre en block u otros estados de control.
     if (typeof this.hp === 'number' && this.hp <= 0) return;

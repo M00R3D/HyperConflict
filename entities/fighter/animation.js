@@ -3,6 +3,18 @@ export function setState(self, newState) {
   // NO cambiar de estado si está en pausa o durante hitstop
   if (window.PAUSED || window.HITSTOP_ACTIVE) return;
 
+  // Si estamos en un taunt activo, bloquear cualquier transición que no sea daño/knockdown.
+  // Permitimos solo 'hit1'/'hit2'/'hit3' (interrupción por daño) o 'knocked' (knockdown).
+  if (self && self.state && self.state.current === 'taunt' && self.attacking) {
+    const allowIf = (ns) => {
+      if (!ns || typeof ns !== 'string') return false;
+      if (ns === 'knocked') return true;
+      if (/^hit[123]$/.test(ns)) return true;
+      return false;
+    };
+    if (!allowIf(newState)) return;
+  }
+
   // Protección: si estamos en bloqueo, NO permitir que el estado pase a un "hit".
   // Esto evita transiciones a 'hit', 'hit1', 'hit2', 'hit3' cuando el personaje está bloqueando.
   if (typeof newState === 'string' && newState.startsWith('hit')) {

@@ -230,9 +230,20 @@ export function updateAttackState(self) {
       return;
     }
 
+    const endedAttackType = self.attackType;
+
     self.attacking = false;
     self.attackType = null;
     // limpiar lista de objetivos al terminar la activación
     if (self._hitTargets) { self._hitTargets.clear(); self._hitTargets = null; }
+
+    // Si el ataque terminado era un taunt y el fighter sigue en ese estado visual,
+    // forzamos la vuelta a 'idle' para que la entropía del loop no deje al fighter bloqueado.
+    // (Solo aplicamos esto para 'taunt' porque otros ataques pueden manejar su propia recovery)
+    try {
+      if (endedAttackType === 'taunt' && self.state && self.state.current === 'taunt') {
+        self.setState('idle');
+      }
+    } catch (e) { /* silent */ }
   }
 }
