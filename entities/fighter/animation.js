@@ -26,9 +26,12 @@ export function setState(self, newState) {
     self.knockedStartTime = millis();
     // while knocked, ensure flags that could interfere are cleared
     try { self.attacking = false; self.attackType = null; self._hitTargets = null; } catch (e) {}
+    // permitir que la animación de knocked avance y al llegar al último frame se quede ahí
+    self._knockedAnimationEnded = false;
   } else {
     // clear knockedStartTime when leaving knocked
     if (prevState === 'knocked') delete self.knockedStartTime;
+    if (self._knockedAnimationEnded !== undefined) delete self._knockedAnimationEnded;
   }
   if (newState === 'recovery') {
     self.recoveryStartTime = millis();
@@ -113,7 +116,11 @@ export function updateAnimation(self) {
 
   // determina delay por acción si existe mapping actions, fallback a 6
   const action = (self.actions && self.actions[self.state.current]) || {};
-  const frameDelay = action.frameDelay ?? 6;
+  // hacer recovery un poco más lento visualmente
+  let frameDelay = action.frameDelay ?? 6;
+  if (self.state && self.state.current === 'recovery') {
+    frameDelay = Math.max(8, Math.round(frameDelay * 1.4));
+  }
 
   self.frameTimer = (self.frameTimer || 0) + 1;
   if (self.frameTimer > frameDelay) {
@@ -121,7 +128,22 @@ export function updateAnimation(self) {
     // número de frames en la primera capa (asume capas homogéneas)
     const layer0 = self.currentFramesByLayer[0] || [];
     const frameCount = layer0.length || 1;
-    self.frameIndex = (self.frameIndex + 1) % frameCount;
+    // Si estamos en 'knocked' queremos avanzar la animación pero QUEDARNOS en el último frame
+    if (self.state && self.state.current === 'knocked') {
+      if (frameCount <= 1) {
+        self.frameIndex = 0;
+        self._knockedAnimationEnded = true;
+      } else if ((self.frameIndex || 0) < frameCount - 1) {
+        self.frameIndex = (self.frameIndex || 0) + 1;
+      } else {
+        // stay on last frame
+        self.frameIndex = frameCount - 1;
+        self._knockedAnimationEnded = true;
+      }
+    } else {
+      // comportamiento normal (loop)
+      self.frameIndex = (self.frameIndex + 1) % frameCount;
+    }
   }
 }
 

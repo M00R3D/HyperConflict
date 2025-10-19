@@ -82,8 +82,9 @@ class Fighter {
       grab: { anim: this.grabFramesByLayer, frameDelay: 6, duration: 500 },
       grabbed: { anim: this.grabbedFramesByLayer, frameDelay: 6, duration: 500 },
       knocking: { anim: this.knockingFramesByLayer, frameDelay: 10, duration: 600 }, // <-- nuevo estado intermedio (no usado)
-      knocked: { anim: this.knockedFramesByLayer, frameDelay: 10, duration: 800 }, // <-- nuevo estado intermedio (no usado)
-      recovery: { anim: this.recoveryFramesByLayer, frameDelay: 10, duration: 600 }, // <-- nuevo estado intermedio (no usado)
+      // usar las duraciones configurables creadas en initBase y aumentar ligeramente frameDelay
+      knocked: { anim: this.knockedFramesByLayer, frameDelay: 7, duration: (this.knockedDurationMs || 800) },
+      recovery: { anim: this.recoveryFramesByLayer, frameDelay: 7, duration: (this.recoveryDurationMs || 1200) },
       // dashLight: { anim: this.dashLightFramesByLayer, frameDelay: 10, duration: 300 }, // <-- nuevo estado intermedio (no usado)
     };
 
