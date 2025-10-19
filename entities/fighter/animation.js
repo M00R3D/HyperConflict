@@ -1,7 +1,12 @@
 // entities/fighter/animation.js
 export function setState(self, newState) {
   // NO cambiar de estado si está en pausa o durante hitstop
-  if (window.PAUSED || window.HITSTOP_ACTIVE) return;
+  if (window.PAUSED || window.HITSTOP_ACTIVE) {
+    try {
+      console.log(`[Anim.setState] blocked by PAUSE/HITSTOP: ${self?.id || '?'} trying -> ${newState}`);
+    } catch (e) { /* ignore logging errors */ }
+    return;
+  }
 
   // Si estamos en un taunt activo, bloquear cualquier transición que no sea daño/knockdown.
   // Permitimos solo 'hit1'/'hit2'/'hit3' (interrupción por daño) o 'knocked' (knockdown).
@@ -12,7 +17,12 @@ export function setState(self, newState) {
       if (/^hit[123]$/.test(ns)) return true;
       return false;
     };
-    if (!allowIf(newState)) return;
+    if (!allowIf(newState)) {
+      try {
+        console.log(`[Anim.setState] transition blocked by taunt lock: ${self.id || '?'} ${self.state.current} -> ${newState}`);
+      } catch (e) { /* ignore logging errors */ }
+      return;
+    }
   }
 
   // Protección: si estamos en bloqueo, NO permitir que el estado pase a un "hit".
@@ -20,6 +30,9 @@ export function setState(self, newState) {
   if (typeof newState === 'string' && newState.startsWith('hit')) {
     // si está bloqueando en suelo o en crouch, ignorar intentos de poner hit
     if (self && (self.blocking || self.state?.current === 'block' || self.state?.current === 'crouchBlock')) {
+      try {
+        console.log(`[Anim.setState] hit transition ignored due blocking: ${self.id || '?'} state=${self.state?.current} -> ${newState}`);
+      } catch (e) { /* ignore logging errors */ }
       return;
     }
   }
@@ -172,13 +185,41 @@ export function exitHitIfElapsed(self) {
     return;
   }
 
+  // -------------------- MODIFIED: decide knocked vs idle al expirar isHit --------------------
   if (self.isHit && millis() - self.hitStartTime >= self.hitDuration) {
-    self.isHit = false; self.setState("idle");
+    // marcar que ya no estamos en "isHit"
+    self.isHit = false;
+
+    // condición para convertir la salida de hit en knockdown en lugar de idle:
+    // - si el nivel de hit fue 3 o más
+    // - o si estamos exhaustos (stamina <= 0)
+    const hitLevel = (typeof self.hitLevel === 'number') ? self.hitLevel : 0;
+    const exhausted = (typeof self.stamina === 'number') ? (self.stamina <= 0) : false;
+    const shouldKnock = (hitLevel >= 3) || exhausted;
+
+    if (shouldKnock) {
+      try {
+        // preferimos la versión 'forceSetState' para aplicar la visual incluso si hay hitstop/pausa
+        if (typeof forceSetState === 'function') {
+          forceSetState(self, 'knocked');
+        } else {
+          self.setState('knocked');
+        }
+      } catch (e) {
+        try { self.setState('knocked'); } catch (e2) {}
+      }
+    } else {
+      try {
+        self.setState('idle');
+      } catch (e) {}
+    }
+
     // limpiar cualquier marca de lanzamiento al terminar el hit/launch
     if (self._launched) { delete self._launched; delete self._launchedStart; delete self._launchedDuration; }
     // limpiar supresión para que futuros hits se comporten normalmente
     if (self._suppressHitState) delete self._suppressHitState;
   }
+  // -------------------- end modified block --------------------
 
   // manejar expiración de blockStun / crouchBlockStun
   try {
@@ -227,5 +268,52 @@ export function exitHitIfElapsed(self) {
     }
   } catch (e) {
     // ignore transition errors
+  }
+}
+
+// NEW: fuerza el cambio de estado saltándose bloqueo de pausa/hitstop.
+// Actualmente usado para mostrar knocked inmediatamente durante hitstop/pause.
+export function forceSetState(self, newState) {
+  try {
+    const prevState = self.state?.current;
+    self.state = self.state || { current: null, timer: 0 };
+    self.state.current = newState;
+    self.state.timer = 0;
+
+    if (newState === 'knocked') {
+      self.knockedStartTime = millis();
+      // asegurar limpieza mínima
+      try { self.attacking = false; self.attackType = null; self._hitTargets = null; } catch (e) {}
+      // asignar frames knocked y dejar en último frame visual
+      self.currentFramesByLayer = self.knockedFramesByLayer || self.hitFramesByLayer || self.currentFramesByLayer || [];
+      const layer0 = self.currentFramesByLayer[0] || [];
+      self.frameIndex = Math.max(0, (layer0.length || 1) - 1);
+      self.frameTimer = 0;
+      self._knockedAnimationEnded = true;
+      try { console.log(`[Anim.forceSetState] forced ${self.id || '?'} -> knocked (visual applied)`); } catch (e) {}
+      return;
+    }
+
+    if (newState === 'recovery') {
+      self.recoveryStartTime = millis();
+      self.currentFramesByLayer = self.recoveryFramesByLayer || self.hitFramesByLayer || self.currentFramesByLayer || [];
+      self.frameIndex = 0;
+      self.frameTimer = 0;
+      try { console.log(`[Anim.forceSetState] forced ${self.id || '?'} -> recovery (visual applied)`); } catch (e) {}
+      return;
+    }
+
+    // fallback: set basic frames for other states using existing mapping where available
+    switch (newState) {
+      case 'idle': self.currentFramesByLayer = self.idleFramesByLayer; break;
+      case 'hit1': self.currentFramesByLayer = self.hit1FramesByLayer || self.hitFramesByLayer; break;
+      case 'hit2': self.currentFramesByLayer = self.hit2FramesByLayer || self.hitFramesByLayer; break;
+      case 'hit3': self.currentFramesByLayer = self.hit3FramesByLayer || self.hitFramesByLayer; break;
+      default: self.currentFramesByLayer = self.idleFramesByLayer || self.currentFramesByLayer; break;
+    }
+    self.frameIndex = 0;
+    self.frameTimer = 0;
+  } catch (err) {
+    try { console.warn('[Anim.forceSetState] failed', err); } catch (e) {}
   }
 }

@@ -1,4 +1,5 @@
 // entities/fighter/attacks.js
+import * as Anim from './animation.js';
 export function attack(self, key) {
   const now = millis();
   const chain = self.comboChainsByKey[key];
@@ -140,85 +141,181 @@ export function shoot(self) {
 }
 
 export function hit(self, attacker = null) {
-  // si ya está en hit y no es un upgrade de nivel, no re-aplicamos
-  const atkName = attacker && attacker.attackType ? attacker.attackType : null;
+  // seguridad: nada que procesar
+  if (!attacker) return;
+  try { console.log(`[Attacks.hit] ${self.id || '?'} hit by ${attacker.id || '?'} attack=${attacker.attackType}`); } catch(e){}
+  // TRACE: nivel de hit previo (si existe) — nos interesa detectar recibir golpe adicional sobre hit3
+  const prevHitLevel = (typeof self.hitLevel === 'number') ? self.hitLevel : 0;
 
-  // mapear ataque -> nivel deseado
-  const levelMap = {
-    punch: 1, punch2: 2, punch3: 3,
-    kick: 1, kick2: 2, kick3: 3,
-    hadouken: 1
-  };
-  const newLevel = levelMap[atkName] || 1;
+  // guardar hp antes de delegados externos por si acaso (otros módulos podrían modificar hp)
+  const hpBefore = (typeof self.hp === 'number') ? self.hp : null;
 
-  // si ya está en hit y su nivel actual es >= newLevel, no hacemos nada
-  if (self.isHit && (self.hitLevel || 0) >= newLevel) {
+  // delegar a Attacks.hit si existe (efectos/partículas/sonidos)
+  try { if (typeof Attacks !== 'undefined' && typeof Attacks.hit === 'function') Attacks.hit(this, attacker); } catch (e) {}
+
+  // sanity: el atacante debe declarar tipo de ataque para decidir comportamiento
+  if (!attacker || typeof attacker.attackType !== 'string') return;
+  const atk = String(attacker.attackType || '').toLowerCase();
+  const attackIsBlockable = (attacker.unblockable !== true);
+
+  // considerar estados que actúan como bloqueo: bandera blocking + estados block / crouchBlock
+  // y también blockStun / crouchBlockStun: mientras esté en cualquiera de estos NO debe recibir daño.
+  const inBlockingState = !!(
+    self.blocking ||
+    self.state?.current === 'block' ||
+    self.state?.current === 'crouchBlock' ||
+    self.state?.current === 'blockStun' ||
+    self.state?.current === 'crouchBlockStun'
+  );
+
+  // Si está en bloqueo y el ataque puede bloquearse, ANULA cualquier daño aplicado y aplica block-stun.
+  if (inBlockingState && attackIsBlockable) {
+    // revertir HP si algún otro código lo redujo
+    if (hpBefore !== null && typeof this.hp === 'number') {
+      this.hp = hpBefore;
+    }
+    // refrescar/establecer blockStun timers sin marcar isHit
+    this.blockStunStartTime = millis();
+    const dur = (this.crouching ? (this.crouchBlockStunDuration || 540) : (this.blockStunDuration || 540));
+    this.blockStunDuration = Math.max(this.blockStunDuration || 0, dur);
+    try {
+      if (this.crouching) this.setState('crouchBlockStun');
+      else this.setState('blockStun');
+    } catch (e) {}
+    // notificar al atacante/attacks que fue bloqueado (si existe hook)
+    try { if (typeof Attacks !== 'undefined' && typeof Attacks.onBlock === 'function') Attacks.onBlock(this, attacker); } catch (e) {}
+    // interrumpe cadena de hits (block rompe el combo que escala hitLevel)
+    this._consecutiveHits = 0;
+    this._consecutiveHitAt = 0;
     return;
   }
 
-  // ahora sí aplicamos/upgrade del hit
-  self.hp -= 1;
-  self.isHit = true;
-  self.hitStartTime = millis();
+  // --- No está bloqueando -> procesar hit normal ---
+  if (typeof this.hp !== 'number') return;
 
-  let kbX = 0;
-  let kbY = -2;
-  // default hitstun map (fallbacks)
-  const defaultHitstun = {
-    punch: 200, punch2: 720, punch3: 700,
-    kick: 220, kick2: 320, kick3: 520,
-    hadouken: 260, default: 220
-  };
+  const now = millis();
+  const chainWindow = 800; // ms: ventana para considerar golpes "consecutivos" (ajusta a gusto)
 
-  // Si el atacante y su acción definen hitstun, úsalo; si no, usa el default map.
-  let hitStun = (attacker && attacker.actions && attacker.actions[atkName] && attacker.actions[atkName].hitstun)
-    || defaultHitstun[atkName] || defaultHitstun.default;
-
-  self.hitLevel = newLevel; // setear al nuevo nivel
-
-  // empujar hacia la "espalda" del golpeado: -facing
-  const pushDir = -(self.facing || 1);
-
-  switch (atkName) {
-    case 'punch':
-      kbX = pushDir * 1.0; kbY = -2.2; break;
-    case 'punch2':
-      kbX = pushDir * 1.0; kbY = -4.0; break;
-    case 'punch3':
-      kbX = pushDir * 10.0; kbY = -5.2; break;
-    case 'kick':
-      kbX = pushDir * 2.6; kbY = -1.8; break;
-    case 'kick2':
-      kbX = 0; kbY = -4.2; break;
-    case 'kick3':
-      kbX = pushDir * 5.5; kbY = -5.0; break;
-    case 'hadouken':
-      kbX = pushDir * 3.5; kbY = -2.0; break;
-    default:
-      kbX = pushDir * 2.0; kbY = -2.0; break;
+  // resetar cadena si pasó mucho tiempo desde el último golpe
+  if (!this._consecutiveHitAt || (now - (this._consecutiveHitAt || 0)) > chainWindow) {
+    this._consecutiveHits = 0;
   }
 
-  // aplicar knockback (reemplaza valores anteriores si es upgrade)
-  self.vx = kbX;
-  self.vy = kbY;
+  // Si el atacante forzó un nivel (p. ej. shoryuken), respetarlo; si no, incrementar por cadena
+  let resolvedHitLevel = null;
+  if (typeof attacker.forcedHitLevel === 'number') {
+    resolvedHitLevel = Math.max(1, Math.min(3, Math.floor(attacker.forcedHitLevel)));
+    // reset or set consecutive tracking to match forced level
+    this._consecutiveHits = resolvedHitLevel;
+    this._consecutiveHitAt = now;
+  } else {
+    // incrementar la cuenta de golpes consecutivos del defensor
+    this._consecutiveHits = (this._consecutiveHits || 0) + 1;
+    if (this._consecutiveHits > 3) this._consecutiveHits = 3;
+    this._consecutiveHitAt = now;
+    resolvedHitLevel = this._consecutiveHits;
+  }
 
-  if (kbY < -1.5) self.onGround = false;
+  // Si YA estábamos en hit3 y recibimos otro golpe, forzar knocked inmediatamente.
+  if (prevHitLevel === 3) {
+    try {
+      console.log(`[Attacks.hit] ${self.id || '?'} was in hit3 and got hit again -> forcing knocked`);
+      Anim.forceSetState(self, 'knocked');
+    } catch (e) {
+      console.warn('[Attacks.hit] failed to force knocked, marking _forceKnocked', self.id, e);
+      self._forceKnocked = true;
+    }
+    // limpieza/early exit
+    self.attacking = false; self.attackType = null; self._hitTargets = null;
+    self.vx = 0; self.vy = 0;
+    return;
+  }
 
-  self.hitDuration = hitStun;
-  // setear estado específico por nivel: hit1/hit2/hit3 (pero con misma animación)
-  const stateName = 'hit' + (self.hitLevel || 1);
-  self.setState(stateName);
+  // --- NEW: If defender is already exhausted (stamina <= 0), any successful hit forces knocked ---
+  try {
+    if (typeof this.stamina === 'number' && this.stamina <= 0) {
+      // Always use forceSetState so knocked visual/state applies immediately (no PAUSE/HITSTOP dependence)
+      try {
+        console.log(`[Attacks.hit] ${self.id || '?'} is EXHAUSTED -> forcing knocked`);
+        Anim.forceSetState(this, 'knocked');
+      } catch (e) {
+        console.warn('[Attacks.hit] forceSetState failed, marking _forceKnocked', this.id, e);
+        this._forceKnocked = true;
+      }
+      // clean up and early return
+      this.attacking = false; this.attackType = null; this._hitTargets = null;
+      this.vx = 0; this.vy = 0;
+      return;
+    }
+  } catch (e) { /* silent */ }
 
-  // Empujón ligero del atacante hacia adelante para facilitar encadenes
-  // if (attacker && attacker !== self) {
-  //   const followPushMap = { punch2: 1.6, punch3: 2.6, kick2: 1.2, kick3: 2.0 };
-  //   const boost = followPushMap[attacker.attackType] || 0;
-  //   if (boost > 0) {
-  //     attacker.vx = (attacker.vx || 0) + boost * (attacker.facing || 1);
-  //     const cap = (attacker.runActive ? attacker.runMaxSpeed : attacker.maxSpeed) * 2;
-  //     attacker.vx = constrain(attacker.vx, -cap, cap);
-  //   }
-  // }
+  // Si Attacks.hit ya aplicó daño externamente, no volver a aplicarlo.
+  // Si no se aplicó daño (hpBefore === this.hp), aplicamos daño básico desde attacker.damageQuarters o fallback 1.
+  if (hpBefore !== null && typeof this.hp === 'number' && this.hp === hpBefore) {
+    const damageQuarters = (typeof attacker.damageQuarters === 'number') ? attacker.damageQuarters : 1;
+    this.hp = Math.max(0, this.hp - damageQuarters);
+  }
+
+  // --- NUEVO: Si el ataque es un punch/kick, el golpeado pierde 2 STA
+  try {
+    const meleeHits = ['punch','punch2','punch3','kick','kick2','kick3'];
+    if (meleeHits.includes(atk)) {
+      if (typeof this.stamina === 'number') {
+        this.stamina = Math.max(0, (this.stamina || 0) - 2); // restar 2 STA al golpeado
+        this._staminaConsumedAt = millis();
+      }
+    }
+  } catch (e) { /* silent */ }
+
+  // marcar hit state y tiempos
+  this.isHit = true;
+  this.hitStartTime = millis();
+  this.hitLevel = resolvedHitLevel || 1;
+
+  const levelDurMap = {
+    1: (this.actions?.hit1?.duration || 500),
+    2: (this.actions?.hit2?.duration || 700),
+    3: (this.actions?.hit3?.duration || 1000)
+  };
+  this.hitDuration = levelDurMap[this.hitLevel] || (this.hitDuration || 260);
+
+  // set animation state correspondiente (hit1/2/3 preferido)
+  try {
+    const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3');
+    this.setState(s);
+  } catch (e) {}
+
+  // Si HP llega a 0 forzar knockdown y limpiar estados que podrían bloquear transiciones
+  if (this.hp <= 0) {
+    this.hp = 0;
+    this.alive = false;
+    this.blocking = false;
+    this.blockStunStartTime = 0;
+    this.attacking = false;
+    this.isHit = false;
+    // reset consecutive hits on death
+    this._consecutiveHits = 0;
+    this._consecutiveHitAt = 0;
+    try { this.setState('knocked'); } catch (e) {}
+    return;
+  }
+
+  // --- NEW: if we were already in hit3 and get another hit forcibly, convert to knocked ---
+  // (this covers cases where earlier code returned due to being in isHit; ensure this runs when a new hit lands)
+  try {
+    // If we just received this hit but previously were already in hit3 (rare path), force knock
+    if ((this.hitLevel || 0) >= 3 && typeof this.stamina === 'number' && this.stamina <= 0) {
+      // already handled above; redundant safety
+      if (window.PAUSED || window.HITSTOP_ACTIVE) {
+        this._forceKnocked = true;
+      } else {
+        try { this.setState('knocked'); } catch (e) {}
+      }
+      this.attacking = false; this.attackType = null; this._hitTargets = null;
+      this.vx = 0; this.vy = 0;
+      return;
+    }
+  } catch (e) { /* silent */ }
 }
 
 export function updateAttackState(self) {

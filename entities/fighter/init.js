@@ -49,7 +49,7 @@ export function initBase(self, x, col, id) {
   self.staminaMax = 8 * 4; // 32 quarters (doble)
   self.stamina = self.staminaMax;
   // regeneration config: 1 quarter por tick. Ahora tick reducido para doblar la velocidad de recarga.
-  self._staminaRegenTickMs = 75; // ms por cuarto (el doble de velocidad)
+  self._staminaRegenTickMs = 275; // ms por cuarto (el doble de velocidad)
   self._staminaLastRegen = millis();
   // timestamp del último consumo de stamina para pausar la regeneración unos ms
   self._staminaConsumedAt = 0;

@@ -65,9 +65,9 @@ class Fighter {
       crouch:  { anim: this.crouchFramesByLayer, frameDelay: 10 },
       crouchwalk: { anim: this.crouchWalkFramesByLayer, frameDelay: 10 },
       hit:     { anim: this.hitFramesByLayer, frameDelay: 10 },
-      hit1:    { anim: this.hit1FramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 500 },
-      hit2:    { anim: this.hit2FramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 700 },
-      hit3:    { anim: this.hit3FramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 1000 },
+      hit1:    { anim: this.hit1FramesByLayer || this.hitFramesByLayer, frameDelay: 6, duration: 200 },
+      hit2:    { anim: this.hit2FramesByLayer || this.hitFramesByLayer, frameDelay: 6, duration: 200 },
+      hit3:    { anim: this.hit3FramesByLayer || this.hitFramesByLayer, frameDelay: 6, duration: 200 },
       flyback: { anim: this.flybackFramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 800 },
       flyup:   { anim: this.flyupFramesByLayer || this.hitFramesByLayer, frameDelay: 10, duration: 800 },
       hadouken: { anim: this.shootFramesByLayer, frameDelay: 6, duration: 600 },
@@ -472,8 +472,14 @@ class Fighter {
     // APLICAR KNOCK/RECOVERY PRIORITARIO (mostrar visual y evitar ser sobreescrito)
     // Si existía un knock forzado mientras estábamos en pausa/hitstop, aplicarlo ahora
     if (this._forceKnocked && !window.PAUSED && !window.HITSTOP_ACTIVE) {
-      this.setState('knocked');
-      delete this._forceKnocked;
+      try {
+        console.log(`[Fighter.update] applying _forceKnocked -> setState('knocked') for ${this.id}`);
+        this.setState('knocked');
+      } catch (e) {
+        console.warn(`[Fighter.update] failed to apply forced knocked for ${this.id}`, e);
+      } finally {
+        delete this._forceKnocked;
+      }
     }
 
     if (this.state && (this.state.current === 'knocked' || this.state.current === 'recovery' || this.state.current === 'knocking')) {
@@ -801,7 +807,13 @@ class Fighter {
       return true;
     }
 
-    // NOT ENOUGH STAMINA -> aplicar knockdown inmediato
+    // NOT ENOUGH STAMINA ->
+    // Special case: attempting a dash with no stamina should simply fail (no knock)
+    if (actionName === 'dash') {
+      return false; // don't force knocked on dash attempts
+    }
+
+    // For other actions, when not enough stamina, force knockdown (existing behaviour)
     try {
       // set stamina to zero and force knocked state
       this.stamina = 0;
@@ -809,10 +821,24 @@ class Fighter {
       this.attacking = false;
       this.attackType = null;
       this._hitTargets = null;
-      // marcar pendiente de knocked en caso de que setState sea ignorado por pausa/hitstop
-      this._forceKnocked = true;
-      // marcar knocked: setState registrará timestamp (si es posible)
-      this.setState('knocked');
+      // intentar aplicar knocked inmediatamente (usa forceSetState si estamos en pausa/hitstop)
+      try {
+        // import dinámico para evitar romper orden de carga si no es soportado por el entorno
+        const Anim = require('./animation.js');
+        if (window.PAUSED || window.HITSTOP_ACTIVE) {
+          if (Anim && typeof Anim.forceSetState === 'function') {
+            Anim.forceSetState(this, 'knocked');
+          } else {
+            this._forceKnocked = true;
+          }
+        } else {
+          this.setState('knocked');
+        }
+      } catch (e) {
+        // fallback: marcar para aplicar después del freeze si no podemos forzar ahora
+        this._forceKnocked = true;
+        console.warn(`[Fighter.consumeStaminaFor] could not force setState knocked for ${this.id}`, e);
+      }
       // opcional: resetear velocidades para que el personaje quede estático momentáneamente
       this.vx = 0; this.vy = 0;
       // pausar regen y marcar consumo
@@ -820,7 +846,7 @@ class Fighter {
       this._staminaRegenAccum = 0;
       this._staminaRegenLastTime = millis();
     } catch (e) {
-      /* silent */
+      console.warn(`[Fighter.consumeStaminaFor] error forcing knocked for ${this.id} action=${actionName}`, e);
     }
     return false;
   }

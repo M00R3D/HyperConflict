@@ -422,6 +422,29 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
          drawPlayerBoots(p1, leftX, false);
          drawPlayerBoots(p2, rightStart, true);
 
-} // end drawHealthBars
-// export API
-export { drawInputQueues, drawHealthBars };
+  // EXHAUSTED label: mostrar cuando stamina <= 0 (por jugador), anclado debajo del grupo de botas
+  const exhaustedY = bootsY + rows * (bootH + 6) + 8;
+  const drawExhausted = (player, alignRight = false) => {
+    if (!player || typeof player.stamina !== 'number') return;
+    if (player.stamina <= 0) {
+      push();
+      textSize(12);
+      textAlign(CENTER, TOP);
+      noStroke();
+      fill(140, 24, 24, 220);
+      const boxW = 92;
+      const boxH = 20;
+      const centerX = alignRight ? Math.round(width - 12 - bootGroupWidth/2) : Math.round(12 + bootGroupWidth/2);
+      rectMode(CENTER);
+      rect(centerX, exhaustedY + boxH/2, boxW, boxH, 6);
+      fill(255);
+      text('EXHAUSTED', centerX, exhaustedY + 4);
+      pop();
+    }
+  };
+  drawExhausted(p1, false);
+  drawExhausted(p2, true);
+
+ } // end drawHealthBars
+ // export API
+ export { drawInputQueues, drawHealthBars };

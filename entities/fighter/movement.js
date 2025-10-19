@@ -101,6 +101,10 @@ export function updateMovement(self) {
 
   const acc = self.runActive ? self.runAcceleration : self.acceleration;
   const maxSpd = self.runActive ? self.runMaxSpeed : self.maxSpeed;
+  // Si no hay stamina, penalizar ligeramente movilidad (menos aceleración y velocidad máxima)
+  const staFactor = (typeof self.stamina === 'number' && self.stamina <= 0) ? 0.85 : 1.0;
+  const effectiveAcc = acc * staFactor;
+  const effectiveMaxSpd = maxSpd * staFactor;
   // base friction según si corre o no
   const baseFriction = self.runActive ? self.runFriction : self.friction;
 
@@ -128,8 +132,8 @@ export function updateMovement(self) {
       self.state.current === "kick3"
     );
     if (!isAttackingState) {
-      if (self.keys.left && self.state.current !== "fall" && self.state.current !== "jump") self.vx -= acc;
-      if (self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") self.vx += acc;
+      if (self.keys.left && self.state.current !== "fall" && self.state.current !== "jump") self.vx -= effectiveAcc;
+      if (self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") self.vx += effectiveAcc;
     }
     if (!self.keys.left && !self.keys.right && self.state.current !== "fall" && self.state.current !== "jump") {
       if (self.vx > 0) self.vx = Math.max(0, self.vx - effectiveFriction);
@@ -146,7 +150,7 @@ export function updateMovement(self) {
     }
   }
 
-  self.vx = constrain(self.vx, -maxSpd, maxSpd);
+  self.vx = constrain(self.vx, -effectiveMaxSpd, effectiveMaxSpd);
   self.x += self.vx;
   
   // allow larger horizontal speeds while launched / heavily launched (do not clamp the initial knockback)
