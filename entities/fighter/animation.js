@@ -21,6 +21,23 @@ export function setState(self, newState) {
   self.state.current = newState;
   self.state.timer = 0;
 
+  // REGISTER timestamps for knocked/recovery so transitions are time-driven
+  if (newState === 'knocked') {
+    self.knockedStartTime = millis();
+    // while knocked, ensure flags that could interfere are cleared
+    try { self.attacking = false; self.attackType = null; self._hitTargets = null; } catch (e) {}
+  } else {
+    // clear knockedStartTime when leaving knocked
+    if (prevState === 'knocked') delete self.knockedStartTime;
+  }
+  if (newState === 'recovery') {
+    self.recoveryStartTime = millis();
+    // make recovery non-attacking by default
+    try { self.attacking = false; self.attackType = null; } catch (e) {}
+  } else {
+    if (prevState === 'recovery') delete self.recoveryStartTime;
+  }
+
   // asignar frames por estado (asegúrate de que las propiedades existen en el fighter)
   switch (newState) {
     case 'walk':      self.currentFramesByLayer = self.walkFramesByLayer; break;
@@ -155,5 +172,26 @@ export function exitHitIfElapsed(self) {
     }
   } catch (e) {
     // no romper si hay error
+  }
+
+  // NEW: knocked -> recovery -> idle transitions basadas en duraciones configurables
+  try {
+    if (self.state && self.state.current === 'knocked') {
+      const start = self.knockedStartTime || 0;
+      const dur = (typeof self.knockedDurationMs === 'number') ? self.knockedDurationMs : 1200;
+      if (start > 0 && (millis() - start) >= dur) {
+        // pasar a recovery y dejar que setState registre recoveryStartTime
+        self.setState('recovery');
+      }
+    } else if (self.state && self.state.current === 'recovery') {
+      const start = self.recoveryStartTime || 0;
+      const dur = (typeof self.recoveryDurationMs === 'number') ? self.recoveryDurationMs : 800;
+      if (start > 0 && (millis() - start) >= dur) {
+        // volver a idle (o reevaluar según input cuando corresponda)
+        self.setState('idle');
+      }
+    }
+  } catch (e) {
+    // ignore transition errors
   }
 }

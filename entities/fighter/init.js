@@ -81,6 +81,10 @@ export function initBase(self, x, col, id) {
   // tiempo en ms que dura el block-stun en pie / agachado cuando se recibe un golpe bloqueado
   self.blockStunDuration = 1540;
   self.crouchBlockStunDuration = 1540;
+
+  // NEW: knocked / recovery durations (ms) - configurable por personaje al crear la instancia
+  self.knockedDurationMs = 1200;   // tiempo que dura "knocked" antes de pasar a "recovery"
+  self.recoveryDurationMs = 800;   // tiempo que dura "recovery" antes de volver a idle (o reevaluar)
 }
 
 export function initFrames(self, frames) {

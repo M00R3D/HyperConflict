@@ -776,19 +776,38 @@ class Fighter {
 
   // helper: attempt to consume stamina by name (cost uses staminaCosts map)
   consumeStaminaFor(actionName) {
-    if (typeof this.stamina !== 'number' || !this.staminaCosts) return false;
+    if (typeof this.stamina !== 'number' || !this.staminaCosts) return true;
     const cost = Math.max(0, (this.staminaCosts[actionName] || 0));
     if (cost <= 0) return true;
-    // si no hay suficiente stamina, devolver false (no consumir)
-    if (this.stamina < cost) return false;
-    this.stamina = Math.max(0, this.stamina - cost);
-    // registrar tiempo de consumo para pausar regen un rato y resetar acumulador
+
+    // If enough stamina, consume and mark last consumption time as before
+    if (this.stamina >= cost) {
+      this.stamina = Math.max(0, this.stamina - cost);
+      // registrar tiempo de consumo para pausar regen un rato y resetar acumulador
+      try { this._staminaConsumedAt = millis(); this._staminaRegenAccum = 0; this._staminaRegenLastTime = millis(); } catch (e) {}
+      return true;
+    }
+
+    // NOT ENOUGH STAMINA -> aplicar knockdown inmediato
     try {
+      // set stamina to zero and force knocked state
+      this.stamina = 0;
+      // limpiar flags de ataque/locks para evitar comportamiento extraño
+      this.attacking = false;
+      this.attackType = null;
+      this._hitTargets = null;
+      // marcar knocked: setState registrará timestamp
+      this.setState('knocked');
+      // opcional: resetear velocidades para que el personaje quede estático momentáneamente
+      this.vx = 0; this.vy = 0;
+      // pausar regen y marcar consumo
       this._staminaConsumedAt = millis();
       this._staminaRegenAccum = 0;
       this._staminaRegenLastTime = millis();
-    } catch (e) {}
-    return true;
+    } catch (e) {
+      /* silent */
+    }
+    return false;
   }
 
   dash(dir) {

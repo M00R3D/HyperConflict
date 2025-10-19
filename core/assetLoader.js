@@ -1,13 +1,9 @@
 // core/assetLoader.js
 import { loadPiskel } from './loader.js';
 
-async function loadOrNull(path) {
-  try {
-    return await loadPiskel(path);
-  } catch (err) {
-    console.warn('No se pudo cargar asset:', path, err);
-    return null;
-  }
+async function loadOrNull(path) {try {    return await loadPiskel(path);  } catch (err)
+  {console.warn('No se pudo cargar asset:', path, err);
+    return null;}
 }
 
 async function loadTyemanAssets() {
@@ -23,13 +19,9 @@ async function loadTyemanAssets() {
     kick2: await loadOrNull('src/tyeman/tyeman_kick_2.piskel'),
     kick3: await loadOrNull('src/tyeman/tyeman_kick_3.piskel'),
     kick: await loadOrNull('src/tyeman/tyeman_kick.piskel'),
-    // animación "tats" que se mostrará en el personaje (hitbox/anim)
     tats: await loadOrNull('src/tyeman/tyeman_tats.piskel'),
-    // frames específicos para el proyectil (sprite distinto)
     tatsProjFramesByLayer: await loadOrNull('src/tyeman/tyeman_tats_proj.piskel'),
-    // NEW: shory-like anim used during "bun" special
     shor: await loadOrNull('src/tyeman/tyeman_shor.piskel'),
-    // NEW: bun projectile frames + string frames
     bunProj: await loadOrNull('src/tyeman/tyeman_bun.piskel'),
     bunString: await loadOrNull('src/tyeman/tyeman_string.piskel'),
     crouch: await loadOrNull('src/tyeman/tyeman_crouch.piskel'),
@@ -67,9 +59,7 @@ async function loadSbluerAssets() {
     kick2: await loadOrNull('src/sbluer/sbluer_kick_2.piskel'),
     kick3: await loadOrNull('src/sbluer/sbluer_kick_3.piskel'),
     kick: await loadOrNull('src/sbluer/sbluer_kick.piskel'),
-    // animación "tats" para personaje (si existe)
     tats: await loadOrNull('src/sbluer/sbluer_tats.piskel'),
-    // sprite de proyectil tats para sbluer (puede ser null si no existe)
     tatsProjFramesByLayer: await loadOrNull('src/sbluer/sbluer_tats_proj.piskel'),
     crouch: await loadOrNull('src/sbluer/sbluer_crouch.piskel'),
     crouchWalk: await loadOrNull('src/sbluer/sbluer_crouch_walk.piskel'),
@@ -92,29 +82,16 @@ async function loadSbluerAssets() {
   recovery: await loadOrNull('src/sbluer/sbluer_recovery.piskel'),
   };
 }
- 
 export { loadTyemanAssets, loadSbluerAssets };
-
-// SLOT assets (selection screen)
-export async function loadSlotAssets() {
-  return {
+export async function loadSlotAssets() {return {
     empty: await loadOrNull('src/slots/slot_empty.piskel'),
     rounderP1: await loadOrNull('src/slots/slot_rounder_p1.piskel'),
     rounderP2: await loadOrNull('src/slots/slot_rounder_p2.piskel'),
-  };
-}
+  };}
 
-// HEARTS (HUD) asset loader
-export async function loadHeartFrames() {
-  return await loadOrNull('src/hearth/hearth_red.piskel');
-}
+export async function loadHeartFrames() {return await loadOrNull('src/hearth/hearth_red.piskel');}
+export async function loadBootFrames() {return await loadOrNull('src/hearth/boot_green.piskel');}
 
-// BOOTS (HUD) asset loader
-export async function loadBootFrames() {
-  return await loadOrNull('src/hearth/boot_green.piskel');
-}
-
-// Expose loader on window in case modules are loaded into global scope (fallback)
 if (typeof window !== 'undefined') {
   if (typeof window.loadTyemanAssets === 'undefined') window.loadTyemanAssets = loadTyemanAssets;
   if (typeof window.loadSbluerAssets === 'undefined') window.loadSbluerAssets = loadSbluerAssets;

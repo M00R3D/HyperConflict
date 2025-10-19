@@ -1,16 +1,7 @@
 // core/main.js
-import { Fighter } from '../../entities/fighter.js';
-import { Projectile } from '../../entities/projectile.js';
-import { updateCamera, applyCamera } from './camera.js';
-import { initInput, clearFrameFlags, keysPressed } from './input.js';
-import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';
-import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
-import { drawBackground } from '../ui/background.js';
-import { applyHitstop, isHitstopActive } from './hitstop.js';
-import { registerSpecialsForChar } from '../../entities/fighter/specials.js';
-import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
-
-// --- REGISTRO DE STATS Y ACCIONES ---
+import { Fighter } from '../../entities/fighter.js';import { Projectile } from '../../entities/projectile.js';
+import { updateCamera, applyCamera } from './camera.js';import { initInput, clearFrameFlags, keysPressed } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
+import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
 registerStatsForChar('tyeman', {
   maxSpeed: 3,
   runMaxSpeed: 6,
@@ -51,29 +42,17 @@ let player1, player2;
 let projectiles = [];
 let playersReady = false;
 let cam = { x: 0, y: 0, zoom: 1 };
-let PAUSED = false; // bandera de pausa (toggle con Enter)
-// variable para suavizar el zoom aplicado en pantalla (no modifica `cam` real)
+let PAUSED = false;
 let appliedCamZoom = cam.zoom || 1;
-// suavizado para HUD (0..1)
 let appliedHUDAlpha = 1;
-// exponer pausa globalmente para display.js
 window.PAUSED = window.PAUSED || false;
-
-// --- DAMAGE / SCREEN SHAKE state (nuevo) ---
 const MAX_HP_QUARTERS = 24;
 let _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
 let _prevHp = { p1: null, p2: null };
-
-// NEW: hitstop tracking to compensate timers when hitstop ends
 let _hsPrevActive = false;
 let _hsStartedAt = 0;
-
-// NEW: blockstun zoom state (smooth quick zoom, no screenshake)
 let _prevBlockstun = { p1: false, p2: false };
 let _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, playerId: null };
-
-// NEW: calcular frames de hitstop dinámicamente según vida restante.
-// Base 3 frames, y sumar 2 frames por cada cuarto de corazón que falte.
 function computeFramesPerHitFor(player) {
   const base = 3;
   const perQuarterBonus = 2;
@@ -82,117 +61,50 @@ function computeFramesPerHitFor(player) {
   const missing = Math.max(0, maxQ - hpNow);
   return base + (missing * perQuarterBonus);
 }
-
 function startDamageEffect(player, quartersRemoved) {
   if (!player) return;
   const now = millis();
-  // cuánto "resalta" según vida restante: más efecto cuanto MENOS vida tenga
-  const remaining = Math.max(0, Math.min(MAX_HP_QUARTERS, player.hp));
-  const lowFactor = 1 - (remaining / MAX_HP_QUARTERS); // 0..1
-  // duración y magnitud escaladas por cuartos quitados y por lowFactor
-  const duration = Math.min(500, 220 + 160 * Math.max(1, quartersRemoved));
-  const baseMag = Math.min(100, 6 * Math.max(1, quartersRemoved) * (1 + lowFactor * 3)); // px (antes)
-  const mag = baseMag * 0.065; // reducir screenshake 85% -> mantener 15% de la magnitud original
-  const zoomAdd = Math.min(0.3, 0.035 * Math.max(1, quartersRemoved) * (1 + lowFactor * 4)); // fractional zoom add
+  const remaining = Math.max(0, Math.min(MAX_HP_QUARTERS, player.hp));const lowFactor = 1 - (remaining / MAX_HP_QUARTERS);const duration = Math.min(500, 220 + 160 * Math.max(1, quartersRemoved));
+  const baseMag = Math.min(100, 6 * Math.max(1, quartersRemoved) * (1 + lowFactor * 3)); const mag = baseMag * 0.065;const zoomAdd = Math.min(0.3, 0.035 * Math.max(1, quartersRemoved) * (1 + lowFactor * 4));
   _hitEffect = { active: true, start: now, end: now + duration, duration, mag, zoom: zoomAdd, targetPlayerId: player.id };
 }
-
-// assets refs (llenadas en setup)
-let _tyemanAssets = null;
-let _sbluerAssets = null;
-let _heartFrames = null;
-let _slotAssets = null; // { empty, rounderP1, rounderP2 }
-let _bootFrames = null;
- 
-// character selection state
-let selectionActive = false;
-const choices = ['tyeman', 'sbluer'];
-let p1Choice = 0; // index in choices (final chosen char index)
-let p2Choice = 1;
-let p1Confirmed = false;
-let p2Confirmed = false;
-
-// GRID selection state (3x2 matrix)
-let p1SelIndex = 0; // 0..5 cursor pos for jugador1
-let p2SelIndex = 1; // 0..5 cursor pos for jugador2
-
+let _tyemanAssets = null;let _sbluerAssets = null;let _heartFrames = null;let _slotAssets = null;let _bootFrames = null;let selectionActive = false;
+const choices = ['tyeman', 'sbluer'];let p1Choice = 0;
+let p2Choice = 1;let p1Confirmed = false;let p2Confirmed = false;let p1SelIndex = 0;let p2SelIndex = 1;
 async function setup() {
-  createCanvas(800, 400);
-  // Force pixel-perfect rendering for pixel-art: disable smoothing and use 1:1 pixel density
-  // (important on high-DPI displays and when scaling sprites)
-  pixelDensity(1);
-  noSmooth();
+  createCanvas(800, 400);pixelDensity(1);noSmooth();
   if (typeof drawingContext !== 'undefined' && drawingContext) drawingContext.imageSmoothingEnabled = false;
-  // instalar listeners de input desde el inicio para que el menú detecte teclas
-  initInput(); // <-- ADICIÓN
-
-  // mostrar hit/attack hitboxes en pantalla para debug (desactivar cuando confirmes)
-  window.SHOW_DEBUG_OVERLAYS = true;
-
-  // bandera global para debug overlays (asegura valor por defecto)
-  window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
-  // cargar assets pero NO crear players todavía — primero pantalla de selección
-  _tyemanAssets = await loadTyemanAssets();
-  _sbluerAssets = await loadSbluerAssets();
-  // cargar assets de slots (pantalla de selección)
-  try {
-    _slotAssets = await loadSlotAssets();
-    // console.log('loadSlotAssets ->', _slotAssets);
-  } catch (e) {
-    _slotAssets = null;
-    console.warn('loadSlotAssets failed', e);
-  }
-  // cargar frames del corazón (HUD)
+  initInput();
+  window.SHOW_DEBUG_OVERLAYS = true;window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
+  _tyemanAssets = await loadTyemanAssets();_sbluerAssets = await loadSbluerAssets();
+  try {_slotAssets = await loadSlotAssets();} catch (e) {
+    _slotAssets = null;console.warn('loadSlotAssets failed', e);}
   try {
     _heartFrames = await loadHeartFrames();
-    // console.log('loadHeartFrames ->', Array.isArray(_heartFrames) ? `${_heartFrames.length} layers` : _heartFrames);
     if (Array.isArray(_heartFrames)) {
-      _heartFrames.forEach((layer, idx) => {
-        // console.log(`heart layer[${idx}] -> frames: ${Array.isArray(layer) ? layer.length : 'n/a'}`);
-      });
+      _heartFrames.forEach((layer, idx) => {});
     }
-  } catch (e) {
-    _heartFrames = null;
-    console.error('loadHeartFrames failed', e);
-  }
-  // cargar frames de botas (HUD)
+  } catch (e) {_heartFrames = null;console.error('loadHeartFrames failed', e);}
   try {
     _bootFrames = await loadBootFrames();
-    // console.log('loadBootFrames ->', Array.isArray(_bootFrames) ? `${_bootFrames.length} layers` : _bootFrames);
     if (Array.isArray(_bootFrames)) {
       _bootFrames.forEach((layer, idx) => {
-        // console.log(`boot layer[${idx}] -> frames: ${Array.isArray(layer) ? layer.length : 'n/a'}`);
       });
     }
   } catch (e) {
-    _bootFrames = null;
-    console.error('loadBootFrames failed', e);
+    _bootFrames = null;console.error('loadBootFrames failed', e);
   }
-  // iniciar pantalla de selección
   selectionActive = true;
   playersReady = false;
-  // asegurar confirm flags iniciales
   p1Confirmed = false;
   p2Confirmed = false;
   p1Choice = 0;
   p2Choice = 1;
 }
-
 function tryCreatePlayers() {
-  // sólo crear si ambos confirmaron
   if (!p1Confirmed || !p2Confirmed) return;
-
-  // evitar crear dos veces
   if (player1 || player2) return;
-
-  const tyeman = _tyemanAssets;
-  const sbluer = _sbluerAssets;
-
-  const p1Stats = getStatsForChar(choices[p1Choice]);
-  const p2Stats = getStatsForChar(choices[p2Choice]);
-  const p1Actions = getActionsForChar(choices[p1Choice]);
-  const p2Actions = getActionsForChar(choices[p2Choice]);
-
+  const tyeman = _tyemanAssets;const sbluer = _sbluerAssets;const p1Stats = getStatsForChar(choices[p1Choice]);const p2Stats = getStatsForChar(choices[p2Choice]);const p1Actions = getActionsForChar(choices[p1Choice]);const p2Actions = getActionsForChar(choices[p2Choice]);
   player1 = new Fighter({
     x: 100,
     col: color(255,100,100),
@@ -202,7 +114,6 @@ function tryCreatePlayers() {
     actions: p1Actions,
     ...p1Stats
   });
-
   player2 = new Fighter({
     x: 600,
     col: color(100,100,255),
@@ -212,13 +123,9 @@ function tryCreatePlayers() {
     actions: p2Actions,
     ...p2Stats
   });
-
-  // ASIGNAR OPONENTES MUTUAMENTE PARA AUTO-FACING
   player1.opponent = player2;
   player2.opponent = player1;
-
   registerSpecialsForChar('tyeman', {
-    // override o definiciones adicionales sólo para tyeman
     hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
     bun: { seq: ['→','↓','↘','P'], direction: 'forward' },
     ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
@@ -226,138 +133,59 @@ function tryCreatePlayers() {
     supersalto: { seq: ['↓','↑'], direction: 'any' },
     grab: { seq: ['G'], direction: 'any' }
   });
-
   registerSpecialsForChar('sbluer', {
-    // sbluer podría tener un special exclusivo (ejemplo)
     shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
     supersalto: { seq: ['↓','↑'], direction: 'any' },
     taunt: { seq: ['T'], direction: 'any' },
     grab: { seq: ['G'], direction: 'any' }
   });
-  
-  // asegurar facing inicial basado en la posición relativa (source of truth = Fighter.facing)
-  player1.facing = (player1.x < player2.x) ? 1 : -1;
-  player2.facing = (player2.x < player1.x) ? 1 : -1;
-
-  initInput({ p1: player1, p2: player2, ready: true });
-  playersReady = true;
-  selectionActive = false;
-
-// guardar snapshots iniciales para detectar cambios posteriores
-_prevHp.p1 = player1.hp;
-_prevHp.p2 = player2.hp;
+  player1.facing = (player1.x < player2.x) ? 1 : -1;player2.facing = (player2.x < player1.x) ? 1 : -1;
+  initInput({ p1: player1, p2: player2, ready: true });playersReady = true;
+  selectionActive = false;_prevHp.p1 = player1.hp;_prevHp.p2 = player2.hp;
 }
-
 function drawCharacterSelect() {
   background(12, 18, 28);
-  fill(255);
-  textAlign(CENTER, CENTER);
-  textSize(28);
-  text("Selecciona tu personaje", width/2, 48);
-
-  // Grid configuration (3x2)
-  const cols = 3;
-  const rows = 2;
-  const cellSize = 72;
-  const cellGap = 12;
-  const gridW = cols * cellSize + (cols - 1) * cellGap;
-  const gridH = rows * cellSize + (rows - 1) * cellGap;
-  const gridX = Math.round((width - gridW) / 2);
-  const gridY = Math.round((height - gridH) / 2);
-
-  // draw grid cells
+  fill(255);textAlign(CENTER, CENTER);textSize(28);
+  text("Selecciona tu personaje", width/2, 48);const cols = 3;const rows = 2;
+  const cellSize = 72;const cellGap = 12;const gridW = cols * cellSize + (cols - 1) * cellGap;
+  const gridH = rows * cellSize + (rows - 1) * cellGap;const gridX = Math.round((width - gridW) / 2);const gridY = Math.round((height - gridH) / 2);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
-      const ix = gridX + c * (cellSize + cellGap);
-      const iy = gridY + r * (cellSize + cellGap);
-
-      push();
-      // cell background: intentar dibujar imagen de slot (estirada al tamaño de la celda).
-      noStroke();
-      // Siempre usar slot_empty.piskel como fondo del slot (estirado al tamaño de la celda).
-      // Si no se cargó, caerá en el rectángulo redondeada legacy.
+      const ix = gridX + c * (cellSize + cellGap);const iy = gridY + r * (cellSize + cellGap);
+      push();noStroke();
       let slotImg = null;
       try {
         if (_slotAssets && _slotAssets.empty) {
           const res = _slotAssets.empty;
-          if (Array.isArray(res)) {
-            const layer = res.find(l => Array.isArray(l) && l.length > 0);
-            if (layer && layer.length > 0) slotImg = layer[0];
-          }
+          if (Array.isArray(res)) {const layer = res.find(l => Array.isArray(l) && l.length > 0);
+            if (layer && layer.length > 0) slotImg = layer[0];}
         }
       } catch (e) { slotImg = null; }
-
       if (slotImg && slotImg.width && slotImg.height) {
-        push();
-        imageMode(CORNER);
-        const dx = Math.round(ix);
-        const dy = Math.round(iy);
-        const dw = Math.round(cellSize);
-        const dh = Math.round(cellSize);
-        // estirar la imagen completa para cubrir la celda (src completa)
-        image(slotImg, dx, dy, dw, dh, 0, 0, slotImg.width, slotImg.height);
-        pop();
-      } else {
-        // fallback: rect redondeada si no hay imagen disponible
-        fill(18, 22, 30);
-        rect(ix, iy, cellSize, cellSize, 6);
-      }
-
-      // if this slot maps to a character (only first two slots)
+        push();imageMode(CORNER);
+        const dx = Math.round(ix);const dy = Math.round(iy);
+        const dw = Math.round(cellSize);const dh = Math.round(cellSize);
+        image(slotImg, dx, dy, dw, dh, 0, 0, slotImg.width, slotImg.height);pop();
+      } else {fill(18, 22, 30);rect(ix, iy, cellSize, cellSize, 6);}
       if (idx < choices.length) {
         const charId = choices[idx];
         const assets = (charId === 'tyeman') ? _tyemanAssets : _sbluerAssets;
-        // use only second layer (index 1) if present, otherwise fallback to layer 0
         const idleLayer = (assets?.idle && assets.idle[1]) ? assets.idle[1] : (assets?.idle && assets.idle[0]) ? assets.idle[0] : null;
-        const frameImg = (idleLayer && idleLayer.length) ? idleLayer[0] : null; // draw a single static frame
-
+        const frameImg = (idleLayer && idleLayer.length) ? idleLayer[0] : null; 
         if (frameImg) {
           imageMode(CENTER);
-          // --- calcular ancho de un solo frame (srcFrameW) y mantener aspect ratio con respecto a ese frame ---
-          const frameCount = (idleLayer && idleLayer.length) ? idleLayer.length : 1;
-          const srcFrameW = Math.max(1, Math.floor(frameImg.width / frameCount));
-          const srcFrameH = frameImg.height;
-          const maxW = cellSize - 12;
-          const maxH = cellSize - 12;
-          const ratio = Math.min(maxW / srcFrameW, maxH / srcFrameH, 1);
-          const dw = Math.round(srcFrameW * ratio);
-          const dh = Math.round(srcFrameH * ratio);
-
-          // dibujar sólo el primer frame (recortando source usando srcFrameW)
-          image(
-            frameImg,
-            ix + cellSize/2, iy + cellSize/2,
-            dw, dh,
-            0, 0,
-            srcFrameW, srcFrameH
-          );
-        } else {
-          // placeholder
-          fill(120);
-          noStroke();
-          ellipse(ix + cellSize/2, iy + cellSize/2, cellSize * 0.45);
-        }
-
-        // (Ningún nombre aquí — se dibuja debajo del taunt)
-      } else {
-        // empty slot placeholder
-        push();
-        noFill();
-        stroke(80);
-        strokeWeight(1);
-        rect(ix + 6, iy + 6, cellSize - 12, cellSize - 12, 4);
-        pop();
-      }
+          const frameCount = (idleLayer && idleLayer.length) ? idleLayer.length : 1;const srcFrameW = Math.max(1, Math.floor(frameImg.width / frameCount));
+          const srcFrameH = frameImg.height;const maxW = cellSize - 12;const maxH = cellSize - 12;
+          const ratio = Math.min(maxW / srcFrameW, maxH / srcFrameH, 1);const dw = Math.round(srcFrameW * ratio);const dh = Math.round(srcFrameH * ratio);
+          image(frameImg,ix + cellSize/2, iy + cellSize/2,dw, dh,0, 0,srcFrameW, srcFrameH);
+        } else {fill(120);noStroke();ellipse(ix + cellSize/2, iy + cellSize/2, cellSize * 0.45);}
+      } else {push();noFill();stroke(80);strokeWeight(1);rect(ix + 6, iy + 6, cellSize - 12, cellSize - 12, 4);pop();}
       pop();
     }
   }
 
-  // draw taunt sprite: one on left representing jugador1 selection, one on right for jugador2
   const baseTauntW = 56, baseTauntH = 56;
-  // player1 taunt: show taunt of whatever character p1 currently has selected (if in first two slots)
-  // si el jugador ya confirmó, usar su elección final (p1Choice/p2Choice),
-  // si no, usar el cursor (p1SelIndex/p2SelIndex)
   const p1SelectedIdx = p1Confirmed ? (p1Choice < choices.length ? p1Choice : null)
                                     : (p1SelIndex < choices.length ? p1SelIndex : null);
   if (p1SelectedIdx !== null) {
@@ -369,49 +197,19 @@ function drawCharacterSelect() {
       push();
       imageMode(CORNER);
       tint(255, 240);
-
-      // primer frame width
       const tCount = (tauntLayer && tauntLayer.length) ? tauntLayer.length : 1;
       const tSrcW = Math.max(1, Math.floor(tauntImg.width / tCount));
-      const tSrcH = tauntImg.height;
-
-      // mantener aspect ratio ajustando al "slot" baseTauntW/baseTauntH
-      const tRatio = Math.min(baseTauntW / tSrcW, baseTauntH / tSrcH, 1);
-      const tDrawW = Math.round(tSrcW * tRatio);
-      const tDrawH = Math.round(tSrcH * tRatio);
-
-      // calcular posición centrada dentro del area reservada a la izquierda
-      const leftSlotX = gridX - baseTauntW - 18;
-      const leftSlotY = gridY + Math.round((gridH - baseTauntH) / 2);
-
-      const tauntDestX = leftSlotX + Math.round((baseTauntW - tDrawW) / 2);
-      const tauntDestY = leftSlotY + Math.round((baseTauntH - tDrawH) / 2);
-
+      const tSrcH = tauntImg.height;const tRatio = Math.min(baseTauntW / tSrcW, baseTauntH / tSrcH, 1);
+      const tDrawW = Math.round(tSrcW * tRatio);const tDrawH = Math.round(tSrcH * tRatio);
+      const leftSlotX = gridX - baseTauntW - 18;const leftSlotY = gridY + Math.round((gridH - baseTauntH) / 2);
+      const tauntDestX = leftSlotX + Math.round((baseTauntW - tDrawW) / 2);const tauntDestY = leftSlotY + Math.round((baseTauntH - tDrawH) / 2);
       image(tauntImg, tauntDestX, tauntDestY, tDrawW, tDrawH, 0, 0, tSrcW, tSrcH);
-
-      // dibujar nombre debajo del taunt
-      noTint();
-      fill(220);
-      textSize(12);
-      textAlign(CENTER, TOP);
-      text(charId.toUpperCase(), tauntDestX + tDrawW/2, tauntDestY + tDrawH + 6);
-
-      pop();
-    } else {
-      // placeholder box + name
-      push();
-      noFill();
-      stroke(120);
-      rect(gridX - baseTauntW - 18, gridY + Math.round((gridH - baseTauntH) / 2), baseTauntW, baseTauntH, 6);
-      fill(220);
-      textSize(12);
-      textAlign(CENTER, TOP);
-      text(choices[p1SelectedIdx].toUpperCase(), gridX - baseTauntW - 18 + baseTauntW/2, gridY + Math.round((gridH - baseTauntH) / 2) + baseTauntH + 6);
-      pop();
+      noTint();fill(220);textSize(12);textAlign(CENTER, TOP);text(charId.toUpperCase(), tauntDestX + tDrawW/2, tauntDestY + tDrawH + 6);pop();
+    } else {push();noFill();stroke(120);
+      rect(gridX - baseTauntW - 18, gridY + Math.round((gridH - baseTauntH) / 2), baseTauntW, baseTauntH, 6);fill(220);textSize(12);textAlign(CENTER, TOP);
+      text(choices[p1SelectedIdx].toUpperCase(), gridX - baseTauntW - 18 + baseTauntW/2, gridY + Math.round((gridH - baseTauntH) / 2) + baseTauntH + 6);pop();
     }
   }
-
-  // player2 taunt (derecha)
   const p2SelectedIdx = p2Confirmed ? (p2Choice < choices.length ? p2Choice : null)
                                     : (p2SelIndex < choices.length ? p2SelIndex : null);
   if (p2SelectedIdx !== null) {
