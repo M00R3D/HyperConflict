@@ -462,13 +462,19 @@ class Fighter {
       return;
     }
 
-    // limpiar dashLight cuando su duración expire (evita overlays "fantasma")
-    if (this.dashLightStart && (millis() - this.dashLightStart >= (this.dashLightDuration || 0))) {
-      this.dashLightStart = 0;
-      this.dashLightDuration = 0;
-      delete this.dashLightAnchorX;
-      delete this.dashLightAnchorY;
-      delete this.dashLightFacing;
+    // APLICAR KNOCK/RECOVERY PRIORITARIO (mostrar visual y evitar ser sobreescrito)
+    // Si existía un knock forzado mientras estábamos en pausa/hitstop, aplicarlo ahora
+    if (this._forceKnocked && !window.PAUSED && !window.HITSTOP_ACTIVE) {
+      this.setState('knocked');
+      delete this._forceKnocked;
+    }
+
+    if (this.state && (this.state.current === 'knocked' || this.state.current === 'recovery' || this.state.current === 'knocking')) {
+      // Mantener la animación y dejar que exitHitIfElapsed haga las transiciones temporales
+      Anim.updateAnimation(this);
+      this.state.timer = (this.state.timer || 0) + 1;
+      Anim.exitHitIfElapsed(this);
+      return;
     }
 
     // prioridad de estados + anim
@@ -796,7 +802,9 @@ class Fighter {
       this.attacking = false;
       this.attackType = null;
       this._hitTargets = null;
-      // marcar knocked: setState registrará timestamp
+      // marcar pendiente de knocked en caso de que setState sea ignorado por pausa/hitstop
+      this._forceKnocked = true;
+      // marcar knocked: setState registrará timestamp (si es posible)
       this.setState('knocked');
       // opcional: resetear velocidades para que el personaje quede estático momentáneamente
       this.vx = 0; this.vy = 0;
