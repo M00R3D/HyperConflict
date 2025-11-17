@@ -820,7 +820,6 @@ function draw() {
   } else {
     // DURANTE HITSTOP: NO avanzar timers ni física — la sensación de "pause" es total.
     // (antes aquí se avanzaban timers mínimos; lo removimos para un freeze visual total)
-    // Si no estamos en hitstop pero sí en PAUSED, se dejó fuera arriba.
     // No-op
   }
 
@@ -930,9 +929,52 @@ function draw() {
 
   // --- NEW: if a frame-based hitstop was requested earlier, capture the just-rendered frame now ---
   try {
-    if (typeof capturePendingHitstopSnapshot === 'function') capturePendingHitstopSnapshot();
+    if (typeof capturePendingHitstopSnapshot === 'function') {
+      capturePendingHitstopSnapshot();
+    }
   } catch (e) {
     // ignore capture errors, continue
+  }
+
+  // Mostrar un pequeño indicador cuando el overlay de debug (tecla '1') está activo.
+  // El cuadradito se colorea en verde si hay hitstop activo, rojo en caso contrario.
+  if (typeof window !== 'undefined' && window.SHOW_DEBUG_OVERLAYS) {
+    try {
+      push();
+      const size = 12;
+      const pad =118;
+      const padX = 78;
+      const hsActive = (typeof isHitstopActive === 'function') ? !!isHitstopActive() : !!window.HITSTOP_ACTIVE;
+      // obtener ms restantes: preferir la función pública que calcula frames+tiempo,
+      // si no existe o devuelve 0 usar el fallback global expuesto por hitstop.js
+      let msLeft = 0;
+      if (typeof remainingHitstopMs === 'function') {
+        try { msLeft = Math.max(0, Math.round(remainingHitstopMs())); } catch (e) { msLeft = 0; }
+      }
+      if ((!msLeft || msLeft === 0) && typeof window !== 'undefined') {
+        msLeft = Math.max(0, Math.round(window.HITSTOP_REMAINING_MS || 0));
+      }
+
+      noStroke();
+      fill(hsActive ? color(80, 220, 120, 220) : color(220, 80, 80, 200));
+      rect(pad, padX, size, size, 3);
+
+      // pequeño borde
+      stroke(0, 0, 0, 120);
+      noFill();
+      rect(pad, padX, size, size, 3);
+
+      // escribir ms restantes a la derecha del cuadrado
+      noStroke();
+      fill(240);
+      textSize(12);
+      textAlign(LEFT, CENTER);
+      text(`${msLeft}ms`, pad + size + 8, padX + size / 2);
+
+      pop();
+    } catch (e) {
+      // no romper dibujado principal por errores del indicador
+    }
   }
 
   drawHealthBars(player1, player2, _heartFrames, _bootFrames);
