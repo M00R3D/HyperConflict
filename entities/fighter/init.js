@@ -7,11 +7,18 @@ export function initBase(self, x, col, id) {
   self.col = col;
   // now store health as quarters: 6 hearts * 4 = 24 quarters total
   self.hp = 24;
+  self.hpMax = 24; // <-- max HP stored
   self.id = id;
+
+  // store spawn/origin X to allow respawn
+  self.startX = x;
 
   // alive flag: false cuando HP llega a 0 (usa en lógica de input/estados)
   self.alive = true;
 
+  // LIVES: default 2 vidas por personaje (configurable por instancia)
+  self.livesMax = 2;
+  self.lives = (typeof self.lives === 'number') ? self.lives : self.livesMax;
   self.vx = 0;
   self.vy = 0;
   self.gravity = 0.3;

@@ -73,32 +73,125 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
   const quartersPerBoot = 4;
   const totalBootQuartersMax = bootsCount * quartersPerBoot; // 32
 
-   // pick first non-empty layer (some .piskel exports put frames in layer 1)
-   const layer = (Array.isArray(heartFrames) ? heartFrames.find(l => Array.isArray(l) && l.length > 0) : null);
-   if (!layer) {
+  // draw small life portraits (2 lives) above hearts
+  const drawLifePortraits = (player, xBase, alignRight = false) => {
+    if (!player) return;
+    const portraits = player.livesMax || 2;
+    const gap = 38;
+    const size = 36;
+    const slotY = 2;
+
+    // helper: obtain the image object that represents LAYER 2 FRAME 0 (only)
+    const getLayer2Frame0 = (layerContainer) => {
+      if (!layerContainer) return null;
+      // Case A: frames-by-layer array: layers -> frames[]
+      if (Array.isArray(layerContainer) && layerContainer.length > 2 && Array.isArray(layerContainer[2])) {
+        return layerContainer[1][0] || null;
+      }
+      // Case B: maybe the provided container is already the layer array (frames list)
+      if (Array.isArray(layerContainer) && layerContainer.length > 0) {
+        // if this appears to be a layer array where each item is an image/frame, return its first item
+        if (layerContainer[0] && layerContainer[0].width) return layerContainer[0];
+        // if it has >=3 entries, prefer the third as layer2[0]
+        if (layerContainer.length > 2 && layerContainer[2] && layerContainer[2].width) return layerContainer[2];
+      }
+      return null;
+    };
+
+    for (let i = 0; i < portraits; i++) {
+      // position (mirror for right side)
+      const slotX = alignRight ? (xBase - i * (size + 6)) : (xBase + i * (size + 6));
+      const active = (i < (player.lives || 0));
+
+      // choose the single-frame image for layer 2
+      let img = null;
+      if (active) {
+        img = getLayer2Frame0(player.idleFramesByLayer) || getLayer2Frame0(player.currentFramesByLayer) || null;
+      } else {
+        img = getLayer2Frame0(player.knockedFramesByLayer) || getLayer2Frame0(player.hitFramesByLayer) || null;
+      }
+
+      // hover effect (simple): scale up slightly and draw border if mouse over slot
+      let scaleFactor = 1.0;
+      let hovered = false;
+      try {
+        if (typeof mouseX === 'number' && typeof mouseY === 'number') {
+          hovered = (mouseX >= slotX && mouseX <= slotX + size && mouseY >= slotY && mouseY <= slotY + size);
+          if (hovered) scaleFactor = 1.08;
+        }
+      } catch (e) { hovered = false; }
+
+      if (img && img.width && img.height) {
+        push();
+        imageMode(CORNER);
+        // compute draw size and position with hover scale centered on slot
+        const drawW = Math.round(size * scaleFactor);
+        const drawH = Math.round(size * scaleFactor);
+        const drawX = Math.round(slotX - (drawW - size) / 2);
+        const drawY = Math.round(slotY - (drawH - size) / 2);
+
+        // If the source is a spritesheet packed horizontally, crop the FIRST frame only.
+        // Heuristic: if width >= height * 2 then assume horizontal frames.
+        const frameCount = Math.max(1, Math.round(img.width / img.height));
+        const srcW = Math.round(img.width / frameCount);
+        const srcX = 0; // first frame
+
+        if (!active) tint(160, 160); // slight desaturate for defeated portrait
+        // draw only the first subframe
+        try {
+          image(img, drawX, drawY, drawW, drawH, srcX, 0, srcW, img.height);
+        } catch (e) {
+          // fallback to drawing whole image if cropping fails
+          image(img, drawX, drawY, drawW, drawH);
+        }
+        noTint();
+
+        if (hovered) {
+          noFill();
+          strokeWeight(2);
+          stroke(255, 220, 120);
+          rect(slotX - 2, slotY - 2, size + 4, size + 4, 6);
+        }
+        pop();
+        continue;
+      }
+
+      // fallback: simple rectangle with color indicating active/defeated
+      push();
+      noStroke();
+      fill(active ? 200 : 80);
+      rect(slotX, slotY, size, size, 6);
+      pop();
+    }
+  };
+
+  // compute left/right base for portraits (above heart groups)
+  const leftPortraitX = 12;
+  const rightPortraitX = Math.round(width - 12 - (32)); // start for right-most icon
+  drawLifePortraits(p1, leftPortraitX, false);
+  drawLifePortraits(p2, rightPortraitX, true);
+
+  // pick first non-empty layer (some .piskel exports put frames in layer 1)
+  const layer = (Array.isArray(heartFrames) ? heartFrames.find(l => Array.isArray(l) && l.length > 0) : null);
+  if (!layer) {
     push();
     fill(255);
     textSize(14);
     textAlign(LEFT, TOP);
-    text(`HP P1: ${Math.max(0, p1?.hp ?? 0)}/${totalQuartersMax}`, 12, 8);
+    text(`HP P1: ${Math.max(0, p1?.hp ?? 0)}/${totalQuartersMax}`, 12, 8 + 44); // shift down because portraits occupy top area
     textAlign(RIGHT, TOP);
-    text(`HP P2: ${Math.max(0, p2?.hp ?? 0)}/${totalQuartersMax}`, width - 12, 8);
+    text(`HP P2: ${Math.max(0, p2?.hp ?? 0)}/${totalQuartersMax}`, width - 12, 8 + 44);
     pop();
     return;
   }
 
-  // sanity checks
-  const anyValidImg = layer.some(img => img && img.width && img.height);
-  if (!anyValidImg) {
-    console.warn('drawHealthBars: heart layer found but no valid images in frames — comprobar .piskel / loader output', layer);
-  }
-
-   // sizing and positions
-   const heartW = 32;
-   const heartH = 32;
-   const padding = 6;
-   const groupWidth = heartsCount * (heartW + padding) - padding;
-   const y = 8;
+  // adjust hearts drawing Y to be below portraits
+  const heartYOffset = 44;
+  const heartW = 32;
+  const heartH = 32;
+  const padding = 6;
+  const groupWidth = heartsCount * (heartW + padding) - padding;
+  const y = heartYOffset;
   // boots drawing area (below hearts) - display más pequeño y en grid 2x4
   const bootW = 18; // más pequeño
   const bootH = 18;

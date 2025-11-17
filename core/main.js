@@ -46,7 +46,20 @@ let cam = { x: 0, y: 0, zoom: 1 };
 let PAUSED = false;
 let appliedCamZoom = cam.zoom || 1;
 let appliedHUDAlpha = 1;
-window.PAUSED = window.PAUSED || false;
+let MATCH_OVER = false;            // <-- new: match state
+let MATCH_WINNER = null;          // <-- new: winner id when match ends
+window.MATCH_OVER = window.MATCH_OVER || false;
+window.MATCH_WINNER = window.MATCH_WINNER || null;
+
+// NEW: menu state for MATCH_OVER overlay (behaves like pause menu)
+const _matchMenu = {
+  items: ['Rematch', 'Character Select'],
+  idx: 0,
+  lastInputAt: 0,
+  debounceMs: 220, // cooldown to avoid immediate selection when overlay appears
+  active: false
+};
+window._matchMenu = window._matchMenu || _matchMenu;
 const MAX_HP_QUARTERS = 24;
 let _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
 let _prevHp = { p1: null, p2: null };
@@ -111,6 +124,28 @@ async function setup() {
   p1Choice = 0;
   p2Choice = 1;
 }
+function clearMatchOverState() {
+  MATCH_OVER = false;
+  MATCH_WINNER = null;
+  window.MATCH_OVER = false;
+  window.MATCH_WINNER = null;
+
+  if (_matchMenu) {
+    _matchMenu.active = false;
+    _matchMenu.idx = 0;
+    _matchMenu.lastInputAt = 0;
+  }
+
+  // clear per-player life-processing/handled flags so deaths can be detected again
+  [player1, player2].forEach(p => {
+    if (!p) return;
+    p._lifeProcessing = false;
+    p._lifeHandled = false;
+    // also ensure any blocking flags that might persist are cleared
+    if (p._lifeHandledAt) delete p._lifeHandledAt;
+  });
+}
+
 function tryCreatePlayers() {
   if (!p1Confirmed || !p2Confirmed) return;
   if (player1 || player2) return;
@@ -135,6 +170,10 @@ function tryCreatePlayers() {
   });
   player1.opponent = player2;
   player2.opponent = player1;
+
+  // Ensure any previous MATCH_OVER state is cleared when we actually enter combat
+  clearMatchOverState();
+
   registerSpecialsForChar('tyeman', {
     hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
     bun: { seq: ['→','↓','↘','P'], direction: 'forward' },
@@ -547,6 +586,66 @@ function compensatePauseTimers(dt) {
       /* ignore per-projectile compensation errors */
     }
   });
+}
+
+function _respawnPlayer(player) {
+  if (!player) return;
+  player.hp = player.hpMax || 24;
+  player.stamina = player.staminaMax ?? player.stamina;
+  player.alive = true;
+  player.attacking = false;
+  player.attackType = null;
+  player.isHit = false;
+  player._hitTargets = null;
+  player.vx = 0; player.vy = 0;
+  // move to spawn X (fallback to sensible positions)
+  player.x = (typeof player.startX === 'number') ? player.startX : (player.id === 'p1' ? 100 : 600);
+  player.y = height - 72;
+  try { player.setState('idle'); } catch (e) {}
+  // clear transient knock/launch flags
+  delete player._knockback; delete player._pendingKnockback; delete player._forceKnocked;
+  // ensure life-handled flag cleared so future hp hits are detected again
+  player._lifeHandled = false;
+}
+
+function handlePlayerLifeLost(player) {
+  if (!player) return;
+  // avoid double-processing
+  if (player._lifeProcessing) return;
+  player._lifeProcessing = true;
+
+  // decrement lives
+  player.lives = Math.max(0, (typeof player.lives === 'number' ? player.lives : player.livesMax) - 1);
+
+  // Visual: force the fighter to knocked so HUD/portrait and sprite reflect defeat
+  try { if (typeof forceSetState === 'function') forceSetState(player, 'knocked'); else player.setState('knocked'); } catch (e) {}
+
+  // If the player still has at least one life left -> respawn after a short timeout
+  if (player.lives > 0) {
+    const respawnDelay = 700; // ms, tweak as desired
+    setTimeout(() => {
+      try { _respawnPlayer(player); } catch (e) {}
+      try { if (player.opponent) _respawnPlayer(player.opponent); } catch (e) {}
+      player._lifeProcessing = false;
+    }, respawnDelay);
+    return;
+  }
+
+  // No lives left -> match over
+  MATCH_OVER = true;
+  MATCH_WINNER = (player.id === 'p1') ? 'p2' : 'p1';
+  window.MATCH_OVER = MATCH_OVER;
+  window.MATCH_WINNER = MATCH_WINNER;
+  console.log('[MATCH OVER] Winner:', MATCH_WINNER);
+
+  // initialize match menu (prevent immediate input leaks)
+  _matchMenu.idx = 0;
+  _matchMenu.lastInputAt = millis();
+  _matchMenu.active = true;
+  // clear any pending input flags so players don't instantly confirm
+  try { if (typeof keysPressed !== 'undefined') {
+    keysPressed['i'] = keysPressed['o'] = keysPressed['b'] = keysPressed['n'] = false;
+  } } catch (e) {}
 }
 
 function draw() {
@@ -1056,6 +1155,98 @@ function draw() {
     pop();
   }
 
+  // --- life -> portrait transitions: poll HP and trigger life-loss handling ----
+  try {
+    if (player1 && typeof player1.hp === 'number' && player1.hp <= 0 && !MATCH_OVER) {
+      if (!player1._lifeHandled) {
+        player1._lifeHandled = true;
+        handlePlayerLifeLost(player1);
+      }
+    } else if (player1 && typeof player1.hp === 'number' && player1.hp > 0) {
+      player1._lifeHandled = false;
+    }
+
+    if (player2 && typeof player2.hp === 'number' && player2.hp <= 0 && !MATCH_OVER) {
+      if (!player2._lifeHandled) {
+        player2._lifeHandled = true;
+        handlePlayerLifeLost(player2);
+      }
+    } else if (player2 && typeof player2.hp === 'number' && player2.hp > 0) {
+      player2._lifeHandled = false;
+    }
+  } catch (e) {
+    // defensive: don't break render on errors here
+    console.warn('[life detect] error', e);
+  }
+
+  // If match over, draw overlay and accept rematch/return input with menu navigation
+  if (MATCH_OVER) {
+    _drawMatchOverOverlay(_matchMenu);
+
+    // input handling with small debounce to avoid accidental immediate accept
+    const now = millis();
+    const canInput = (now - (_matchMenu.lastInputAt || 0)) >= (_matchMenu.debounceMs || 220);
+
+    // navigation: P1 uses W/S, P2 uses arrowUp/arrowDown
+    const up = !!( (canInput && typeof keysPressed !== 'undefined') && (keysPressed['w'] || keysPressed['arrowup']) );
+    const down = !!( (canInput && typeof keysPressed !== 'undefined') && (keysPressed['s'] || keysPressed['arrowdown']) );
+
+    if (up) {
+      _matchMenu.idx = Math.max(0, (_matchMenu.idx || 0) - 1);
+      _matchMenu.lastInputAt = now;
+      if (keysPressed['w']) keysPressed['w'] = false;
+      if (keysPressed['arrowup']) keysPressed['arrowup'] = false;
+    } else if (down) {
+      _matchMenu.idx = Math.min((_matchMenu.items.length - 1), (_matchMenu.idx || 0) + 1);
+      _matchMenu.lastInputAt = now;
+      if (keysPressed['s']) keysPressed['s'] = false;
+      if (keysPressed['arrowdown']) keysPressed['arrowdown'] = false;
+    }
+
+    // selection: P1 (i/o), P2 (b/n) or Enter
+    const selP1 = !!(canInput && typeof keysPressed !== 'undefined' && (keysPressed['i'] || keysPressed['o']));
+    const selP2 = !!(canInput && typeof keysPressed !== 'undefined' && (keysPressed['b'] || keysPressed['n']));
+    const selEnter = !!(canInput && typeof keysPressed !== 'undefined' && (keysPressed['enter'] || keysPressed[' ']));
+
+    if (selP1 || selP2 || selEnter) {
+      const choice = _matchMenu.items[_matchMenu.idx || 0] || 'Rematch';
+      _matchMenu.lastInputAt = now;
+      // consume select keys
+      if (keysPressed['i']) keysPressed['i'] = false;
+      if (keysPressed['o']) keysPressed['o'] = false;
+      if (keysPressed['b']) keysPressed['b'] = false;
+      if (keysPressed['n']) keysPressed['n'] = false;
+      if (keysPressed['enter']) keysPressed['enter'] = false;
+      if (keysPressed[' ']) keysPressed[' '] = false;
+
+      if (choice === 'Rematch') {
+        try {
+          if (player1) {
+            player1.lives = player1.livesMax || 2;
+            _respawnPlayer(player1);
+            player1._lifeProcessing = false;
+            player1._lifeHandled = false;
+          }
+          if (player2) {
+            player2.lives = player2.livesMax || 2;
+            _respawnPlayer(player2);
+            player2._lifeProcessing = false;
+            player2._lifeHandled = false;
+          }
+          projectiles.length = 0;
+          // central reset of match flags & menu
+          clearMatchOverState();
+        } catch (e) {}
+      } else {
+        // Character Select
+        try {
+          clearMatchOverState();
+          resetToSelection();
+        } catch (e) {}
+      }
+    }
+  }
+
   clearFrameFlags();
 }
 
@@ -1065,6 +1256,9 @@ function resetToSelection() {
   PAUSED = false;
   window.PAUSED = false;
   try { window.HITSTOP_ACTIVE = false; window.HITSTOP_PENDING = false; window.HITSTOP_REMAINING_MS = 0; } catch(e){}
+
+  // Ensure match-over menu cleared as we leave gameplay
+  clearMatchOverState();
 
   // clear players / projectiles / ready flag
   try { if (player1) { player1 = null; } } catch(e){}
@@ -1114,3 +1308,53 @@ function resetToSelection() {
 window.setup = setup;
 window.draw = draw;
 export { projectiles };
+function _drawMatchOverOverlay(menu = null) {
+  push();
+  noStroke();
+  fill(0, 200);
+  rect(0, 0, width, height);
+
+  const w = Math.min(520, width - 80);
+  const h = 220;
+  const x = (width - w) / 2;
+  const y = (height - h) / 2;
+  fill(28, 34, 42, 230);
+  stroke(255, 28);
+  rect(x, y, w, h, 8);
+
+  noStroke();
+  fill(255);
+  textAlign(CENTER, TOP);
+  textSize(28);
+  text('MATCH OVER', x + w / 2, y + 12);
+
+  textSize(18);
+  const winnerLabel = MATCH_WINNER === 'p1' ? (player1?.charId || 'P1') : (MATCH_WINNER === 'p2' ? (player2?.charId || 'P2') : '—');
+  text(`Winner: ${winnerLabel}`, x + w / 2, y + 56);
+
+  // draw menu options (like pause menu) and highlight selected
+  const items = (menu && Array.isArray(menu.items)) ? menu.items : ['Rematch','Character Select'];
+  const selIdx = menu ? (menu.idx || 0) : 0;
+  textSize(16);
+  const menuX = x + w / 2;
+  let menuY = y + 96;
+  for (let i = 0; i < items.length; i++) {
+    const ty = menuY + i * 36;
+    if (i === selIdx) {
+      fill(80,200,255);
+      rect(x + 36, ty - 8, w - 72, 30, 6);
+      fill(10);
+    } else {
+      fill(220);
+    }
+    textAlign(CENTER, CENTER);
+    text(items[i], menuX, ty + 6);
+  }
+
+  textSize(12);
+  fill(200);
+  textAlign(CENTER, TOP);
+  text('Navega con W/S (P1) o ↑/↓ (P2). Selecciona con I/O (P1) o B/N (P2).', x + w/2, y + h - 36);
+
+  pop();
+}
