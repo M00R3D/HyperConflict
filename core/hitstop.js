@@ -16,7 +16,7 @@ let _pendingRequest = false; // indica que hay una solicitud pendiente de freeze
 
 // --- NEW: controlar duración del hitstop con una sola variable (ms por "frame" de freeze) ---
 // Si HITSTOP_MS_PER_FRAME === 0 => hitstop queda desactivado (siempre 0ms)
-export let HITSTOP_MS_PER_FRAME = 0; // ajustar a 0 para desactivar totalmente el hitstop
+export let HITSTOP_MS_PER_FRAME = 1; // ajustar a 0 para desactivar totalmente el hitstop
 
 
 

@@ -189,6 +189,9 @@ export function exitHitIfElapsed(self) {
   if (self.isHit && millis() - self.hitStartTime >= self.hitDuration) {
     // marcar que ya no estamos en "isHit"
     self.isHit = false;
+    // limpiar banderas adicionales de visual hit2/hit3
+    if (self.isHit2) delete self.isHit2;
+    if (self.isHit3) delete self.isHit3;
 
     // condición para convertir la salida de hit en knockdown en lugar de idle:
     // - si el nivel de hit fue 3 o más

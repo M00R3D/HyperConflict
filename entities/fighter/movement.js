@@ -2,20 +2,45 @@
 import * as Hitbox from './hitbox.js';
 
 export function updateMovement(self) {
+  // Si existe knockback persistente, aplicarlo primero y protegerlo contra sobrescrituras
+  if (self._knockback) {
+    try {
+      // aplicar la velocidad del knockback (vx se gestiona por kb, vy por gravedad salvo el impulso inicial)
+      self.vx = typeof self._knockback.vx === 'number' ? self._knockback.vx : (self.vx || 0);
+      if (typeof self._knockback.vy === 'number' && !self.onGround) {
+        // aplicar vy sólo como impulso inicial; gravedad continuará después
+        self.vy = self._knockback.vy;
+      }
+
+      // decay horizontal para simular pérdida gradual (mantener feel de push)
+      self._knockback.vx *= (typeof self._knockback.decay === 'number' ? self._knockback.decay : 0.92);
+      self._knockback.frames = (typeof self._knockback.frames === 'number') ? (self._knockback.frames - 1) : Infinity;
+
+      // limpiar cuando ya casi no tiene velocidad o se acabaron frames
+      if (Math.abs(self._knockback.vx) < 0.06 || (typeof self._knockback.frames === 'number' && self._knockback.frames <= 0)) {
+        delete self._knockback;
+      }
+    } catch (e) {
+      // no romper movimiento por errores pequeños
+      delete self._knockback;
+    }
+  }
+
   // Si estás agarrado por otro, no ejecutar arreglo de movimiento (quedarte inmóvil)
   if (self._grabLock) {
-    self.vx = 0;
-    self.vy = 0;
+    // no sobrescribir knockback si existe
+    if (!self._knockback) { self.vx = 0; this.vy = 0; }
     return;
   }
 
   // Si estamos en block sobre el suelo, aplicar fricción fuerte / detener movimiento.
-  // Esto hace que el block se sienta como una postura estable y evita drift.
   if ((self.blocking || self.state?.current === 'block' || self.state?.current === 'crouchBlock') && self.onGround) {
-    // frenar vx de forma agresiva
-    const stopFactor = 0.6;
-    self.vx = lerp(self.vx || 0, 0, stopFactor);
-    if (Math.abs(self.vx) < 0.05) self.vx = 0;
+    // frenar vx de forma agresiva, pero respetar knockback si hay
+    if (!self._knockback) {
+      const stopFactor = 0.6;
+      self.vx = lerp(self.vx || 0, 0, stopFactor);
+      if (Math.abs(self.vx) < 0.05) self.vx = 0;
+    }
     self.runActive = false;
     // no devolvemos early: mantener otras lógicas como collision/grav etc.
   }
@@ -65,7 +90,10 @@ export function updateMovement(self) {
   }
 
   // --- FORZAR QUIETO EN TODOS LOS ATAQUES ---
-  if( self.state.current === "grab" || self.state.current === "grabbed"){self.vx=0;}
+  // mantener la restricción solo si NO hay knockback activo
+  if ((self.state.current === "grab" || self.state.current === "grabbed") && !self._knockback) {
+    self.vx = 0;
+  }
   if (
     self.state.current === "punch" ||
     self.state.current === "punch2" ||
@@ -74,8 +102,11 @@ export function updateMovement(self) {
     self.state.current === "kick2" ||
     self.state.current === "kick3"
   ) {
-    if(self.vx>0 && self.vy==0) self.vx -= 0.04;
-    else if(self.vx<0 && self.vy==0) self.vx += 0.04;
+    // si hay knockback dejamos que eius vx persista (no aplicar decrementos que cancelen el empuje)
+    if (!self._knockback) {
+      if(self.vx>0 && self.vy==0) self.vx -= 0.04;
+      else if(self.vx<0 && self.vy==0) self.vx += 0.04;
+    }
   }
 
   // --- CORTAR DASH SI ENTRA EN ATAQUE ---
@@ -144,10 +175,20 @@ export function updateMovement(self) {
     // if (self.keys.right) self.facing = 1;
   } else {
     // Si estás en hit: aplicar sólo fricción para que no quede drift infinito
-    if (!self.keys.left && !self.keys.right) {
-      if (self.vx > 0) self.vx = Math.max(0, self.vx - effectiveFriction);
-      if (self.vx < 0) self.vx = Math.min(0, self.vx + effectiveFriction);
-    }
+    
+      // Si estás en hit: si hay knockback, reducir fricción mucho menos para permitir desplazamiento
+      if (!self._knockback) {
+        if (!self.keys.left && !self.keys.right) {
+          if (self.vx > 0) self.vx = Math.max(0, self.vx - effectiveFriction);
+          if (self.vx < 0) self.vx = Math.min(0, self.vx + effectiveFriction);
+        }
+      } else {
+        // durante knockback dejar que la velocidad persista (aplicar una fricción muy baja)
+        const kbFric = (effectiveFriction * 0.03);
+        if (self.vx > 0) self.vx = Math.max(0, self.vx - kbFric);
+        if (self.vx < 0) self.vx = Math.min(0, self.vx + kbFric);
+      }
+    
   }
 
   self.vx = constrain(self.vx, -effectiveMaxSpd, effectiveMaxSpd);

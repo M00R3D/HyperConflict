@@ -11,7 +11,20 @@ export function display(self) {
     if (self._stateTextFrozen != null) self._stateTextFrozen = null;
   }
 
-  const framesByLayer = self.currentFramesByLayer || self.idleFramesByLayer;
+  // Si el fighter está marcado como "isHit", elegir hit1/hit2/hit3 según hitLevel (más robusto que flags independientes)
+  let framesByLayer;
+  if (self.isHit) {
+    const hl = Math.max(1, Math.min(3, Number(self.hitLevel || 1)));
+    if (hl >= 3) {
+      framesByLayer = self.hit3FramesByLayer || self.hitFramesByLayer || self.currentFramesByLayer || self.idleFramesByLayer;
+    } else if (hl === 2) {
+      framesByLayer = self.hit2FramesByLayer || self.hitFramesByLayer || self.currentFramesByLayer || self.idleFramesByLayer;
+    } else {
+      framesByLayer = self.hit1FramesByLayer || self.hitFramesByLayer || self.currentFramesByLayer || self.idleFramesByLayer;
+    }
+  } else {
+    framesByLayer = self.currentFramesByLayer || self.idleFramesByLayer;
+  }
   // ensure per-fighter alpha state for dashLight visuals
   self._dashLightAlpha = (typeof self._dashLightAlpha === 'number') ? self._dashLightAlpha : 1.0;
 

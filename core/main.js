@@ -556,10 +556,21 @@ function draw() {
   // SHORT-CIRCUIT: Si hay hitstop frame-freeze activo, dibujar la captura y terminar el frame
   try {
     if (typeof drawFrozenHitstop === 'function' && drawFrozenHitstop()) {
-      // important: do NOT advance any game logic, timers or animation while frame-freeze is drawing.
-      // Just clear one-frame flags and return early so HUD/characters/camera remain visually frozen.
+      // avanzar lógica mínima DURANTE hitstop para que el knockback mueva al golpeado
+      try {
+        if (player1 && typeof player1.updateDuringHitstop === 'function') player1.updateDuringHitstop();
+        if (player2 && typeof player2.updateDuringHitstop === 'function') player2.updateDuringHitstop();
+
+        // actualizar proyectiles mínimo (si quieres que sigan moviéndose durante hitstop)
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+          const p = projectiles[i];
+          if (p && typeof p.update === 'function') p.update();
+        }
+      } catch (e) {
+        // no romper el frame por errores en la lógica de hitstop
+        console.warn('[hitstop] updateDuringHitstop error', e);
+      }
       clearFrameFlags();
-      // Ensure global paused-like flag is set (hitstop module already sets it) and return.
       return;
     }
   } catch (e) {

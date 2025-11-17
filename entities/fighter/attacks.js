@@ -1,5 +1,6 @@
 // entities/fighter/attacks.js
 import * as Anim from './animation.js';
+import { getKnockbackForAttack } from '../../core/knockback.js';
 export function attack(self, key) {
   const now = millis();
   const chain = self.comboChainsByKey[key];
@@ -144,8 +145,14 @@ export function hit(self, attacker = null) {
   // seguridad: nada que procesar
   if (!attacker) return;
   try { console.log(`[Attacks.hit] ${self.id || '?'} hit by ${attacker.id || '?'} attack=${attacker.attackType}`); } catch(e){}
+
+  // (Se eliminó el bloqueo que forzaba un knockback por defecto aquí)
+  // La aplicación del knockback se realiza más abajo usando la tabla por-ataque (getKnockbackForAttack).
+
   // TRACE: nivel de hit previo (si existe) — nos interesa detectar recibir golpe adicional sobre hit3
   const prevHitLevel = (typeof self.hitLevel === 'number') ? self.hitLevel : 0;
+  // mark previous in-air hit for multiplier decisions
+  const wasInAirAndHit = (!self.onGround && prevHitLevel > 0);
 
   // guardar hp antes de delegados externos por si acaso (otros módulos podrían modificar hp)
   const hpBefore = (typeof self.hp === 'number') ? self.hp : null;
@@ -284,6 +291,72 @@ export function hit(self, attacker = null) {
     const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3');
     this.setState(s);
   } catch (e) {}
+
+  // --- FORZAR KNOCKBACK UNIFORME: todos los golpes empujan hacia la dirección CONTRARIA
+  try {
+    // resolver charId robustamente (soporta proyectiles con ownerRef/ownerId)
+    let charId = attacker && (attacker.charId || attacker.char || attacker._charId || attacker.charName) || null;
+    if (!charId && attacker && attacker.ownerRef && attacker.ownerRef.charId) charId = attacker.ownerRef.charId;
+    if (!charId && attacker && attacker.owner && attacker.owner.charId) charId = attacker.owner.charId;
+    if (!charId && attacker && attacker.ownerId && typeof window !== 'undefined') {
+      if (window.player1 && window.player1.id === attacker.ownerId) charId = window.player1.charId;
+      else if (window.player2 && window.player2.id === attacker.ownerId) charId = window.player2.charId;
+    }
+    if (!charId) charId = (attacker && attacker.ownerRef && attacker.ownerRef.charId) ? attacker.ownerRef.charId : 'default';
+
+    const attackName = String((attacker && attacker.attackType) || 'default').toLowerCase();
+
+    // obtener configuración por personaje/ataque
+    const cfg = getKnockbackForAttack(charId, attackName) || { h: 5, v: 5 };
+
+    // determinar dirección "away" (1 => a la derecha, -1 => a la izquierda)
+    const away = Math.sign((self.x || 0) - (attacker.x || 0)) || ((attacker.facing || 1) * -1) || 1;
+
+    // si el defensor ya estaba EN EL AIRE y YA estaba en hit (re-hit en aire), duplicar la fuerza.
+    // Si es el primer impacto en aire no multiplicamos aquí (evita exagerar fuerza del primer aire-hit).
+    const airMult = (wasInAirAndHit) ? 2 : 1;
+
+    const finalH = Math.round((cfg.h || 0) * airMult);
+    const finalV = Math.round((cfg.v || 0) * airMult);
+
+    // crear knockback persistente (se consumirá en update/updateDuranteHitstop)
+    const kb = {
+      vx: finalH * away,   // horizontal signed velocity
+      vy: -finalV,         // negative = up
+      decay: 1,
+      frames: 101,
+      sourceId: attacker?.id || null
+    };
+
+    this._knockback = Object.assign({}, kb);
+    this._pendingKnockback = { magX: Math.abs(kb.vx), y: kb.vy, away, applied: false, _markLaunched: { start: millis(), duration: 600 } };
+
+    // Exponer flags adicionales para UI/display:
+    // true2 = mostrar hit2 sprite, true3 = mostrar hit3 sprite (permanece mientras isHit === true)
+    this.isHit2 = (this.hitLevel >= 2);
+    this.isHit3 = (this.hitLevel >= 3);
+
+    // asegurar que quede marcado como hit y mostrar la animación adecuada
+    this.isHit = true;
+    this.hitStartTime = millis();
+    // preserve already computed hitLevel/hitDuration if present; otherwise set default 1
+    this.hitLevel = this.hitLevel || 1;
+    this.hitDuration = this.hitDuration || (this.actions?.hit1?.duration || 260);
+    try {
+      const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3');
+      Anim.forceSetState(this, s);
+    } catch (e) {}
+
+    // marcar launched para ajustar física
+    this._launched = true;
+    this._launchedStart = millis();
+    this._launchedDuration = Math.max(this._launchedDuration || 0, 600);
+
+    // no forzar borrar pending; se consumirá en update/updateDuranteHitstop
+    console.log('[KB APPLY CONFIG]', { target: this.id, from: attacker?.id, charId, attackName, cfg, finalH, finalV, away });
+  } catch (e) {
+    console.warn('[KB FORCE] failed to set persistent knockback', e);
+  }
 
   // Si HP llega a 0 forzar knockdown y limpiar estados que podrían bloquear transiciones
   if (this.hp <= 0) {

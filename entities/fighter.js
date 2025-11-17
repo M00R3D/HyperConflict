@@ -271,6 +271,62 @@ class Fighter {
       this.setState(s);
     } catch (e) {}
 
+    // --- NUEVO: asegurar aplicación inmediata y determinista del knockback usando la tabla por-ataque ---
+    try {
+      // resolver charId/attackName de forma robusta (soporta proyectiles con ownerRef/ownerId)
+      const attackName = String((attacker && attacker.attackType) || 'default').toLowerCase();
+      let charId = attacker && (attacker.charId || attacker.char || attacker._charId || attacker.charName) || null;
+      if (!charId && attacker && attacker.ownerRef && attacker.ownerRef.charId) charId = attacker.ownerRef.charId;
+      if (!charId && attacker && attacker.owner && attacker.owner.charId) charId = attacker.owner.charId;
+      if (!charId && attacker && attacker.ownerId && typeof window !== 'undefined') {
+        if (window.player1 && window.player1.id === attacker.ownerId) charId = window.player1.charId;
+        else if (window.player2 && window.player2.id === attacker.ownerId) charId = window.player2.charId;
+      }
+      if (!charId) charId = 'default';
+
+      // obtener cfg desde el módulo de knockback (se expone en window para evitar ciclos)
+      const cfg = (typeof window !== 'undefined' && typeof window.getKnockbackForAttack === 'function')
+        ? window.getKnockbackForAttack(charId, attackName)
+        : ({ h: 5, v: 1 });
+
+      // dirección "away" (signed)
+      const away = Math.sign((this.x || 0) - (attacker.x || 0)) || ((attacker && attacker.facing ? attacker.facing : 1) * -1) || 1;
+
+      // si ya hay knockback activo y estamos en el aire -> duplicar la magnitud (re-hit)
+      if (this._knockback && !this.onGround) {
+        // multiplicar magnitud existente
+        try {
+          this._knockback.vx = (this._knockback.vx || 0) * 2;
+          this._knockback.vy = (this._knockback.vy || 0) * 2;
+        } catch (e) { /* silent */ }
+        console.log('[KB FORCE APPLY] doubled existing knockback (re-hit in air)', { target: this.id, from: attacker?.id, now: this._knockback });
+      } else {
+        // crear/rewire knockback persistente según la tabla
+        const finalH = Math.round(Math.abs(cfg.h || 0));
+        const finalV = Math.round(Math.abs(cfg.v || 0));
+        const kb = {
+          vx: finalH * away,
+          vy: -(finalV), // vy negative = up
+          decay: 1,
+          frames: 1,
+          sourceId: attacker?.id || null
+        };
+        this._knockback = Object.assign({}, kb);
+        // pending para hitstop consumption
+        this._pendingKnockback = { magX: Math.abs(kb.vx), y: kb.vy, away, applied: false, _markLaunched: { start: millis(), duration: 600 } };
+
+        // marcar launched/onGround false para asegurar física
+        this._launched = true;
+        this._launchedStart = millis();
+        this._launchedDuration = Math.max(this._launchedDuration || 0, 600);
+        this.onGround = false;
+
+        console.log('[KB FORCE APPLY] applied per-attack knockback', { target: this.id, from: attacker?.id, charId, attackName, cfg, kb });
+      }
+    } catch (e) {
+      console.warn('[KB FORCE APPLY] failed', e);
+    }
+
     // Si HP llega a 0 forzar knockdown y limpiar estados que podrían bloquear transiciones
     if (this.hp <= 0) {
       this.hp = 0;
@@ -417,6 +473,22 @@ class Fighter {
    handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
    
    update() {
+    // antes de todo, consumir pending knockback si existe y no estamos en hitstop/pause
+    if (!window.PAUSED && !window.HITSTOP_ACTIVE && this._pendingKnockback && !this._pendingKnockback.applied) {
+      try {
+        const pk = this._pendingKnockback;
+        this.vx = (pk.magX || 0) * (pk.away || 1);
+        this.vy = (typeof pk.y === 'number') ? pk.y : 0;
+        this._pendingKnockback.applied = true;
+        if (pk._markLaunched) {
+          this._launched = true;
+          this._launchedStart = pk._markLaunched.start || millis();
+          this._launchedDuration = pk._markLaunched.duration || 600;
+        }
+        console.log('[KB APPLIED DURING UPDATE]', { target: this.id, vx: this.vx, vy: this.vy });
+      } catch (e) { console.warn('[KB APPLY] during update failed', e); }
+    }
+
     // Si estamos siendo agarrados, congelar en 'grabbed' y no procesar lógica normal
     if (this._grabLock) {
       this.vx = 0; this.vy = 0;
@@ -736,30 +808,23 @@ class Fighter {
 
   // llamada ligera durante hitstop: avanza timers de ataque/hit sin ejecutar movimiento completo
   updateDuringHitstop() {
-    // avanzar estado de ataque para que startup/active/recovery cierren
-    if (typeof Attacks !== 'undefined' && Attacks.updateAttackState) {
-      Attacks.updateAttackState(this);
-    }
-
-    // permitir salir de hit si elapsed (asegura que Anim exista y tenga exitHitIfElapsed)
-    if (typeof Anim !== 'undefined' && Anim.exitHitIfElapsed) {
-      Anim.exitHitIfElapsed(this);
-    }
-
-    // Forzar salida de isHit si por alguna razón no se limpió (protección)
-    if (this.isHit && (millis() - (this.hitStartTime || 0) >= (this.hitDuration || 0))) {
-      this.isHit = false;
-      // limpiar marca de launched si existía (terminó el launch)
-      if (this._launched) { delete this._launched; delete this._launchedStart; delete this._launchedDuration; }
-      // restablecer estado base según direcciones sostenidas
-      const stillDir = this.keys && (this.keys.left || this.keys.right);
-      this.runActive = !!stillDir;
-      if (this.runActive && stillDir) this.setState('run');
-      else this.setState('idle');
-    }
-    // Durante hitstop ligero (updateDuringHitstop) o hit normal, limpiar suppression si expiró el launched safety window
-    if (this._suppressHitState && this._launchedStart && (millis() - this._launchedStart > (this._launchedDuration || 1600) + 120)) {
-      delete this._suppressHitState;
+    // aplicar pending knockback (si existe) para que el golpeado se mueva durante hitstop
+    if (this._pendingKnockback && !this._pendingKnockback.applied) {
+      try {
+        const pk = this._pendingKnockback;
+        // aplicar away: magX * away (away = sign away from attacker)
+        this.vx = (pk.magX || 0) * (pk.away || 1);
+        this.vy = (typeof pk.y === 'number') ? pk.y : 0;
+        // marcar aplicado y transferir launched mark
+        this._pendingKnockback.applied = true;
+        if (pk._markLaunched) {
+          this._launched = true;
+          this._launchedStart = pk._markLaunched.start || millis();
+          this._launchedDuration = pk._markLaunched.duration || 600;
+        }
+        console.log('[KB APPLIED DURING HITSTOP]', { target: this.id, vx: this.vx, vy: this.vy });
+        // no borrar inmediatamente: keep applied=true to signal consumed
+      } catch (e) { console.warn('[KB APPLY] during hitstop failed', e); }
     }
 
     // aplicar física mínima para que el golpeado reciba knockback y no quede inmóvil.
@@ -770,9 +835,8 @@ class Fighter {
     // aplicar fricción ligera horizontal (para evitar drift infinito)
     // reducir fricción horizontal si es hit3 (menos desaceleración)
     let minFriction = 0.04;
-    if (this.hitLevel === 3) minFriction *= 0.12; // menos fricción para hit3
-    // si fue lanzado explícitamente, reducir aun más la fricción para mantener velocidad alta
-    if (this._launched) minFriction *= 0.06;
+    if (this.hitLevel === 3) minFriction = minFriction * 0.25;
+    if (this._launched) minFriction = minFriction * 0.5;
 
     if (this.vx > 0.01) this.vx = Math.max(0, this.vx - minFriction);
     if (this.vx < -0.01) this.vx = Math.min(0, this.vx + minFriction);
@@ -781,14 +845,23 @@ class Fighter {
     this.vy += (this.gravity || 0.3);
     this.y += this.vy;
 
-    if (this.y >= height - 72) { this.y = height - 72; this.vy = 0; this.onGround = true; }
-    else this.onGround = false;
+    if (this.y >= height - 72) {
+      this.y = height - 72;
+      this.vy = 0;
+      this.onGround = true;
+      // limpiar pendingKnockback después de tocar suelo si fue aplicado
+      if (this._pendingKnockback && this._pendingKnockback.applied) {
+        delete this._pendingKnockback;
+        console.log('[KB CLEARED ON LAND]', { target: this.id });
+      }
+    } else {
+      this.onGround = false;
+    }
 
     this.x = constrain(this.x, 0, width - this.w);
 
     // avanzar contadores de estado/animación para evitar bloqueos visuales
-    if (this.state) this.state.timer = (this.state.timer || 0) + 1;
-    this.frameTimer = (this.frameTimer || 0) + 1;
+    if (this.state) this.frameTimer = (this.frameTimer || 0) + 1;
   }
 
   display() { Display.display(this); }
