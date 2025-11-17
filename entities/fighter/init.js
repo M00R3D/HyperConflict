@@ -82,9 +82,23 @@ export function initBase(self, x, col, id) {
   self.crouchBlockStunDuration = 1540;
 
   // NEW: knocked / recovery durations (ms) - configurable por personaje al crear la instancia
-  // defaults aumentados: knocked más largo, recovery algo más lento
-  self.knockedDurationMs = 2200;   // ms que dura "knocked" antes de pasar a "recovery"
-  self.recoveryDurationMs = 1200;  // ms que dura "recovery" antes de volver a idle (o reevaluar)
+  // defaults reducidos para duraciones más cortas; puedes ajustar globalmente desde la consola:
+  //   window.setKnockedDurationMs(900)
+  const defaultKnocked = (typeof window !== 'undefined' && typeof window.KNOCKED_DURATION_MS === 'number')
+    ? Math.max(0, Math.round(window.KNOCKED_DURATION_MS))
+    : 200;   // valor por defecto más corto
+  const defaultRecovery = (typeof window !== 'undefined' && typeof window.RECOVERY_DURATION_MS === 'number')
+    ? Math.max(0, Math.round(window.RECOVERY_DURATION_MS))
+    : 600;
+
+  self.knockedDurationMs = defaultKnocked;   // ms que dura "knocked" antes de pasar a "recovery"
+  self.recoveryDurationMs = defaultRecovery;  // ms que dura "recovery" antes de volver a idle (o reevaluar)
+
+  // helper global para ajustar en caliente desde consola (opcional)
+  if (typeof window !== 'undefined' && typeof window.setKnockedDurationMs === 'undefined') {
+    window.setKnockedDurationMs = (ms) => { window.KNOCKED_DURATION_MS = Math.max(0, Number(ms) || 0); return window.KNOCKED_DURATION_MS; };
+    window.setRecoveryDurationMs = (ms) => { window.RECOVERY_DURATION_MS = Math.max(0, Number(ms) || 0); return window.RECOVERY_DURATION_MS; };
+  }
 }
 
 export function initFrames(self, frames) {
@@ -140,6 +154,11 @@ export function initComboAndInput(self) {
   self.pendingSimpleTime = 0;
   self.pendingSimpleTimeout = 500;
   self.oppositeDiagInsertWindow = 200;
+
+  // Ensure input buffer exists and defaults to sane values to avoid crashes
+  self.inputBuffer = self.inputBuffer || [];
+  self.inputBufferDuration = (typeof self.inputBufferDuration === 'number') ? self.inputBufferDuration : 1400;
+  self.inputBufferMax = (typeof self.inputBufferMax === 'number') ? self.inputBufferMax : 20;
 
   self.comboChainsByKey = {
     i: ['punch', 'punch2', 'punch3'],

@@ -1,7 +1,8 @@
 // core/main.js
 import { Fighter } from '../../entities/fighter.js';import { Projectile } from '../../entities/projectile.js';
-import { updateCamera, applyCamera } from './camera.js';import { initInput, clearFrameFlags, keysPressed } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
+import { updateCamera, applyCamera } from './camera.js';import { initInput, keysPressed, clearFrameFlags, setPlayersReady } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
 import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
+import { initPauseMenu, handlePauseInput, drawPauseMenu, openPauseFor, closePause } from './pauseMenu.js';
 registerStatsForChar('tyeman', {
   maxSpeed: 3,
   runMaxSpeed: 6,
@@ -75,6 +76,15 @@ async function setup() {
   createCanvas(800, 400);pixelDensity(1);noSmooth();
   if (typeof drawingContext !== 'undefined' && drawingContext) drawingContext.imageSmoothingEnabled = false;
   initInput();
+  // init pause menu with callbacks
+  initPauseMenu({
+    onResume: () => { PAUSED = false; window.PAUSED = false; },
+    onReturnToCharSelect: () => {
+      // use the centralized reset helper to fully restart selection state
+      resetToSelection();
+    }
+  });
+
   window.SHOW_DEBUG_OVERLAYS = true;window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
   _tyemanAssets = await loadTyemanAssets();_sbluerAssets = await loadSbluerAssets();
   try {_slotAssets = await loadSlotAssets();} catch (e) {
@@ -139,9 +149,20 @@ function tryCreatePlayers() {
     taunt: { seq: ['T'], direction: 'any' },
     grab: { seq: ['G'], direction: 'any' }
   });
-  player1.facing = (player1.x < player2.x) ? 1 : -1;player2.facing = (player2.x < player1.x) ? 1 : -1;
-  initInput({ p1: player1, p2: player2, ready: true });playersReady = true;
-  selectionActive = false;_prevHp.p1 = player1.hp;_prevHp.p2 = player2.hp;
+  player1.facing = (player1.x < player2.x) ? 1 : -1;
+  player2.facing = (player2.x < player1.x) ? 1 : -1;
+
+  // ensure animations/frames are initialized and not blocked by PAUSED
+  try {
+    // force globals for a clean start
+    PAUSED = false; window.PAUSED = false;
+    // reset animation state explicitly so sprites render their frames immediately
+    player1.setState('idle'); player1.frameIndex = 0; player1.frameTimer = 0;
+    player2.setState('idle'); player2.frameIndex = 0; player2.frameTimer = 0;
+  } catch (e) { /* silent */ }
+
+  initInput({ p1: player1, p2: player2, ready: true }); playersReady = true;
+  selectionActive = false; _prevHp.p1 = player1.hp; _prevHp.p2 = player2.hp;
 }
 function drawCharacterSelect() {
   background(12, 18, 28);
@@ -638,19 +659,29 @@ function draw() {
   // nota: asegúrate de que la variable hsActive usada mas abajo
   // para condicionales coincide con la que hemos calculado aquí:
   const hsActiveFinal = hsActive;
-  // toggle PAUSA con Enter
-  if (typeof keysPressed !== 'undefined' && keysPressed['enter']) {
-    if (!PAUSED) {
-      // Se va a pausar
-      pauseStartTime = millis();
-    } else {
-      // Se va a despausar
-      const dt = millis() - pauseStartTime;
-      totalPausedTime += dt;
-      compensatePauseTimers(dt);
+  // toggle PAUSA: P1 opens with Enter, P2 opens with Shift
+  if (typeof keysPressed !== 'undefined') {
+    if (keysPressed['enter']) {
+      // open pause for P1
+      PAUSED = true;
+      window.PAUSED = true;
+      try { openPauseFor('p1'); } catch (e) {}
+      keysPressed['enter'] = false;
     }
-    PAUSED = !PAUSED;
-    keysPressed['enter'] = false;
+    if (keysPressed['shift']) {
+      // open pause for P2
+      PAUSED = true;
+      window.PAUSED = true;
+      try { openPauseFor('p2'); } catch (e) {}
+      keysPressed['shift'] = false;
+    }
+  }
+
+  // if paused, route input to pause menu and draw it
+  if (PAUSED) {
+    try {
+      handlePauseInput(keysPressed, { p1: player1, p2: player2 });
+    } catch (e) { /* ignore pause input errors */ }
   }
 
   // inputs solo si no está en pausa
@@ -988,17 +1019,24 @@ function draw() {
     }
   }
 
-  drawHealthBars(player1, player2, _heartFrames, _bootFrames);
-  drawInputQueues(player1, player2);
+  // draw HUD - pasar fallback seguro si player1/player2 no están listos
+  drawHealthBars(player1 || null, player2 || null, _heartFrames, _bootFrames);
+  // pasar objetos seguros (null-safe) a drawInputQueues
+  drawInputQueues(player1 || { inputBuffer: [] , inputBufferDuration:1400 }, player2 || { inputBuffer: [], inputBufferDuration:1400 });
 
-  // overlay de PAUSA
+  // overlay de PAUSA: usar el menú personalizado (si PAUSED)
   if (PAUSED) {
-    push();
-    fill(255, 220);
-    textSize(42);
-    textAlign(CENTER, CENTER);
-    text('PAUSA', width / 2, height / 2);
-    pop();
+    try {
+      drawPauseMenu(player1, player2);
+    } catch (e) {
+      // fallback simple si falla el menú
+      push();
+      fill(255, 220);
+      textSize(42);
+      textAlign(CENTER, CENTER);
+      text('PAUSA', width / 2, height / 2);
+      pop();
+    }
   }
 
   // suavizar la opacidad del HUD (0 = invisible, 1 = visible)
@@ -1020,6 +1058,58 @@ function draw() {
 
   clearFrameFlags();
 }
+
+// ---------- NEW: full reset helper to go back to character select ----------
+function resetToSelection() {
+  // Stop pause/hitstop and clear globals
+  PAUSED = false;
+  window.PAUSED = false;
+  try { window.HITSTOP_ACTIVE = false; window.HITSTOP_PENDING = false; window.HITSTOP_REMAINING_MS = 0; } catch(e){}
+
+  // clear players / projectiles / ready flag
+  try { if (player1) { player1 = null; } } catch(e){}
+  try { if (player2) { player2 = null; } } catch(e){}
+  projectiles.length = 0;
+  playersReady = false;
+  selectionActive = true;
+
+  // reset selection indexes & confirmations
+  p1Confirmed = false; p2Confirmed = false;
+  p1SelIndex = 0; p2SelIndex = 1;
+  p1Choice = 0; p2Choice = 1;
+
+  // reset camera / hud / effects
+  cam = { x: 0, y: 0, zoom: 1 };
+  appliedCamZoom = cam.zoom || 1;
+  appliedHUDAlpha = 1;
+  _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
+  _prevHp = { p1: null, p2: null };
+  _hsPrevActive = false;
+  _hsStartedAt = 0;
+  _prevBlockstun = { p1: false, p2: false };
+  _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, playerId: null };
+
+  // clear input flags (defensive)
+  try {
+    if (typeof keysPressed === 'object') for (const k in keysPressed) keysPressed[k] = false;
+    if (typeof keysDown === 'object') for (const k in keysDown) keysDown[k] = false;
+    if (typeof keysUp === 'object') for (const k in keysUp) keysUp[k] = false;
+  } catch (e) {}
+
+  // re-init input module without players
+  try { initInput({ p1: null, p2: null, ready: false }); } catch (e) {}
+
+  // clear any per-player HUD state maps (safe)
+  try {
+    if (typeof window !== 'undefined') {
+      if (window._heartStateByPlayer && typeof window._heartStateByPlayer.clear === 'function') window._heartStateByPlayer.clear();
+      if (window._bootStateByPlayer && typeof window._bootStateByPlayer.clear === 'function') window._bootStateByPlayer.clear();
+    }
+  } catch(e){}
+
+  console.log('[RESET] returned to character select and fully reset state');
+}
+// ---------- end reset helper ----------
 
 window.setup = setup;
 window.draw = draw;

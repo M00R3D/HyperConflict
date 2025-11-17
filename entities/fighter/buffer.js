@@ -22,6 +22,9 @@ export function bufferConsumeLast(self, n) {
 
 export function addInput(self, symbol) {
   if (!symbol) return;
+  // Defensive: ensure inputBuffer exists
+  if (!self.inputBuffer || !Array.isArray(self.inputBuffer)) self.inputBuffer = [];
+
   const now = millis();
   const last = self.inputBuffer.length > 0 ? self.inputBuffer[self.inputBuffer.length - 1] : null;
   if (last && last.symbol === symbol) return;

@@ -37,6 +37,12 @@ function _getHeartState(player, heartsCount) {
 }
 
 function drawInputQueues(p1, p2) {
+  // proteger contra players null durante selección/escenas
+  const p1Buf = (p1 && Array.isArray(p1.inputBuffer)) ? p1.inputBuffer : [];
+  const p2Buf = (p2 && Array.isArray(p2.inputBuffer)) ? p2.inputBuffer : [];
+  const p1BufDur = (p1 && typeof p1.inputBufferDuration === 'number') ? p1.inputBufferDuration : 1400;
+  const p2BufDur = (p2 && typeof p2.inputBufferDuration === 'number') ? p2.inputBufferDuration : 1400;
+
   const centerX = width / 2;
   const y = 40;
   const spacing = 22;
@@ -46,7 +52,7 @@ function drawInputQueues(p1, p2) {
   const drawBuffer = (buf, x, bufferDuration = 1400) => {
     for (let i = 0; i < buf.length; i++) {
       const entry = buf[i];
-      const age = millis() - entry.time;
+      const age = millis() - (entry.time || 0);
       const alpha = map(age, 0, bufferDuration, 255, 0);
       fill(255, alpha);
       noStroke();
@@ -54,8 +60,8 @@ function drawInputQueues(p1, p2) {
     }
   };
 
-  drawBuffer(p1.inputBuffer || [], centerX - 140, p1.inputBufferDuration);
-  drawBuffer(p2.inputBuffer || [], centerX + 140, p2.inputBufferDuration);
+  drawBuffer(p1Buf, centerX - 140, p1BufDur);
+  drawBuffer(p2Buf, centerX + 140, p2BufDur);
 }
 
 function drawHealthBars(p1, p2, heartFrames, bootFrames) {
@@ -313,6 +319,9 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
 
    // draw boots for a player (mirrored layout for P2)
    const drawPlayerBoots = (player, xStart, alignRight = false) => {
+     // PROTECCIÓN: si no hay player (por ejemplo durante selección), no intentar leer state
+     if (!player) return;
+
      const rawSt = (typeof player?.stamina === 'number') ? player.stamina : 0;
      const pMax = (typeof player?.staminaMax === 'number' && player.staminaMax > 0) ? player.staminaMax : totalBootQuartersMax;
      // map player's actual stamina range to 0..totalBootQuartersMax

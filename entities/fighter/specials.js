@@ -24,6 +24,20 @@ export function registerSpecialsForChar(charId, defs) {
   specialDefsByChar[charId] = Object.assign({}, specialDefsByChar[charId] || {}, defs);
 }
 
+// NEW: getter para mostrar specials desde UI (expuesto para pause menu)
+export function getSpecialDefsForChar(charId, self = null) {
+  // prioridad: instance override > char map > default
+  if (self && self.specialDefs && typeof self.specialDefs === 'object') return self.specialDefs;
+  return specialDefsByChar[charId] || defaultSpecialDefs;
+}
+
+// expose to window so legacy/global callers can read the table if needed
+if (typeof window !== 'undefined') {
+  window.getSpecialDefsForChar = getSpecialDefsForChar;
+  window.registerSpecialsForChar = registerSpecialsForChar;
+  window._SPECIALS_TABLE = specialDefsByChar;
+}
+
 // obtiene el conjunto efectivo de specials para un fighter (instancia override > charId > default)
 function getEffectiveSpecialDefs(self) {
   if (self && self.specialDefs && typeof self.specialDefs === 'object') return self.specialDefs;
