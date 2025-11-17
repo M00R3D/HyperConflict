@@ -3,6 +3,7 @@ import { Fighter } from '../../entities/fighter.js';import { Projectile } from '
 import { updateCamera, applyCamera } from './camera.js';import { initInput, keysPressed, clearFrameFlags, setPlayersReady } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
 import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
 import { initPauseMenu, handlePauseInput, drawPauseMenu, openPauseFor, closePause } from './pauseMenu.js';
+import { registerAttackHitboxesForChar } from './hitboxConfig.js';
 registerStatsForChar('tyeman', {
   maxSpeed: 3,
   runMaxSpeed: 6,
@@ -37,6 +38,38 @@ registerActionsForChar('sbluer', {
   kick2: { duration: 1000, frameDelay: 6 },
   kick3: { duration: 1000, frameDelay: 6 },
   grab: { duration: 500, frameDelay: 3 }
+});
+
+// ejemplo: ajustar hitboxes de tyeman
+registerAttackHitboxesForChar('tyeman', {
+  punch:  { offsetX: 16, offsetY: 6, w: 20, h: 20 },
+  punch2: { offsetX: 18, offsetY: 6, w: 22, h: 20 },
+  punch3: { offsetX: 20, offsetY: 4, w: 28, h: 24 },
+  kick:   { offsetX: 23, offsetY: 16, w: 11, h: 13 },
+  kick2:   { offsetX: 23, offsetY: 16, w: 15, h: 13 },
+  kick3:   { offsetX: 20, offsetY: 4, w: 17, h: 15 }
+});
+
+// ejemplo: sbluer tweaks
+registerAttackHitboxesForChar('sbluer', {
+  punch: { offsetX: 14, offsetY: 6, w: 18, h: 18 },
+  kick3:  { offsetX: 24, offsetY: 4, w: 30, h: 26 }
+});
+
+registerBodyHitboxesForChar('tyeman', {
+  idle:  { offsetX: 6, offsetY: 0, w: 22, h: 32 },
+  kick:  { offsetX: 6, offsetY: 0, w: 22, h: 32 },
+  kick2:  { offsetX: 6, offsetY: 1, w: 20, h: 32 },
+  kick3:  { offsetX: 6, offsetY: 10, w: 22, h: 23 },
+  // punch: { offsetX: 14, offsetY: 6, w: 18, h: 20 },
+  // hit:   { offsetX: 8, offsetY: 0, w: 20, h: 32 },
+  // knocked:{ offsetX: 4, offsetY: 0, w: 28, h: 28 }
+});
+
+registerBodyHitboxesForChar('sbluer', {
+  idle: { offsetX: 7, offsetY: 0, w: 22, h: 32 },
+  kick:  { offsetX: 6, offsetY: 0, w: 22, h: 32 },
+  // kick: { offsetX: 20, offsetY: 8, w: 28, h: 18 }
 });
 
 let player1, player2;
@@ -78,10 +111,15 @@ function computeFramesPerHitFor(player) {
 function startDamageEffect(player, quartersRemoved) {
   if (!player) return;
   const now = millis();
-  const remaining = Math.max(0, Math.min(MAX_HP_QUARTERS, player.hp));const lowFactor = 1 - (remaining / MAX_HP_QUARTERS);const duration = Math.min(500, 220 + 160 * Math.max(1, quartersRemoved));
-  const baseMag = Math.min(100, 6 * Math.max(1, quartersRemoved) * (1 + lowFactor * 3)); const mag = baseMag * 0.065;const zoomAdd = Math.min(0.3, 0.035 * Math.max(1, quartersRemoved) * (1 + lowFactor * 4));
+  const remaining = Math.max(0, Math.min(MAX_HP_QUARTERS, player.hp));
+  const lowFactor = 1 - (remaining / MAX_HP_QUARTERS);
+  const duration = Math.min(500, 220 + 160 * Math.max(1, quartersRemoved));
+  const baseMag = Math.min(100, 6 * Math.max(1, quartersRemoved) * (1 + lowFactor * 3));
+  const mag = baseMag * 0.065;
+  const zoomAdd = Math.min(0.3, 0.035 * Math.max(1, quartersRemoved) * (1 + lowFactor * 4));
   _hitEffect = { active: true, start: now, end: now + duration, duration, mag, zoom: zoomAdd, targetPlayerId: player.id };
 }
+
 let _tyemanAssets = null;let _sbluerAssets = null;let _heartFrames = null;let _slotAssets = null;let _bootFrames = null;let selectionActive = false;
 const choices = ['tyeman', 'sbluer'];let p1Choice = 0;
 let p2Choice = 1;let p1Confirmed = false;let p2Confirmed = false;let p1SelIndex = 0;let p2SelIndex = 1;
@@ -147,9 +185,16 @@ function clearMatchOverState() {
 }
 
 function tryCreatePlayers() {
+  // Guard clauses must return when conditions not met
   if (!p1Confirmed || !p2Confirmed) return;
   if (player1 || player2) return;
-  const tyeman = _tyemanAssets;const sbluer = _sbluerAssets;const p1Stats = getStatsForChar(choices[p1Choice]);const p2Stats = getStatsForChar(choices[p2Choice]);const p1Actions = getActionsForChar(choices[p1Choice]);const p2Actions = getActionsForChar(choices[p2Choice]);
+
+  const tyeman = _tyemanAssets;
+  const sbluer = _sbluerAssets;
+  const p1Stats = getStatsForChar(choices[p1Choice]);
+  const p2Stats = getStatsForChar(choices[p2Choice]);
+  const p1Actions = getActionsForChar(choices[p1Choice]);
+  const p2Actions = getActionsForChar(choices[p2Choice]);
   player1 = new Fighter({
     x: 100,
     col: color(255,100,100),
@@ -598,31 +643,40 @@ function _respawnPlayer(player) {
   player.isHit = false;
   player._hitTargets = null;
   player.vx = 0; player.vy = 0;
-  // move to spawn X (fallback to sensible positions)
   player.x = (typeof player.startX === 'number') ? player.startX : (player.id === 'p1' ? 100 : 600);
   player.y = height - 72;
-  try { player.setState('idle'); } catch (e) {}
-  // clear transient knock/launch flags
-  delete player._knockback; delete player._pendingKnockback; delete player._forceKnocked;
-  // ensure life-handled flag cleared so future hp hits are detected again
+  try { if (typeof player.setState === 'function') player.setState('idle'); } catch (e) {}
+  // clear transient flags (delete only properties)
+  delete player._knockback;
+  delete player._pendingKnockback;
+  delete player._forceKnocked;
+  delete player._launched;
+  delete player._launchedStart;
+  delete player._launchedDuration;
+  delete player._grabLock;
+  delete player._grabHolding;
+  delete player._grabVictimOffsetX;
+  // reset life tokens
+  player._lifeProcessing = false;
   player._lifeHandled = false;
 }
 
+// Reemplazar bloque roto por una función consistente para manejo de pérdida de vida
 function handlePlayerLifeLost(player) {
   if (!player) return;
-  // avoid double-processing
   if (player._lifeProcessing) return;
   player._lifeProcessing = true;
 
-  // decrement lives
   player.lives = Math.max(0, (typeof player.lives === 'number' ? player.lives : player.livesMax) - 1);
 
-  // Visual: force the fighter to knocked so HUD/portrait and sprite reflect defeat
-  try { if (typeof forceSetState === 'function') forceSetState(player, 'knocked'); else player.setState('knocked'); } catch (e) {}
+  // aplicar visual knocked inmediatamente
+  try {
+    if (typeof forceSetState === 'function') forceSetState(player, 'knocked');
+    else if (typeof player.setState === 'function') player.setState('knocked');
+  } catch (e) {}
 
-  // If the player still has at least one life left -> respawn after a short timeout
   if (player.lives > 0) {
-    const respawnDelay = 700; // ms, tweak as desired
+    const respawnDelay = 700;
     setTimeout(() => {
       try { _respawnPlayer(player); } catch (e) {}
       try { if (player.opponent) _respawnPlayer(player.opponent); } catch (e) {}
@@ -631,21 +685,21 @@ function handlePlayerLifeLost(player) {
     return;
   }
 
-  // No lives left -> match over
+  // sin vidas: match over
   MATCH_OVER = true;
   MATCH_WINNER = (player.id === 'p1') ? 'p2' : 'p1';
   window.MATCH_OVER = MATCH_OVER;
   window.MATCH_WINNER = MATCH_WINNER;
-  console.log('[MATCH OVER] Winner:', MATCH_WINNER);
 
-  // initialize match menu (prevent immediate input leaks)
+  // inicializar menú y prevenir input instantáneo
   _matchMenu.idx = 0;
   _matchMenu.lastInputAt = millis();
   _matchMenu.active = true;
-  // clear any pending input flags so players don't instantly confirm
-  try { if (typeof keysPressed !== 'undefined') {
-    keysPressed['i'] = keysPressed['o'] = keysPressed['b'] = keysPressed['n'] = false;
-  } } catch (e) {}
+  try {
+    if (typeof keysPressed !== 'undefined') {
+      keysPressed['i'] = keysPressed['o'] = keysPressed['b'] = keysPressed['n'] = false;
+    }
+  } catch (e) {}
 }
 
 function draw() {
