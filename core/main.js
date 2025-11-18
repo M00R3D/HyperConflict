@@ -4,6 +4,16 @@ import { updateCamera, applyCamera } from './camera.js';import { initInput, keys
 import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
 import { initPauseMenu, handlePauseInput, drawPauseMenu, openPauseFor, closePause } from './pauseMenu.js';
 import { registerAttackHitboxesForChar } from './hitboxConfig.js';
+import {
+  initStageEditor,
+  toggleStageEditor,
+  isStageEditorActive,
+  drawStageEditor,
+  handleMousePressed as stageHandleMousePressed,
+  handleWheel as stageHandleWheel,
+  exportItems as stageExportItems,
+  loadStageItems as stageLoadItems
+} from '../ui/stageEditor.js';
 registerStatsForChar('tyeman', {
   maxSpeed: 3,
   runMaxSpeed: 6,
@@ -161,6 +171,40 @@ async function setup() {
   p2Confirmed = false;
   p1Choice = 0;
   p2Choice = 1;
+  initStageEditor(); // asegura que el editor cargue sus frames
+
+  // forward mouse / wheel to editor when active
+  // NOTE: passive:false para poder call e.preventDefault()
+  window.addEventListener('mousedown', (e) => {
+    try {
+      if (isStageEditorActive()) {
+        stageHandleMousePressed(e, cam);
+        e.preventDefault();
+      }
+    } catch (err) {}
+  }, { passive: false });
+
+  window.addEventListener('contextmenu', (e) => {
+    if (isStageEditorActive()) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  window.addEventListener('wheel', (e) => {
+    try {
+      if (isStageEditorActive()) {
+        stageHandleWheel(e.deltaY, cam);
+        e.preventDefault();
+      }
+    } catch (err) {}
+  }, { passive: false });
+
+  // expose quick toggles
+  if (typeof window !== 'undefined') {
+    window.toggleStageEditor = toggleStageEditor;
+    window.stageExportItems = stageExportItems;
+    window.stageLoadItems = stageLoadItems;
+  }
 }
 function clearMatchOverState() {
   MATCH_OVER = false;
@@ -703,6 +747,18 @@ function handlePlayerLifeLost(player) {
 }
 
 function draw() {
+  // allow toggling the stage editor immediately (works even during selection/screens)
+  if (typeof keysPressed !== 'undefined' && (keysPressed['4'] || keysPressed['4'])) {
+    try {
+      toggleStageEditor();
+      console.log('[StageEditor] toggled ->', isStageEditorActive() ? 'OPEN' : 'CLOSED');
+    } catch (e) {
+      console.warn('toggleStageEditor failed', e);
+    }
+    // consume key so it doesn't retrigger
+    keysPressed['4'] = false;
+  }
+
   // si estamos en pantalla de selección, manejarla primero
   if (selectionActive) {
     handleSelectionInput();
@@ -804,9 +860,16 @@ function draw() {
   // toggle debug overlays with '1' key (press 1 to toggle)
   if (typeof keysPressed !== 'undefined' && (keysPressed['1'] || keysPressed['Digit1'])) {
     window.SHOW_DEBUG_OVERLAYS = !window.SHOW_DEBUG_OVERLAYS;
-    // evita múltiples toggles por el mismo evento
-    keysPressed['1'] = false;
-    keysPressed['Digit1'] = false;
+    keysPressed['1'] = false; keysPressed['Digit1'] = false;
+  }
+
+  // Toggle Stage Editor with '4'
+  if (typeof keysPressed !== 'undefined' && (keysPressed['4'] || keysPressed['Digit4'])) {
+    try {
+      toggleStageEditor();
+    } catch (e) { console.warn('toggleStageEditor failed', e); }
+    // consume the key so it doesn't retrigger immediately
+    keysPressed['4'] = false; keysPressed['Digit4'] = false;
   }
   
   // nota: asegúrate de que la variable hsActive usada mas abajo
@@ -1173,7 +1236,6 @@ function draw() {
   }
 
   // draw HUD - pasar fallback seguro si player1/player2 no están listos
-  // INSERT: indicators for offscreen players (screen-space)
   try {
     // ensure the HUD module function is available (import/namespace may vary)
     if (typeof drawOffscreenIndicators === 'function') {
@@ -1184,8 +1246,16 @@ function draw() {
   } catch (e) { /* silent */ }
 
   drawHealthBars(player1 || null, player2 || null, _heartFrames, _bootFrames);
-  // pasar objetos seguros (null-safe) a drawInputQueues
   drawInputQueues(player1 || { inputBuffer: [] , inputBufferDuration:1400 }, player2 || { inputBuffer: [], inputBufferDuration:1400 });
+
+  // draw stage editor overlay if active (screen & world aware) - ensure it's called after camera/pop
+  try {
+    if (typeof isStageEditorActive === 'function' && isStageEditorActive()) {
+      drawStageEditor(cam);
+    }
+  } catch (e) {
+    console.warn('stage editor draw failed', e);
+  }
 
   // overlay de PAUSA: usar el menú personalizado (si PAUSED)
   if (PAUSED) {
@@ -1323,6 +1393,8 @@ function resetToSelection() {
 
   // Ensure match-over menu cleared as we leave gameplay
   clearMatchOverState();
+
+ 
 
   // clear players / projectiles / ready flag
   try { if (player1) { player1 = null; } } catch(e){}
