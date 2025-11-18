@@ -548,5 +548,162 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
   drawExhausted(p2, true);
 
  } // end drawHealthBars
- // export API
- export { drawInputQueues, drawHealthBars };
+
+function drawOffscreenIndicators(cam, players = []) {
+  if (!cam || !Array.isArray(players) || players.length === 0) return;
+  const pad = 18;
+  const indicatorSize = 46;
+  const spriteDrawSize = 36;
+  const cx = width / 2;
+  const cy = height / 2;
+  const halfw = width / 2 - pad;
+  const halfh = height / 2 - pad;
+  const camYOffset = map(cam.zoom || 1, 0.6, 1.5, 80, 20);
+
+  const worldToScreen = (wx, wy) => {
+    const sx = ((wx - (cam.x || 0)) * (cam.zoom || 1)) + width / 2;
+    const sy = ((wy - (cam.y || 0)) * (cam.zoom || 1)) + height / 2 + camYOffset;
+    return { sx, sy };
+  };
+
+  // helper: pick a single-frame image from a given layer container (array-of-frames or spritesheet)
+  const pickFromLayer = (layer, frameIndex = 0) => {
+    if (!layer) return null;
+    if (Array.isArray(layer) && layer.length > 0 && layer[0] && layer[0].width) {
+      return layer[Math.min(frameIndex, layer.length - 1)] || layer[0];
+    }
+    if (layer && layer.width && layer.height) return layer;
+    return null;
+  };
+
+  push();
+  imageMode(CENTER);
+  // do NOT change global smoothing state — use per-buffer noSmooth() below
+  for (const p of players) {
+    if (!p) continue;
+
+    const wx = (p.x || 0) + ((p.w || 0) / 2);
+    const wy = (p.y || 0) + ((p.h || 0) / 2);
+    const { sx, sy } = worldToScreen(wx, wy);
+
+    // on-screen (with small margin) -> skip
+    if (sx >= -pad && sx <= width + pad && sy >= -pad && sy <= height + pad) continue;
+
+    // direction vector from screen center to projected point
+    const dx = sx - cx;
+    const dy = sy - cy;
+    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) continue;
+
+    // compute intersection scale with screen rect (cx +/- halfw, cy +/- halfh)
+    const tx = dx !== 0 ? halfw / Math.abs(dx) : Infinity;
+    const ty = dy !== 0 ? halfh / Math.abs(dy) : Infinity;
+    const t = Math.min(tx, ty);
+    const ix = Math.round(cx + dx * t);
+    const iy = Math.round(cy + dy * t);
+
+    push();
+    translate(ix, iy);
+
+    // background circle
+    noStroke();
+    fill(12, 18, 28, 220);
+    ellipse(0, 0, indicatorSize + 10, indicatorSize + 10);
+
+    // choose current frame image preferring LAYER 1, fallback to other layers
+    let img = null;
+    let frameIndex = Math.max(0, Math.floor(p.frameIndex || 0));
+    const framesByLayer = p.currentFramesByLayer || p.idleFramesByLayer || [];
+    const preferredIdx = 1; // prefer layer 1
+
+    const tryLayers = [];
+    if (Array.isArray(framesByLayer)) {
+      if (framesByLayer.length > preferredIdx) tryLayers.push(framesByLayer[preferredIdx]);
+      if (framesByLayer.length > 0) tryLayers.push(framesByLayer[0]);
+      for (let li = 0; li < framesByLayer.length; li++) if (li !== 0 && li !== preferredIdx) tryLayers.push(framesByLayer[li]);
+    } else {
+      tryLayers.push(framesByLayer);
+    }
+    if (p.idleFramesByLayer && !tryLayers.includes(p.idleFramesByLayer)) tryLayers.push(p.idleFramesByLayer);
+
+    for (const layer of tryLayers) {
+      img = pickFromLayer(layer, frameIndex);
+      if (img) break;
+    }
+
+    // If we have an image, render it into a tiny offscreen buffer (pixel buffer) and scale up
+    if (img && img.width && img.height) {
+      // low resolution target for pixelation (smaller -> blockier)
+      const lowResSize = 8; // tweak: 6..16. Lower = more blocky
+      const g = createGraphics(lowResSize, lowResSize);
+      g.pixelDensity(1);
+      g.noSmooth(); // ensure buffer is rendered with nearest-neighbor inside
+      g.clear();
+      g.push();
+      g.imageMode(CORNER);
+
+      // detect spritesheet packed horizontally and crop the desired frame into the tiny buffer
+      const frameCount = Math.max(1, Math.round(img.width / img.height));
+      const srcW = Math.round(img.width / frameCount);
+      const srcX = Math.round(Math.min(frameCount - 1, frameIndex) * srcW);
+      try {
+        g.image(img, 0, 0, lowResSize, lowResSize, srcX, 0, srcW, img.height);
+      } catch (e) {
+        // fallback draw full image scaled down
+        g.image(img, 0, 0, lowResSize, lowResSize);
+      }
+      g.pop();
+
+      // Optionally apply a small blur on the tiny buffer BEFORE scaling to soften pixel edges (uncomment to use)
+      // g.filter(BLUR, 1);
+
+      // draw the tiny buffer scaled up onto main canvas; main canvas keeps smooth state unchanged
+      // we want a pixelated look so draw the tiny buffer scaled up but with no smoothing:
+      // temporarily switch global noSmooth() then restore to avoid affecting other draws:
+      noSmooth();
+      image(g, 0, 0, spriteDrawSize, spriteDrawSize);
+      // restore smoothing (use smooth() to return to previous behaviour)
+      smooth();
+
+      // dispose reference (p5 will handle memory, but clear var to avoid accidental reuse)
+      // (no explicit removeGraphics API in p5; leaving g for GC)
+    } else {
+      // fallback: small colored rect with char initial
+      noStroke();
+      fill(140, 140, 140, 200);
+      rectMode(CENTER);
+      rect(0, 0, spriteDrawSize * 0.86, spriteDrawSize * 0.86, 6);
+      fill(255, 220);
+      textAlign(CENTER, CENTER);
+      textSize(12);
+      text((p.charId || p.id || '?').toString().charAt(0).toUpperCase(), 0, 0);
+    }
+
+    // border
+    noFill();
+    stroke(220, 200);
+    strokeWeight(2);
+    ellipse(0, 0, indicatorSize + 10, indicatorSize + 10);
+
+    // small arrow pointing inward
+    const ang = Math.atan2(dy, dx);
+    const arrowDist = (indicatorSize / 2) + 6;
+    const ax = Math.round(Math.cos(ang) * arrowDist);
+    const ay = Math.round(Math.sin(ang) * arrowDist);
+    push();
+    translate(ax, ay);
+    rotate(ang);
+    noStroke();
+    fill(220, 200);
+    triangle(0, -6, 0, 6, 10, 0);
+    pop();
+
+    pop();
+  }
+  pop();
+}
+
+// expose to window for compatibility if not imported
+if (typeof window !== 'undefined') window.drawOffscreenIndicators = drawOffscreenIndicators;
+
+// export API (ensure function still exported at file bottom)
+export { drawInputQueues, drawHealthBars, drawOffscreenIndicators };

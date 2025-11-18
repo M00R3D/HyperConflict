@@ -1173,6 +1173,16 @@ function draw() {
   }
 
   // draw HUD - pasar fallback seguro si player1/player2 no están listos
+  // INSERT: indicators for offscreen players (screen-space)
+  try {
+    // ensure the HUD module function is available (import/namespace may vary)
+    if (typeof drawOffscreenIndicators === 'function') {
+      drawOffscreenIndicators(cam, [player1 || null, player2 || null]);
+    } else if (window && typeof window.drawOffscreenIndicators === 'function') {
+      window.drawOffscreenIndicators(cam, [player1 || null, player2 || null]);
+    }
+  } catch (e) { /* silent */ }
+
   drawHealthBars(player1 || null, player2 || null, _heartFrames, _bootFrames);
   // pasar objetos seguros (null-safe) a drawInputQueues
   drawInputQueues(player1 || { inputBuffer: [] , inputBufferDuration:1400 }, player2 || { inputBuffer: [], inputBufferDuration:1400 });
