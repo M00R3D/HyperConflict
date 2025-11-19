@@ -1,6 +1,7 @@
 import createSelectionScene from '../ui/selection.js';
 import { loadTyemanAssets, loadSbluerAssets, loadSlotAssets, loadHeartFrames, loadBootFrames } from './assetLoader.js';
 import createGameplay from './gameplay.js';
+import { showStagePicker } from '../ui/stageEditor.js'; // <-- add import
 
 let currentScene = null;
 
@@ -18,8 +19,18 @@ export async function initScenes() {
     tyemanAssets: tyeman,
     sbluerAssets: sbluer,
     onConfirm: ({p1Choice,p2Choice}) => {
-      // arrancar gameplay con elecciones
-      currentScene = createGameplay({ p1Choice, p2Choice, tyeman, sbluer, heartFrames, bootFrames, slotAssets: slots });
+      // after character selection, show level picker and then start gameplay using chosen or default stage
+      try {
+        showStagePicker(async (selectedRecord) => {
+          // if user chose a saved stage, load it into stageEditor (picker already does that)
+          // proceed to create gameplay regardless; gameplay can read editor items if needed
+          currentScene = createGameplay({ p1Choice, p2Choice, tyeman, sbluer, heartFrames, bootFrames, slotAssets: slots });
+        });
+      } catch (e) {
+        // fallback: create gameplay immediately if picker fails
+        console.warn('stage picker failed or was cancelled, starting gameplay', e);
+        currentScene = createGameplay({ p1Choice, p2Choice, tyeman, sbluer, heartFrames, bootFrames, slotAssets: slots });
+      }
     }
   });
   currentScene = selection;

@@ -9,6 +9,7 @@ import {
   toggleStageEditor,
   isStageEditorActive,
   drawStageEditor,
+  drawSavedItems,
   handleMousePressed as stageHandleMousePressed,
   handleWheel as stageHandleWheel,
   exportItems as stageExportItems,
@@ -233,12 +234,37 @@ function tryCreatePlayers() {
   if (!p1Confirmed || !p2Confirmed) return;
   if (player1 || player2) return;
 
+  // If there are saved stages, open the picker first (one-time per selection)
+  try {
+    if (typeof window !== 'undefined' && typeof window.stageGetSaved === 'function') {
+      const saved = window.stageGetSaved();
+      if (Array.isArray(saved) && saved.length && !window._stageSelectionDone) {
+        // Hide character selection so the picker/editor overlay can render
+        selectionActive = false;
+        // open picker and wait for callback to resume creation
+        window.stageShowPicker(function(selected) {
+          // selected may be null or a saved record {name, json, ts}
+          window._selectedStageRecord = selected || null;
+          window._stageSelectionDone = true;
+          // resume creation after user picked (or cancelled)
+          tryCreatePlayers();
+        });
+        return; // wait for user pick
+      }
+    }
+  } catch (e) {
+    // ignore picker errors and continue creating players
+    console.warn('stage picker errored, continuing', e);
+  }
+
+  // proceed to create players
   const tyeman = _tyemanAssets;
   const sbluer = _sbluerAssets;
   const p1Stats = getStatsForChar(choices[p1Choice]);
   const p2Stats = getStatsForChar(choices[p2Choice]);
   const p1Actions = getActionsForChar(choices[p1Choice]);
   const p2Actions = getActionsForChar(choices[p2Choice]);
+
   player1 = new Fighter({
     x: 100,
     col: color(255,100,100),
@@ -259,6 +285,17 @@ function tryCreatePlayers() {
   });
   player1.opponent = player2;
   player2.opponent = player1;
+
+  // If a stage record was chosen, try to load it into the editor items
+  try {
+    if (typeof window !== 'undefined' && window._selectedStageRecord) {
+      const rec = window._selectedStageRecord;
+      if (rec && rec.json) {
+        try { loadStageItems(JSON.parse(rec.json)); } catch (e) { console.warn('failed to load selected stage json', e); }
+      }
+      window._selectedStageRecord = null;
+    }
+  } catch (e) { /* ignore */ }
 
   // Ensure any previous MATCH_OVER state is cleared when we actually enter combat
   clearMatchOverState();
@@ -772,6 +809,18 @@ function draw() {
 
   // esperar a que los players y assets estén listos
   if (!playersReady || !player1 || !player2) {
+    // Si el editor/picker está abierto queremos seguir dibujándolo
+    if (typeof isStageEditorActive === 'function' && isStageEditorActive()) {
+      try {
+        // drawStageEditor debe estar importado en este archivo (se hizo antes)
+        if (typeof drawStageEditor === 'function') drawStageEditor(cam);
+      } catch (e) { console.warn('stage editor draw failed while waiting players', e); }
+      // limpiar flags de teclado para evitar input persistente
+      clearFrameFlags();
+      return;
+    }
+    // comportamiento original: mostrar estado de carga o esperar
+    // (mantén aquí tu lógica previa de "waiting for assets/players" visual)
     background(0);
     fill(255);
     textSize(20);
@@ -1155,8 +1204,32 @@ function draw() {
   applyCamera({ x: cam.x + shakeX, y: cam.y + shakeY, zoom: appliedCamZoom });
   drawBackground();
 
-  fill(80, 50, 20);
-  rect(0, height - 40, width, 40);
+  // dibujar el piso del nivel (debe quedar debajo de los items)
+  // push();
+  // noStroke();
+  // fill(80, 50, 20);
+  // rect(0, height - 40, width, 40);
+  // pop();
+
+  // draw level items saved (always) so levels show even if editor is closed
+  try {
+    if (typeof drawSavedItems === 'function') {
+      drawSavedItems({ x: cam.x + shakeX, y: cam.y + shakeY, zoom: appliedCamZoom });
+    }
+  } catch (e) {
+    console.warn('drawSavedItems failed', e);
+  }
+  
+  // Floor no longer drawn as solid. If debug overlay is active, show floor hitbox outline:
+  if (typeof window !== 'undefined' && window.SHOW_DEBUG_OVERLAYS) {
+    push();
+    // camera is already applied here, so draw in world coords
+    noFill();
+    stroke(255, 160, 60);
+    strokeWeight(2);
+    rect(0, height - 40, width, 40);
+    pop();
+  }
 
   if (player1 && typeof player1.display === 'function') player1.display();
   if (player2 && typeof player2.display === 'function') player2.display();
