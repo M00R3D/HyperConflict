@@ -8,6 +8,7 @@ import {
   initStageEditor,
   toggleStageEditor,
   isStageEditorActive,
+  setStageEditorActive,  // Add this
   drawStageEditor,
   drawSavedItems,
   handleMousePressed as stageHandleMousePressed,
@@ -785,14 +786,8 @@ function handlePlayerLifeLost(player) {
 
 function draw() {
   // allow toggling the stage editor immediately (works even during selection/screens)
-  if (typeof keysPressed !== 'undefined' && (keysPressed['4'] || keysPressed['4'])) {
-    try {
-      toggleStageEditor();
-      console.log('[StageEditor] toggled ->', isStageEditorActive() ? 'OPEN' : 'CLOSED');
-    } catch (e) {
-      console.warn('toggleStageEditor failed', e);
-    }
-    // consume key so it doesn't retrigger
+  if (typeof keysPressed !== 'undefined' && keysPressed['4']) {
+    setStageEditorActive(!isStageEditorActive());
     keysPressed['4'] = false;
   }
 
@@ -800,6 +795,10 @@ function draw() {
   if (selectionActive) {
     handleSelectionInput();
     drawCharacterSelect();
+    // Draw stage editor if active during selection
+    if (isStageEditorActive()) {
+      drawStageEditor({ x: 0, y: 0, zoom: 1 });
+    }
     // si ambos confirmaron, crear jugadores
     tryCreatePlayers();
     // limpiar flags y retornar (no ejecutar game loop aún)
@@ -913,13 +912,7 @@ function draw() {
   }
 
   // Toggle Stage Editor with '4'
-  if (typeof keysPressed !== 'undefined' && (keysPressed['4'] || keysPressed['Digit4'])) {
-    try {
-      toggleStageEditor();
-    } catch (e) { console.warn('toggleStageEditor failed', e); }
-    // consume the key so it doesn't retrigger immediately
-    keysPressed['4'] = false; keysPressed['Digit4'] = false;
-  }
+  
   
   // nota: asegúrate de que la variable hsActive usada mas abajo
   // para condicionales coincide con la que hemos calculado aquí:
@@ -1295,7 +1288,7 @@ function draw() {
       noFill();
       rect(pad, padX, size, size, 3);
 
-      // escribir ms restantes a la derecha del cuadrado
+      // escribir ms restantes a la derecha del cuadradito
       noStroke();
       fill(240);
       textSize(12);
@@ -1319,7 +1312,7 @@ function draw() {
   } catch (e) { /* silent */ }
 
   drawHealthBars(player1 || null, player2 || null, _heartFrames, _bootFrames);
-  drawInputQueues(player1 || { inputBuffer: [] , inputBufferDuration:1400 }, player2 || { inputBuffer: [], inputBufferDuration:1400 });
+  drawInputQueues(player1 || { inputBuffer: [], inputBufferDuration:1400 }, player2 || { inputBuffer: [], inputBufferDuration:1400 });
 
   // draw stage editor overlay if active (screen & world aware) - ensure it's called after camera/pop
   try {

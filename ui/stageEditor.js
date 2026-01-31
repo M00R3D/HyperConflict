@@ -32,22 +32,12 @@ export async function initStageEditor(piskelPath = DEFAULT_PISKEL) {
     loaded = true;
   }
 
-  // ensure key toggling available: press '4' to toggle edit mode
-  if (typeof window !== 'undefined' && !window._stageEditorKeyBound) {
-    window._stageEditorKeyBound = true;
-    window.addEventListener('keydown', (ev) => {
-      const k = (ev.key || '').toString();
-      if (k === '4') {
-        active = !active;
-        console.log('[StageEditor] active ->', active);
-      }
-    }, { passive: true });
-  }
   return true;
 }
 
 export function toggleStageEditor() { active = !active; return active; }
 export function isStageEditorActive() { return !!active; }
+export function setStageEditorActive(bool) { active = !!bool; }
 
 // Convert screen <-> world using the same camera math used elsewhere
 function _camYOffset(zoom) { return map(zoom||1, 0.6, 1.5, 80, 20); }
@@ -303,15 +293,7 @@ export function deleteNamedStage(name) {
   } catch (e) { return false; }
 }
 
-// simple picker: invoke callback with selected saved record (non-blocking)
-export function showStagePicker(cb) {
-  const list = getSavedStages();
-  if (!list.length) { if (typeof cb === 'function') cb(null); return; }
-  if (typeof cb === 'function') cb(list[0]);
-  return;
-}
-
-// --- Stage code (compact) helpers ---
+// StageCode helpers (compact base64 wrapper)
 export function generateStageCode() {
   try {
     const arr = exportItems();
@@ -353,8 +335,107 @@ window.addEventListener('keydown', (ev) => {
   }
 }, { passive: true });
 
-// expose helpers
+// --- Levels API: almacenar niveles (name + stageCode) y picker UI ---
+const LEVELS_KEY = 'hyperconf_levels_v1';
+
+function _loadLevels() {
+  try { const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem(LEVELS_KEY) : null; return raw ? JSON.parse(raw) : []; }
+  catch (e) { return []; }
+}
+function _saveLevels(list) {
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem(LEVELS_KEY, JSON.stringify(list)); }
+  catch (e) {}
+}
+
+export function getLevels() { return _loadLevels(); }
+
+export function addLevel(name, code) {
+  if (!name || !code) return false;
+  const list = _loadLevels();
+  const rec = { name: String(name), code: String(code), ts: Date.now() };
+  const idx = list.findIndex(r => r.name === rec.name);
+  if (idx >= 0) list.splice(idx, 1, rec); else list.push(rec);
+  _saveLevels(list);
+  return rec;
+}
+
+export function deleteLevel(name) {
+  try { const next = _loadLevels().filter(r => r.name !== name); _saveLevels(next); return true; } catch (e) { return false; }
+}
+
+export function saveCurrentAsLevel(name) {
+  try {
+    const code = generateStageCode();
+    if (!code) throw new Error('no code');
+    return addLevel(name, code);
+  } catch (e) { console.warn('[StageEditor] saveCurrentAsLevel failed', e); return null; }
+}
+
+// Visual picker: lista overlay con botones para elegir nivel
+export function showStagePicker(cb) {
+  const levels = _loadLevels();
+  if (!levels || levels.length === 0) { if (typeof cb === 'function') cb(null); return; }
+
+  // remove existing overlay if any
+  const existing = document.getElementById('hc-stage-picker');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'hc-stage-picker';
+  Object.assign(overlay.style, {
+    position: 'fixed', left: '0', top: '0', right: '0', bottom: '0',
+    background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', zIndex: 9999, fontFamily: 'monospace'
+  });
+
+  const box = document.createElement('div');
+  Object.assign(box.style, { width: '520px', maxHeight: '70vh', overflowY: 'auto', background: '#222', padding: '12px', borderRadius: '8px' });
+  const title = document.createElement('div'); title.textContent = 'Choose Stage'; title.style.marginBottom = '8px';
+  box.appendChild(title);
+
+  levels.forEach((lvl, i) => {
+    const row = document.createElement('div');
+    Object.assign(row.style, { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' });
+    const lbl = document.createElement('div'); lbl.textContent = `${i}. ${lvl.name}`; lbl.style.flex = '1';
+    const btnLoad = document.createElement('button'); btnLoad.textContent = 'Load & Play';
+    btnLoad.onclick = () => {
+      try { loadStageCode(lvl.code); } catch (e) { console.warn(e); }
+      overlay.remove();
+      if (typeof cb === 'function') cb(lvl);
+    };
+    const btnPreview = document.createElement('button'); btnPreview.textContent = 'Preview';
+    btnPreview.onclick = () => { try { loadStageCode(lvl.code); } catch (e) { console.warn(e); } };
+    const btnDel = document.createElement('button'); btnDel.textContent = 'Delete';
+    btnDel.onclick = () => {
+      if (!confirm(`Delete stage "${lvl.name}"?`)) return;
+      deleteLevel(lvl.name);
+      overlay.remove();
+      showStagePicker(cb);
+    };
+    [btnLoad, btnPreview, btnDel].forEach(b => { b.style.marginLeft = '6px'; });
+    row.appendChild(lbl);
+    const controls = document.createElement('div');
+    controls.appendChild(btnPreview); controls.appendChild(btnLoad); controls.appendChild(btnDel);
+    row.appendChild(controls);
+    box.appendChild(row);
+  });
+
+  const cancelRow = document.createElement('div'); Object.assign(cancelRow.style, { textAlign: 'right', marginTop: '8px' });
+  const btnCancel = document.createElement('button'); btnCancel.textContent = 'Cancel';
+  btnCancel.onclick = () => { overlay.remove(); if (typeof cb === 'function') cb(null); };
+  cancelRow.appendChild(btnCancel);
+  box.appendChild(cancelRow);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+ 
+// expose for console convenience
 if (typeof window !== 'undefined') {
+  window.getLevels = getLevels;
+  window.saveCurrentAsLevel = saveCurrentAsLevel;
+  window.deleteLevel = deleteLevel;
+  window.showStagePicker = showStagePicker;
   window.generateStageCode = generateStageCode;
   window.loadStageCode = loadStageCode;
 }
