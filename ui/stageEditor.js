@@ -26,6 +26,15 @@ export async function initStageEditor(piskelPath = DEFAULT_PISKEL) {
     currentFrame = 0;
     loaded = true;
     console.log('[StageEditor] frames loaded:', frames.length);
+    // Auto-load slot 6 if present (useful to have a default stage when entering gameplay)
+    try {
+      const slotName = 'slot6';
+      const lvls = _loadLevels();
+      const slot = (lvls || []).find(l => l && l.name === slotName);
+      if (slot && slot.code) {
+        try { loadStageCode(slot.code); console.log('[StageEditor] auto-loaded', slotName); } catch (e) { /* ignore */ }
+      }
+    } catch (e) { /* ignore */ }
   } catch (e) {
     console.warn('[StageEditor] init failed', e);
     frames = [];
@@ -333,6 +342,14 @@ window.addEventListener('keydown', (ev) => {
       console.warn('[StageEditor] no code generated');
     }
   }
+  // Save current items into quick-slot 6
+  if (k === '6') {
+    try {
+      const rec = saveCurrentAsLevel('slot6');
+      if (rec) console.log('[StageEditor] saved current stage to slot6');
+      else console.warn('[StageEditor] failed to save slot6');
+    } catch (e) { console.warn('[StageEditor] save slot6 failed', e); }
+  }
 }, { passive: true });
 
 // --- Levels API: almacenar niveles (name + stageCode) y picker UI ---
@@ -361,6 +378,26 @@ export function addLevel(name, code) {
 
 export function deleteLevel(name) {
   try { const next = _loadLevels().filter(r => r.name !== name); _saveLevels(next); return true; } catch (e) { return false; }
+}
+
+// Quick slot helpers (numeric slots stored as levels named `slotN`)
+export function saveSlot(slotNumber) {
+  const name = `slot${Number(slotNumber||0)}`;
+  try { return saveCurrentAsLevel(name); } catch (e) { console.warn('[StageEditor] saveSlot failed', e); return null; }
+}
+
+export function loadSlot(slotNumber) {
+  const name = `slot${Number(slotNumber||0)}`;
+  const list = _loadLevels();
+  const rec = (list || []).find(l => l && l.name === name) || null;
+  if (rec && rec.code) { try { loadStageCode(rec.code); return rec; } catch (e) { console.warn('[StageEditor] loadSlot failed', e); return null; } }
+  return null;
+}
+
+export function getSlot(slotNumber) {
+  const name = `slot${Number(slotNumber||0)}`;
+  const list = _loadLevels();
+  return (list || []).find(l => l && l.name === name) || null;
 }
 
 export function saveCurrentAsLevel(name) {
@@ -438,4 +475,7 @@ if (typeof window !== 'undefined') {
   window.showStagePicker = showStagePicker;
   window.generateStageCode = generateStageCode;
   window.loadStageCode = loadStageCode;
+  window.saveSlot = saveSlot;
+  window.loadSlot = loadSlot;
+  window.getSlot = getSlot;
 }
