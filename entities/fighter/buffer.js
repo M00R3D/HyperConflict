@@ -22,12 +22,25 @@ export function bufferConsumeLast(self, n) {
 
 export function addInput(self, symbol) {
   if (!symbol) return;
-  // Defensive: ensure inputBuffer exists
   if (!self.inputBuffer || !Array.isArray(self.inputBuffer)) self.inputBuffer = [];
 
   const now = millis();
-  const last = self.inputBuffer.length > 0 ? self.inputBuffer[self.inputBuffer.length - 1] : null;
-  if (last && last.symbol === symbol) return;
+
+  // Permitir hasta 4 '↓' consecutivos (configurable por instancia vía self.maxConsecutiveDowns)
+  const allowRepeats = (symbol === '↓') ? (Number(self.maxConsecutiveDowns) || 4) : 1;
+
+  // Contar símbolos iguales al final del buffer
+  let trailing = 0;
+  for (let i = self.inputBuffer.length - 1; i >= 0; i--) {
+    if (self.inputBuffer[i].symbol === symbol) trailing++;
+    else break;
+    if (trailing >= allowRepeats) break;
+  }
+
+  if (trailing >= allowRepeats) {
+    return;
+  }
+
   self.inputBuffer.push({ symbol, time: now });
   normalizeDiagonals(self);
   trimBuffer(self);
