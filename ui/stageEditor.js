@@ -462,8 +462,47 @@ export function showSlotsPicker(mode = 'load', cb = () => {}) {
     btnPrimary.onclick = () => {
       try {
         if (mode === 'save') {
-          const saved = saveSlot(i);
-          closeAndCallback({ slotNumber: i, rec: saved || null });
+          // si ya existe un rec con título, pre-llenarlo
+          const existing = getSlot(i);
+          // crear input inline para el título
+          const nameRowId = `hc-slot-input-${i}`;
+          if (!document.getElementById(nameRowId)) {
+            const inputRow = document.createElement('div');
+            inputRow.id = nameRowId;
+            Object.assign(inputRow.style, { marginTop: '8px', display: 'flex', gap: '6px' });
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.placeholder = 'Nombre para guardar (opcional)';
+            nameInput.value = (existing && existing.title) ? existing.title : '';
+            Object.assign(nameInput.style, { flex: '1', padding: '6px', borderRadius: '4px', border: '1px solid #333', background: '#0b0b0b', color: '#fff' });
+
+            const btnConfirm = document.createElement('button');
+            btnConfirm.textContent = 'Confirm';
+            btnConfirm.onclick = () => {
+              try {
+                const title = String(nameInput.value || '').trim() || null;
+                const saved = saveCurrentAsLevel(`slot${i}`, title);
+                closeAndCallback({ slotNumber: i, rec: saved || null });
+              } catch (e) {
+                console.warn('[StageEditor] inline save failed', e);
+                closeAndCallback(null);
+              }
+            };
+
+            const btnCancelInline = document.createElement('button');
+            btnCancelInline.textContent = 'Cancel';
+            btnCancelInline.onclick = () => {
+              try { const el = document.getElementById(nameRowId); if (el) el.remove(); } catch (e) {}
+            };
+
+            inputRow.appendChild(nameInput);
+            inputRow.appendChild(btnConfirm);
+            inputRow.appendChild(btnCancelInline);
+            slotBox.appendChild(inputRow);
+            // focus al input
+            setTimeout(() => nameInput.focus(), 10);
+          }
         } else {
           const loaded = loadSlot(i);
           closeAndCallback(loaded ? { slotNumber: i, rec: loaded } : null);
