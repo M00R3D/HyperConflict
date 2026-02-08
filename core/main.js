@@ -16,6 +16,8 @@ import {
   exportItems as stageExportItems,
   loadStageItems as stageLoadItems
 } from '../ui/stageEditor.js';
+import './sceneManager.js';
+
 registerStatsForChar('tyeman', {
   maxSpeed: 3,
   runMaxSpeed: 6,
@@ -173,7 +175,7 @@ async function setup() {
   p2Confirmed = false;
   p1Choice = 0;
   p2Choice = 1;
-  initStageEditor(); // asegura que el editor cargue sus frames
+  initStageEditor(undefined, { autoLoadSlot: null });// asegura que el editor cargue sus frames
 
   // forward mouse / wheel to editor when active
   // NOTE: passive:false para poder call e.preventDefault()

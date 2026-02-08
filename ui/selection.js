@@ -1,3 +1,5 @@
+import { showSlotsPicker } from './stageEditor.js';
+
 export default function createSelectionScene(opts = {}) {
   // opts: { choices, slotAssets, tyemanAssets, sbluerAssets, onConfirm }
   const choices = opts.choices || ['tyeman','sbluer'];
@@ -14,10 +16,20 @@ export default function createSelectionScene(opts = {}) {
     if (!p2Confirmed && (keysPressed['arrowright'])) { p2Sel = Math.min(choices.length-1, p2Sel + 1); keysPressed['arrowright'] = false; }
     if (!p2Confirmed && (keysPressed['b'])) { p2Confirmed = true; keysPressed['b'] = false; }
 
-    // si ambos confirman, llamar callback
+    // si ambos confirman, abrir picker de slots (load) y luego llamar callback
     if (p1Confirmed && p2Confirmed && typeof opts.onConfirm === 'function') {
-      state.active = false;
-      opts.onConfirm({ p1Choice: choices[p1Sel], p2Choice: choices[p2Sel] });
+      // abrir picker para elegir slot de stage (opcional). El picker cargará el stage si se elige uno.
+      try {
+        showSlotsPicker('load', (picked) => {
+          // ignorar picked si es null (cancel)
+          state.active = false;
+          opts.onConfirm({ p1Choice: choices[p1Sel], p2Choice: choices[p2Sel] });
+        });
+      } catch (e) {
+        // fallback directo si algo falla
+        state.active = false;
+        opts.onConfirm({ p1Choice: choices[p1Sel], p2Choice: choices[p2Sel] });
+      }
     }
   }
 

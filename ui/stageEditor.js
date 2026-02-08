@@ -15,7 +15,9 @@ const DEFAULT_PISKEL = 'src/stages/static_items/static_items_biome_plains.piskel
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
 // Load frames from a .piskel (path optional)
-export async function initStageEditor(piskelPath = DEFAULT_PISKEL) {
+export async function initStageEditor(piskelPath = DEFAULT_PISKEL, opts = {}) {
+  // Por defecto intenta auto-cargar 'slot6'. Para desactivar pasar { autoLoadSlot: null }.
+  const { autoLoadSlot = 'slot6' } = opts;
   try {
     const layers = await loadPiskel(piskelPath).catch(()=>[]);
     const layer0 = Array.isArray(layers) && layers.length > 0 ? layers[0] : [];
@@ -26,15 +28,17 @@ export async function initStageEditor(piskelPath = DEFAULT_PISKEL) {
     currentFrame = 0;
     loaded = true;
     console.log('[StageEditor] frames loaded:', frames.length);
-    // Auto-load slot 6 if present (useful to have a default stage when entering gameplay)
-    try {
-      const slotName = 'slot6';
-      const lvls = _loadLevels();
-      const slot = (lvls || []).find(l => l && l.name === slotName);
-      if (slot && slot.code) {
-        try { loadStageCode(slot.code); console.log('[StageEditor] auto-loaded', slotName); } catch (e) { /* ignore */ }
-      }
-    } catch (e) { /* ignore */ }
+
+    // Auto-load slot only when explicitly enabled (default is 'slot6')
+    if (autoLoadSlot !== null && typeof autoLoadSlot === 'string') {
+      try {
+        const lvls = _loadLevels();
+        const slot = (lvls || []).find(l => l && l.name === String(autoLoadSlot));
+        if (slot && slot.code) {
+          try { loadStageCode(slot.code); console.log('[StageEditor] auto-loaded', autoLoadSlot); } catch (e) { /* ignore */ }
+        }
+      } catch (e) { /* ignore */ }
+    }
   } catch (e) {
     console.warn('[StageEditor] init failed', e);
     frames = [];
@@ -342,13 +346,15 @@ window.addEventListener('keydown', (ev) => {
       console.warn('[StageEditor] no code generated');
     }
   }
-  // Save current items into quick-slot 6
+
+  // Open slots picker (save) with '6'
   if (k === '6') {
     try {
-      const rec = saveCurrentAsLevel('slot6');
-      if (rec) console.log('[StageEditor] saved current stage to slot6');
-      else console.warn('[StageEditor] failed to save slot6');
-    } catch (e) { console.warn('[StageEditor] save slot6 failed', e); }
+      showSlotsPicker('save', (picked) => {
+        // optional callback after save; picked = { slotNumber, rec } or null
+        if (picked && picked.rec) console.log('[StageEditor] saved slot', picked.slotNumber, picked.rec);
+      });
+    } catch (e) { console.warn('[StageEditor] save slot action failed', e); }
   }
 }, { passive: true });
 
@@ -366,14 +372,23 @@ function _saveLevels(list) {
 
 export function getLevels() { return _loadLevels(); }
 
-export function addLevel(name, code) {
+export function addLevel(name, code, title) {
   if (!name || !code) return false;
   const list = _loadLevels();
-  const rec = { name: String(name), code: String(code), ts: Date.now() };
-  const idx = list.findIndex(r => r.name === rec.name);
+  // store canonical slot name in `name` (used to load by slot), and optional human title in `title`
+  const rec = { name: String(name), code: String(code), ts: Date.now(), title: title ? String(title) : String(name) };
+  const idx = list.findIndex(r => r && r.name === rec.name);
   if (idx >= 0) list.splice(idx, 1, rec); else list.push(rec);
   _saveLevels(list);
   return rec;
+}
+
+export function saveCurrentAsLevel(name, title) {
+  try {
+    const code = generateStageCode();
+    if (!code) throw new Error('no code');
+    return addLevel(name, code, title);
+  } catch (e) { console.warn('[StageEditor] saveCurrentAsLevel failed', e); return null; }
 }
 
 export function deleteLevel(name) {
@@ -399,83 +414,122 @@ export function getSlot(slotNumber) {
   const list = _loadLevels();
   return (list || []).find(l => l && l.name === name) || null;
 }
-
-export function saveCurrentAsLevel(name) {
-  try {
-    const code = generateStageCode();
-    if (!code) throw new Error('no code');
-    return addLevel(name, code);
-  } catch (e) { console.warn('[StageEditor] saveCurrentAsLevel failed', e); return null; }
-}
-
-// Visual picker: lista overlay con botones para elegir nivel
-export function showStagePicker(cb) {
-  const levels = _loadLevels();
-  if (!levels || levels.length === 0) { if (typeof cb === 'function') cb(null); return; }
-
-  // remove existing overlay if any
-  const existing = document.getElementById('hc-stage-picker');
+export function showSlotsPicker(mode = 'load', cb = () => {}) {
+  const existing = document.getElementById('hc-slots-picker');
   if (existing) existing.remove();
 
   const overlay = document.createElement('div');
-  overlay.id = 'hc-stage-picker';
+  overlay.id = 'hc-slots-picker';
   Object.assign(overlay.style, {
     position: 'fixed', left: '0', top: '0', right: '0', bottom: '0',
-    background: 'rgba(0,0,0,0.8)', color: '#fff', display: 'flex',
-    alignItems: 'center', justifyContent: 'center', zIndex: 9999, fontFamily: 'monospace'
+    background: 'rgba(0,0,0,0.85)', color: '#fff', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', zIndex: 10000, fontFamily: 'monospace'
   });
 
   const box = document.createElement('div');
-  Object.assign(box.style, { width: '520px', maxHeight: '70vh', overflowY: 'auto', background: '#222', padding: '12px', borderRadius: '8px' });
-  const title = document.createElement('div'); title.textContent = 'Choose Stage'; title.style.marginBottom = '8px';
-  box.appendChild(title);
-
-  levels.forEach((lvl, i) => {
-    const row = document.createElement('div');
-    Object.assign(row.style, { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' });
-    const lbl = document.createElement('div'); lbl.textContent = `${i}. ${lvl.name}`; lbl.style.flex = '1';
-    const btnLoad = document.createElement('button'); btnLoad.textContent = 'Load & Play';
-    btnLoad.onclick = () => {
-      try { loadStageCode(lvl.code); } catch (e) { console.warn(e); }
-      overlay.remove();
-      if (typeof cb === 'function') cb(lvl);
-    };
-    const btnPreview = document.createElement('button'); btnPreview.textContent = 'Preview';
-    btnPreview.onclick = () => { try { loadStageCode(lvl.code); } catch (e) { console.warn(e); } };
-    const btnDel = document.createElement('button'); btnDel.textContent = 'Delete';
-    btnDel.onclick = () => {
-      if (!confirm(`Delete stage "${lvl.name}"?`)) return;
-      deleteLevel(lvl.name);
-      overlay.remove();
-      showStagePicker(cb);
-    };
-    [btnLoad, btnPreview, btnDel].forEach(b => { b.style.marginLeft = '6px'; });
-    row.appendChild(lbl);
-    const controls = document.createElement('div');
-    controls.appendChild(btnPreview); controls.appendChild(btnLoad); controls.appendChild(btnDel);
-    row.appendChild(controls);
-    box.appendChild(row);
+  Object.assign(box.style, {
+    width: '520px', maxHeight: '80vh', overflowY: 'auto',
+    background: '#0b0b0b', padding: '12px', borderRadius: '8px'
   });
 
-  const cancelRow = document.createElement('div'); Object.assign(cancelRow.style, { textAlign: 'right', marginTop: '8px' });
-  const btnCancel = document.createElement('button'); btnCancel.textContent = 'Cancel';
-  btnCancel.onclick = () => { overlay.remove(); if (typeof cb === 'function') cb(null); };
-  cancelRow.appendChild(btnCancel);
-  box.appendChild(cancelRow);
+  const title = document.createElement('div');
+  title.textContent = (mode === 'save') ? 'Save to Slot' : 'Load from Slot';
+  title.style.fontSize = '16px';
+  title.style.marginBottom = '10px';
+  box.appendChild(title);
+
+  const grid = document.createElement('div');
+  Object.assign(grid.style, { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' });
+  box.appendChild(grid);
+
+  for (let i = 1; i <= 10; i++) {
+    const slotBox = document.createElement('div');
+    Object.assign(slotBox.style, { background: '#121212', padding: '8px', borderRadius: '6px', minHeight: '64px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' });
+
+    const hdr = document.createElement('div');
+    hdr.style.fontSize = '13px';
+    hdr.style.marginBottom = '6px';
+    const rec = getSlot(i);
+    hdr.textContent = `Slot ${i} ${rec && rec.title ? '— ' + rec.title : rec ? '— (saved)' : '— (empty)'}`;
+    hdr.style.color = rec ? '#fff' : '#888';
+    slotBox.appendChild(hdr);
+
+    const btnRow = document.createElement('div');
+    Object.assign(btnRow.style, { display: 'flex', justifyContent: 'space-between', gap: '6px' });
+
+    const btnPrimary = document.createElement('button');
+    btnPrimary.textContent = (mode === 'save') ? 'Save' : 'Load';
+    btnPrimary.onclick = () => {
+      try {
+        if (mode === 'save') {
+          const saved = saveSlot(i);
+          closeAndCallback({ slotNumber: i, rec: saved || null });
+        } else {
+          const loaded = loadSlot(i);
+          closeAndCallback(loaded ? { slotNumber: i, rec: loaded } : null);
+        }
+      } catch (e) { console.warn('[StageEditor] showSlotsPicker action failed', e); closeAndCallback(null); }
+    };
+    btnRow.appendChild(btnPrimary);
+
+    const btnInfo = document.createElement('button');
+    btnInfo.textContent = 'Info';
+    btnInfo.onclick = () => {
+      if (rec && rec.code) {
+        try {
+          const snippet = (rec.title || rec.name) + '\nSaved: ' + new Date(rec.ts || 0).toLocaleString();
+          alert(snippet);
+        } catch (e) { /* ignore */ }
+      } else {
+        alert('(empty slot)');
+      }
+    };
+    btnRow.appendChild(btnInfo);
+
+    slotBox.appendChild(btnRow);
+    grid.appendChild(slotBox);
+  }
+
+  const footer = document.createElement('div');
+  footer.style.textAlign = 'right';
+   footer.style.marginTop = '10px';
+  const btnCancel = document.createElement('button');
+  btnCancel.textContent = 'Cancel';
+  btnCancel.onclick = () => closeAndCallback(null);
+  footer.appendChild(btnCancel);
+  box.appendChild(footer);
 
   overlay.appendChild(box);
   document.body.appendChild(overlay);
+
+  function close() {
+    const el = document.getElementById('hc-slots-picker');
+    if (el) el.remove();
+    window.removeEventListener('keydown', onKey, { passive: false });
+  }
+  function closeAndCallback(res) {
+    try { cb(res); } catch (e) { /* ignore callback errors */ }
+    close();
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeAndCallback(null); }
+  }
+  window.addEventListener('keydown', onKey, { passive: false });
 }
- 
 // expose for console convenience
 if (typeof window !== 'undefined') {
   window.getLevels = getLevels;
   window.saveCurrentAsLevel = saveCurrentAsLevel;
   window.deleteLevel = deleteLevel;
-  window.showStagePicker = showStagePicker;
+  // window.showStagePicker = showStagePicker;
   window.generateStageCode = generateStageCode;
   window.loadStageCode = loadStageCode;
   window.saveSlot = saveSlot;
   window.loadSlot = loadSlot;
   window.getSlot = getSlot;
+}
+
+// ... later keep existing showSlotsPicker export unchanged
+if (typeof window !== 'undefined') {
+  window.showSlotsPicker = showSlotsPicker;
 }
