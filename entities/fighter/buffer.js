@@ -8,8 +8,8 @@ import { keysDown, keysPressed, keysUp, keysDownTime, keysUpTime } from '../../c
 export function trimBuffer(self) {
   const now = millis();
   self.inputBuffer = (self.inputBuffer || []).filter(i => now - i.time <= (self.inputBufferDuration || 1400));
-  if (self.inputBuffer.length > (self.inputBufferMax || 20)) {
-    self.inputBuffer.splice(0, self.inputBuffer.length - (self.inputBufferMax || 20));
+  if (self.inputBuffer.length > (self.inputBufferMax || 500)) {
+    self.inputBuffer.splice(0, self.inputBuffer.length - (self.inputBufferMax || 500));
   }
 }
 
@@ -26,19 +26,20 @@ export function addInput(self, symbol) {
 
   const now = millis();
 
-  // Permitir hasta 4 '↓' consecutivos (configurable por instancia vía self.maxConsecutiveDowns)
-  const allowRepeats = (symbol === '↓') ? (Number(self.maxConsecutiveDowns) || 4) : 1;
-
-  // Contar símbolos iguales al final del buffer
-  let trailing = 0;
-  for (let i = self.inputBuffer.length - 1; i >= 0; i--) {
-    if (self.inputBuffer[i].symbol === symbol) trailing++;
-    else break;
-    if (trailing >= allowRepeats) break;
-  }
-
-  if (trailing >= allowRepeats) {
-    return;
+  // Permitir hasta N repeticiones para '↓' (por instancia o 4 por defecto)
+  if (symbol === '↓') {
+    const maxDowns = Number(self.maxConsecutiveDowns) || 4;
+    let trailingDowns = 0;
+    for (let i = self.inputBuffer.length - 1; i >= 0; i--) {
+      if (self.inputBuffer[i].symbol === '↓') trailingDowns++;
+      else break;
+      if (trailingDowns >= maxDowns) break;
+    }
+    if (trailingDowns >= maxDowns) return;
+  } else {
+    // evitar duplicados idénticos al final (legacy)
+    const last = self.inputBuffer.length > 0 ? self.inputBuffer[self.inputBuffer.length - 1] : null;
+    if (last && last.symbol === symbol) return;
   }
 
   self.inputBuffer.push({ symbol, time: now });
@@ -87,28 +88,118 @@ export function normalizeDiagonals(self) {
 
 export function addInputFromKey(self, keyName) {
   const now = millis();
+
   const dirMapP1 = { 'w': '↑', 's': '↓', 'a': '←', 'd': '→' };
   const dirMapP2 = { 'arrowup': '↑', 'arrowdown': '↓', 'arrowleft': '←', 'arrowright': '→' };
 
+  const actionMapP1 = { 'i': 'P', 'o': 'K', 'u': 'G', ' ': 'T' };
+  const actionMapP2 = { 'b': 'P', 'n': 'K', 'v': 'G', 'backspace': 'T' };
+
+  const actionOrder = ['P','K','G','T'];
+  const combineActionSymbols = (a,b) => {
+    if (!a) return b; if (!b) return a;
+    if (a === b) return a;
+    const ia = actionOrder.indexOf(a), ib = actionOrder.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia <= ib ? `${a}+${b}` : `${b}+${a}`;
+    return (a < b) ? `${a}+${b}` : `${b}+${a}`;
+  };
+  const combineTwo = (a, b) => {
+    if (!a) return b; if (!b) return a;
+    if (actionOrder.includes(a) && actionOrder.includes(b)) return combineActionSymbols(a,b);
+    if (actionOrder.includes(a) && !actionOrder.includes(b)) return `${a}+${b}`;
+    if (actionOrder.includes(b) && !actionOrder.includes(a)) return `${b}+${a}`;
+    const diag = combineDirections(a, b);
+    if (diag) return diag;
+    return (a < b) ? `${a}+${b}` : `${b}+${a}`;
+  };
+
+  // Nueva semántica:
+  // - si la flecha fue mantenida <= dirIgnoreMaxMs => NO combinar con acción
+  // - si la flecha fue mantenida >= dirCombineMinMs => SÍ combinar con acción
+  const dirIgnoreMaxMs = Number(self.dirIgnoreMaxMs) || 370;   // <= esto => IGNORAR combinación
+  const dirCombineMinMs = Number(self.dirCombineMinMs) || 550; // >= esto => FORZAR combinación
+
+  // grab handling (respeta bloqueo)
   if (self.id === 'p1') {
-    if (keyName === 'i') { addInput(self, 'P'); return; }
-    if (keyName === 'o') { addInput(self, 'K'); return; }
-    // grab input only if not currently grabbed / locked
     if (keyName === 'u') {
       if (self._grabLock || (self.state && self.state.current === 'grabbed')) return;
+      const held = ['i','o',' '].find(k => keysDown[k]);
+      if (held) { addInput(self, combineTwo('G', actionMapP1[held])); return; }
+      const dirHeld = ['w','s','a','d'].find(k => keysDown[k]);
+      if (dirHeld) {
+        const heldMs = now - (keysDownTime[dirHeld] || 0);
+        if (heldMs > dirIgnoreMaxMs && heldMs >= dirCombineMinMs) { addInput(self, combineTwo('G', dirMapP1[dirHeld])); return; }
+      }
       addInput(self, 'G'); return;
     }
-    if (keyName === ' ') { addInput(self, 'T'); return; }
   } else {
-    if (keyName === 'b') { addInput(self, 'P'); return; }
-    if (keyName === 'n') { addInput(self, 'K'); return; }
     if (keyName === 'v') {
       if (self._grabLock || (self.state && self.state.current === 'grabbed')) return;
+      const held = ['b','n','backspace'].find(k => keysDown[k]);
+      if (held) { addInput(self, combineTwo('G', actionMapP2[held])); return; }
+      const dirHeld = ['arrowup','arrowdown','arrowleft','arrowright'].find(k => keysDown[k]);
+      if (dirHeld) {
+        const heldMs = now - (keysDownTime[dirHeld] || 0);
+        if (heldMs > dirIgnoreMaxMs && heldMs >= dirCombineMinMs) { addInput(self, combineTwo('G', dirMapP2[dirHeld])); return; }
+      }
       addInput(self, 'G'); return;
     }
-    if (keyName === 'backspace') { addInput(self, 'T'); return; }
   }
 
+  // ACTION key pressed -> try combine with other action OR with direction (direction must meet new thresholds)
+  const isActionKey = (self.id === 'p1') ? !!actionMapP1[keyName] : !!actionMapP2[keyName];
+  if (isActionKey) {
+    const sym = (self.id === 'p1') ? actionMapP1[keyName] : actionMapP2[keyName];
+    const actionCombineWindow = Number(self.actionCombineWindow) || 80;
+
+    // 1) other action currently held -> action+action
+    const otherActionKeys = (self.id === 'p1') ? Object.keys(actionMapP1).filter(k => k !== keyName)
+                                              : Object.keys(actionMapP2).filter(k => k !== keyName);
+    for (const ok of otherActionKeys) {
+      if (keysDown[ok]) {
+        const otherSym = (self.id === 'p1') ? actionMapP1[ok] : actionMapP2[ok];
+        addInput(self, combineTwo(sym, otherSym)); return;
+      }
+    }
+
+    // 2) direction currently held -> only combine if heldMs > dirIgnoreMaxMs AND >= dirCombineMinMs
+    const dirKeysHeld = (self.id === 'p1') ? ['w','s','a','d'] : ['arrowup','arrowdown','arrowleft','arrowright'];
+    for (const dk of dirKeysHeld) {
+      if (keysDown[dk]) {
+        const heldMs = now - (keysDownTime[dk] || 0);
+        if (heldMs > dirIgnoreMaxMs && heldMs >= dirCombineMinMs) {
+          const dirSym = (self.id === 'p1') ? dirMapP1[dk] : dirMapP2[dk];
+          addInput(self, combineTwo(sym, dirSym)); return;
+        }
+      }
+    }
+
+    // 3) recent action in buffer -> merge (unchanged)
+    const buf = self.inputBuffer || [];
+    for (let i = buf.length - 1; i >= 0; i--) {
+      const s = buf[i].symbol;
+      if (actionOrder.includes(s)) {
+        if ((now - buf[i].time) <= actionCombineWindow) { buf.splice(i,1); addInput(self, combineTwo(sym, s)); return; }
+        break;
+      }
+      if ((now - buf[i].time) > actionCombineWindow) break;
+    }
+
+    // 4) recent direction in buffer within window -> merge (buffered dir, no hold check)
+    for (let i = buf.length - 1; i >= 0; i--) {
+      const s = buf[i].symbol;
+      if (['↑','↓','←','→','↘','↙','↗','↖'].includes(s) && ((now - buf[i].time) <= actionCombineWindow)) {
+        buf.splice(i,1);
+        addInput(self, combineTwo(sym, s)); return;
+      }
+      if ((now - buf[i].time) > actionCombineWindow) break;
+    }
+
+    // fallback single action
+    addInput(self, sym); return;
+  }
+
+  // DIRECTIONAL / DIAGONAL HANDLING (dir+action and dir+dir)
   const thisSym = (self.id === 'p1') ? dirMapP1[keyName] : dirMapP2[keyName];
   if (!thisSym) return;
 
@@ -118,6 +209,34 @@ export function addInputFromKey(self, keyName) {
   const otherDirKeys = (self.id === 'p1') ? ['w','s','a','d'].filter(k => k !== keyName)
                                          : ['arrowup','arrowdown','arrowleft','arrowright'].filter(k => k !== keyName);
 
+  // 1) If an action key is currently held -> combine only if this arrow's heldMs > dirIgnoreMaxMs AND >= dirCombineMinMs
+  const actionKeys = (self.id === 'p1') ? Object.keys(actionMapP1) : Object.keys(actionMapP2);
+  const dirDownTime = keysDownTime[keyName] || 0;
+  const dirHeldMs = now - dirDownTime;
+  if (dirHeldMs > dirIgnoreMaxMs && dirHeldMs >= dirCombineMinMs) {
+    for (const ak of actionKeys) {
+      if (keysDown[ak]) {
+        const actSym = (self.id === 'p1') ? actionMapP1[ak] : actionMapP2[ak];
+        addInput(self, combineTwo(actSym, thisSym)); return;
+      }
+    }
+  }
+
+  // 2) recent action in buffer within small window -> merge only if arrow held meets thresholds
+  const actionCombineWindow = Number(self.actionCombineWindow) || 80;
+  const bufNow = self.inputBuffer || [];
+  if (dirHeldMs > dirIgnoreMaxMs && dirHeldMs >= dirCombineMinMs) {
+    for (let i = bufNow.length - 1; i >= 0; i--) {
+      const s = bufNow[i].symbol;
+      if (actionOrder.includes(s) && ((now - bufNow[i].time) <= actionCombineWindow)) {
+        bufNow.splice(i, 1);
+        addInput(self, combineTwo(s, thisSym)); return;
+      }
+      if ((now - bufNow[i].time) > actionCombineWindow) break;
+    }
+  }
+
+  // Existing diagonal detection (dir+dir -> diag) unchanged
   let foundOther = null;
   let foundOtherKey = null;
 
@@ -130,11 +249,11 @@ export function addInputFromKey(self, keyName) {
   }
 
   if (!foundOther) {
-    const buf = self.inputBuffer || [];
-    for (let i = buf.length - 1; i >= 0; i--) {
-      const s = buf[i].symbol;
+    const buf2 = self.inputBuffer || [];
+    for (let i = buf2.length - 1; i >= 0; i--) {
+      const s = buf2[i].symbol;
       if (['↑','↓','←','→','↗','↖','↘','↙'].includes(s)) {
-        if (now - buf[i].time <= diagCombineWindow) foundOther = s;
+        if (now - buf2[i].time <= diagCombineWindow) foundOther = s;
         break;
       }
     }
@@ -168,10 +287,10 @@ export function addInputFromKey(self, keyName) {
       }
 
       if (fromHeldRecent || fromBufferRecent) {
-        const buf = self.inputBuffer || [];
-        if (buf.length > 0) {
-          const last = buf[buf.length - 1];
-          if (last.symbol === thisSym && (now - last.time) <= recentDuplicateWindow) buf.splice(buf.length - 1, 1);
+        const buf3 = self.inputBuffer || [];
+        if (buf3.length > 0) {
+          const last = buf3[buf3.length - 1];
+          if (last.symbol === thisSym && (now - last.time) <= recentDuplicateWindow) buf3.splice(buf3.length - 1, 1);
         }
 
         const diagKeys = Hitbox?.getKeysForSymbol ? Hitbox.getKeysForSymbol(self, diag) : [];

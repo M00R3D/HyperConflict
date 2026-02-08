@@ -183,6 +183,14 @@ export function initComboAndInput(self) {
     self.inputLockedByKey[k] = false;
   }
   self.comboWindow = 250;
+
+  // Timing para combinación de direcciones/acciones (ms)
+  self.dirIgnoreMaxMs = (typeof self.dirIgnoreMaxMs === 'number') ? self.dirIgnoreMaxMs : 20;
+  self.dirCombineMinMs = (typeof self.dirCombineMinMs === 'number') ? self.dirCombineMinMs : 250;
+
+  // Ajustes relacionados (opcional)
+  self.actionCombineWindow = (typeof self.actionCombineWindow === 'number') ? self.actionCombineWindow : 80;
+  self.diagonalWindow = (typeof self.diagonalWindow === 'number') ? self.diagonalWindow : 160;
 }
 
 export function initHitboxes(self) {

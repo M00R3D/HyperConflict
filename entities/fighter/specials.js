@@ -8,8 +8,8 @@ import * as Buffer from './buffer.js';
 // Cada movimiento puede declarar direction: 'forward'|'backward'|'any' para reglas futuras
 const defaultSpecialDefs = {
   hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
-  shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
-  bun: { seq: ['→','↓','↘','P'], direction: 'forward' },
+  shoryuken: { seq: ['←','→','P'], direction: 'forward' },
+  bun: { seq: ['←','→','P'], direction: 'forward' },
   supersalto: { seq: ['↓','↑'], direction: 'any' },
   ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
   taunt: { seq: ['T'], direction: 'any' }

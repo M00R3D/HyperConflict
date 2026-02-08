@@ -305,7 +305,7 @@ function tryCreatePlayers() {
 
   registerSpecialsForChar('tyeman', {
     hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
-    bun: { seq: ['→','↓','↘','P'], direction: 'forward' },
+    bun: { seq: ['←','→','P'], direction: 'forward' },
     ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
     taunt: { seq: ['T'], direction: 'any' },
     supersalto: { seq: ['↓','↑'], direction: 'any' },
