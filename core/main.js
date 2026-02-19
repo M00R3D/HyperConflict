@@ -5,6 +5,7 @@ import { drawBackground } from '../ui/background.js';import { applyHitstop, isHi
 import { initPauseMenu, handlePauseInput, drawPauseMenu, openPauseFor, closePause } from './pauseMenu.js';
 import { registerAttackHitboxesForChar } from './hitboxConfig.js'; 
 import { registerCharData, registerSpecials } from './registerCharData.js';
+import{startDamageEffect,computeFramesPerHitFor} from './effectManager.js';
 import {
   initStageEditor,
   toggleStageEditor,
@@ -49,25 +50,7 @@ let _hsPrevActive = false;
 let _hsStartedAt = 0;
 let _prevBlockstun = { p1: false, p2: false };
 let _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, playerId: null };
-function computeFramesPerHitFor(player) {
-  const base = 3;
-  const perQuarterBonus = 2;
-  const maxQ = (typeof MAX_HP_QUARTERS === 'number') ? MAX_HP_QUARTERS : 24;
-  const hpNow = (player && typeof player.hp === 'number') ? player.hp : maxQ;
-  const missing = Math.max(0, maxQ - hpNow);
-  return base + (missing * perQuarterBonus);
-}
-function startDamageEffect(player, quartersRemoved) {
-  if (!player) return;
-  const now = millis();
-  const remaining = Math.max(0, Math.min(MAX_HP_QUARTERS, player.hp));
-  const lowFactor = 1 - (remaining / MAX_HP_QUARTERS);
-  const duration = Math.min(500, 220 + 160 * Math.max(1, quartersRemoved));
-  const baseMag = Math.min(100, 6 * Math.max(1, quartersRemoved) * (1 + lowFactor * 3));
-  const mag = baseMag * 0.065;
-  const zoomAdd = Math.min(0.3, 0.035 * Math.max(1, quartersRemoved) * (1 + lowFactor * 4));
-  _hitEffect = { active: true, start: now, end: now + duration, duration, mag, zoom: zoomAdd, targetPlayerId: player.id };
-}
+
 
 let _tyemanAssets = null;let _sbluerAssets = null;let _heartFrames = null;let _slotAssets = null;let _bootFrames = null;let selectionActive = false;
 const choices = ['tyeman', 'sbluer'];let p1Choice = 0;
@@ -1055,7 +1038,7 @@ function draw() {
     } else if (player1.hp < _prevHp.p1) {
       // usar frame-based hitstop calculado dinámicamente según vida restante
       const framesPerHit = computeFramesPerHitFor(player1);
-      startDamageEffect(player1, _prevHp.p1 - player1.hp);
+      _hitEffect = startDamageEffect(player1, _prevHp.p1 - player1.hp);
       try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p1 = player1.hp;
@@ -1065,7 +1048,7 @@ function draw() {
       _prevHp.p2 = player2.hp;
     } else if (player2.hp < _prevHp.p2) {
       const framesPerHit = computeFramesPerHitFor(player2);
-      startDamageEffect(player2, _prevHp.p2 - player2.hp);
+      _hitEffect = startDamageEffect(player2, _prevHp.p2 - player2.hp);
       try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p2 = player2.hp;
