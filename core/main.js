@@ -1,6 +1,6 @@
 // core/main.js
 import { Fighter } from '../../entities/fighter.js';import { Projectile } from '../../entities/projectile.js';
-import { updateCamera, applyCamera } from './camera.js';import { initInput, keysPressed, clearFrameFlags, setPlayersReady } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
+import { updateCamera, applyCamera } from './camera.js';import { initInput, keysPressed, clearFrameFlags, setPlayersReady, pollGamepads } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
 import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
 import { initPauseMenu, handlePauseInput, drawPauseMenu, openPauseFor, closePause } from './pauseMenu.js';
 import { registerAttackHitboxesForChar } from './hitboxConfig.js'; 
@@ -708,6 +708,7 @@ function handlePlayerLifeLost(player) {
 }
 
 function draw() {
+  try { if (typeof pollGamepads === 'function') pollGamepads(); } catch (e) {}
   // allow toggling the stage editor immediately (works even during selection/screens)
   if (typeof keysPressed !== 'undefined' && keysPressed['4']) {
     setStageEditorActive(!isStageEditorActive());
