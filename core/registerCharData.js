@@ -1,6 +1,6 @@
 import { registerStatsForChar, registerActionsForChar } from './charConfig.js';
 import { registerAttackHitboxesForChar, registerBodyHitboxesForChar } from './hitboxConfig.js';
-
+import { registerSpecialsForChar } from '../entities/fighter/specials.js';
 export function registerCharData() {
             registerStatsForChar('tyeman', {
             maxSpeed: 3,
@@ -71,3 +71,19 @@ export function registerCharData() {
             });
 }
 
+export function registerSpecials(){
+  registerSpecialsForChar('tyeman', {
+    hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
+    bun: { seq: ['←','→','P'], direction: 'forward' },
+    ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
+    taunt: { seq: ['T'], direction: 'any' },
+    supersalto: { seq: ['↓','↑'], direction: 'any' },
+    grab: { seq: ['G'], direction: 'any' }
+  });
+  registerSpecialsForChar('sbluer', {
+    shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
+    supersalto: { seq: ['↓','↑'], direction: 'any' },
+    taunt: { seq: ['T'], direction: 'any' },
+    grab: { seq: ['G'], direction: 'any' }
+  });
+}

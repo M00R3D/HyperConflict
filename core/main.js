@@ -1,10 +1,10 @@
 // core/main.js
 import { Fighter } from '../../entities/fighter.js';import { Projectile } from '../../entities/projectile.js';
 import { updateCamera, applyCamera } from './camera.js';import { initInput, keysPressed, clearFrameFlags, setPlayersReady } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
-import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
+import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
 import { initPauseMenu, handlePauseInput, drawPauseMenu, openPauseFor, closePause } from './pauseMenu.js';
-import { registerAttackHitboxesForChar } from './hitboxConfig.js';
-import { registerCharData } from './registerCharData.js';
+import { registerAttackHitboxesForChar } from './hitboxConfig.js'; 
+import { registerCharData, registerSpecials } from './registerCharData.js';
 import {
   initStageEditor,
   toggleStageEditor,
@@ -237,21 +237,7 @@ function tryCreatePlayers() {
 
   // Ensure any previous MATCH_OVER state is cleared when we actually enter combat
   clearMatchOverState();
-
-  registerSpecialsForChar('tyeman', {
-    hadouken: { seq: ['↓','↘','→','P'], direction: 'forward' },
-    bun: { seq: ['←','→','P'], direction: 'forward' },
-    ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
-    taunt: { seq: ['T'], direction: 'any' },
-    supersalto: { seq: ['↓','↑'], direction: 'any' },
-    grab: { seq: ['G'], direction: 'any' }
-  });
-  registerSpecialsForChar('sbluer', {
-    shoryuken: { seq: ['→','↓','↘','P'], direction: 'forward' },
-    supersalto: { seq: ['↓','↑'], direction: 'any' },
-    taunt: { seq: ['T'], direction: 'any' },
-    grab: { seq: ['G'], direction: 'any' }
-  });
+  registerSpecials();
   player1.facing = (player1.x < player2.x) ? 1 : -1;
   player2.facing = (player2.x < player1.x) ? 1 : -1;
 
