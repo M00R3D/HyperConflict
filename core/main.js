@@ -23,8 +23,10 @@ import {
 import './sceneManager.js';
 
 registerCharData();
+import { state as gameState, assignFrom as assignGameState } from './gameState.js';
 
 import { handleHUDAndMatch, resetToSelection as _resetToSelection } from './hudAndMatch.js';
+import { tryCreatePlayers, clearMatchOverState } from './lifecycle.js';
 
 let player1, player2;
 let projectiles = [];
@@ -59,6 +61,19 @@ let _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, 
 let _tyemanAssets = null;let _sbluerAssets = null;let _heartFrames = null;let _slotAssets = null;let _bootFrames = null;let selectionActive = false;
 const choices = ['tyeman', 'sbluer'];let p1Choice = 0;
 let p2Choice = 1;let p1Confirmed = false;let p2Confirmed = false;let p1SelIndex = 0;let p2SelIndex = 1;
+
+// Populate the shared gameState module with initial values from main's locals
+try {
+  assignGameState({
+    player1, player2, projectiles, playersReady, cam,
+    PAUSED, appliedCamZoom, appliedHUDAlpha,
+    MATCH_OVER, MATCH_WINNER, _matchMenu,
+    MAX_HP_QUARTERS, _hitEffect, _prevHp,
+    _hsPrevActive, _hsStartedAt, _prevBlockstun, _blockstunZoom,
+    _tyemanAssets, _sbluerAssets, _heartFrames, _slotAssets, _bootFrames,
+    selectionActive, choices, p1Choice, p2Choice, p1Confirmed, p2Confirmed, p1SelIndex, p2SelIndex
+  });
+} catch (e) { /* defensive: allow older runtimes during edit */ }
 async function setup() {
   createCanvas(800, 400);pixelDensity(1);noSmooth();
   if (typeof drawingContext !== 'undefined' && drawingContext) drawingContext.imageSmoothingEnabled = false;
@@ -68,7 +83,7 @@ async function setup() {
     onResume: () => { PAUSED = false; window.PAUSED = false; },
     onReturnToCharSelect: () => {
       // use the centralized reset helper to fully restart selection state
-      resetToSelection();
+      try { if (typeof _resetToSelection === 'function') _resetToSelection(); } catch(e) {}
     }
   });
 
@@ -105,6 +120,13 @@ async function setup() {
   p2Confirmed = false;
   p1Choice = 0;
   p2Choice = 1;
+  // Sync newly loaded assets and selection state into shared gameState
+  try {
+    assignGameState({
+      _tyemanAssets, _sbluerAssets, _heartFrames, _slotAssets, _bootFrames,
+      selectionActive, playersReady, p1Confirmed, p2Confirmed, p1Choice, p2Choice
+    });
+  } catch (e) { /* ignore */ }
   initStageEditor(undefined, { autoLoadSlot: null });// asegura que el editor cargue sus frames
 
   // forward mouse / wheel to editor when active
@@ -140,119 +162,9 @@ async function setup() {
     window.stageLoadItems = stageLoadItems;
   }
 }
-function clearMatchOverState() {
-  MATCH_OVER = false;
-  MATCH_WINNER = null;
-  window.MATCH_OVER = false;
-  window.MATCH_WINNER = null;
+// clearMatchOverState moved to core/lifecycle.js
 
-      if (_matchMenu) {
-        _matchMenu.active = false;
-        _matchMenu.idx = 0;
-        _matchMenu.lastInputAt = 0;
-      }
-
-  // clear per-player life-processing/handled flags so deaths can be detected again
-  [player1, player2].forEach(p => {
-    if (!p) return;
-    p._lifeProcessing = false;
-    p._lifeHandled = false;
-    // also ensure any blocking flags that might persist are cleared
-    if (p._lifeHandledAt) delete p._lifeHandledAt;
-  });
-}
-
-function tryCreatePlayers() {
-  // Guard clauses must return when conditions not met. Support selection state from window.
-  const p1c = (typeof window !== 'undefined' && typeof window.p1Confirmed === 'boolean') ? window.p1Confirmed : p1Confirmed;
-  const p2c = (typeof window !== 'undefined' && typeof window.p2Confirmed === 'boolean') ? window.p2Confirmed : p2Confirmed;
-  if (!p1c || !p2c) return;
-  if (player1 || player2) return;
-
-  // If there are saved stages, open the picker first (one-time per selection)
-  try {
-    if (typeof window !== 'undefined' && typeof window.stageGetSaved === 'function') {
-      const saved = window.stageGetSaved();
-      if (Array.isArray(saved) && saved.length && !window._stageSelectionDone) {
-        // Hide character selection so the picker/editor overlay can render
-        selectionActive = false;
-        // open picker and wait for callback to resume creation
-        window.stageShowPicker(function(selected) {
-          // selected may be null or a saved record {name, json, ts}
-          window._selectedStageRecord = selected || null;
-          window._stageSelectionDone = true;
-          // resume creation after user picked (or cancelled)
-          tryCreatePlayers();
-        });
-        return; // wait for user pick
-      }
-    }
-  } catch (e) {
-    // ignore picker errors and continue creating players
-    console.warn('stage picker errored, continuing', e);
-  }
-
-      // proceed to create players
-  const tyeman = _tyemanAssets;
-  const sbluer = _sbluerAssets;
-  const choicesLocal = (typeof window !== 'undefined' && Array.isArray(window.choices)) ? window.choices : choices;
-  const p1ChoiceLocal = (typeof window !== 'undefined' && typeof window.p1Choice === 'number') ? window.p1Choice : p1Choice;
-  const p2ChoiceLocal = (typeof window !== 'undefined' && typeof window.p2Choice === 'number') ? window.p2Choice : p2Choice;
-  const p1Stats = getStatsForChar(choicesLocal[p1ChoiceLocal]);
-  const p2Stats = getStatsForChar(choicesLocal[p2ChoiceLocal]);
-  const p1Actions = getActionsForChar(choicesLocal[p1ChoiceLocal]);
-  const p2Actions = getActionsForChar(choicesLocal[p2ChoiceLocal]);
-
-  player1 = new Fighter({
-    x: 100,
-    col: color(255,100,100),
-    id: 'p1',
-    charId: choices[p1Choice],
-    assets: choicesLocal[p1ChoiceLocal] === 'tyeman' ? tyeman : sbluer,
-    actions: p1Actions,
-    ...p1Stats
-  });
-  player2 = new Fighter({
-    x: 600,
-    col: color(100,100,255),
-    id: 'p2',
-    charId: choicesLocal[p2ChoiceLocal],
-    assets: choicesLocal[p2ChoiceLocal] === 'tyeman' ? tyeman : sbluer,
-    actions: p2Actions,
-    ...p2Stats
-  });
-  player1.opponent = player2;
-  player2.opponent = player1;
-
-  // If a stage record was chosen, try to load it into the editor items
-  try {
-    if (typeof window !== 'undefined' && window._selectedStageRecord) {
-      const rec = window._selectedStageRecord;
-      if (rec && rec.json) {
-        try { loadStageItems(JSON.parse(rec.json)); } catch (e) { console.warn('failed to load selected stage json', e); }
-      }
-      window._selectedStageRecord = null;
-    }
-  } catch (e) { /* ignore */ }
-
-  // Ensure any previous MATCH_OVER state is cleared when we actually enter combat
-  clearMatchOverState();
-  registerSpecials();
-  player1.facing = (player1.x < player2.x) ? 1 : -1;
-  player2.facing = (player2.x < player1.x) ? 1 : -1;
-
-  // ensure animations/frames are initialized and not blocked by PAUSED
-  try {
-    // force globals for a clean start
-    PAUSED = false; window.PAUSED = false;
-    // reset animation state explicitly so sprites render their frames immediately
-    player1.setState('idle'); player1.frameIndex = 0; player1.frameTimer = 0;
-    player2.setState('idle'); player2.frameIndex = 0; player2.frameTimer = 0;
-  } catch (e) { /* silent */ }
-
-  initInput({ p1: player1, p2: player2, ready: true }); playersReady = true;
-  selectionActive = false; _prevHp.p1 = player1.hp; _prevHp.p2 = player2.hp;
-}
+// tryCreatePlayers moved to core/lifecycle.js
 
 let pauseStartTime = 0;
 let totalPausedTime = 0;
@@ -367,6 +279,17 @@ function handlePlayerLifeLost(player) {
 
 function draw() {
   try { if (typeof pollGamepads === 'function') pollGamepads(); } catch (e) {}
+  // Ensure we reflect any externally-created players/state from `gameState`
+  try {
+    player1 = (gameState && gameState.player1) ? gameState.player1 : player1;
+    player2 = (gameState && gameState.player2) ? gameState.player2 : player2;
+    projectiles = (gameState && Array.isArray(gameState.projectiles)) ? gameState.projectiles : projectiles;
+    playersReady = (gameState && typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
+    selectionActive = (gameState && typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
+    _prevHp = (gameState && gameState._prevHp) ? gameState._prevHp : _prevHp;
+  } catch (e) {
+    // non-fatal
+  }
   // allow toggling the stage editor immediately (works even during selection/screens)
   if (typeof keysPressed !== 'undefined' && keysPressed['4']) {
     setStageEditorActive(!isStageEditorActive());
@@ -382,7 +305,16 @@ function draw() {
       drawStageEditor({ x: 0, y: 0, zoom: 1 });
     }
     // si ambos confirmaron, crear jugadores
-    tryCreatePlayers();
+    try { tryCreatePlayers(); } catch(e) {}
+    // sync locals from shared gameState in case lifecycle created players
+    try {
+      player1 = gameState.player1 || player1;
+      player2 = gameState.player2 || player2;
+      projectiles = gameState.projectiles || projectiles;
+      playersReady = (typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
+      selectionActive = (typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
+      _prevHp = gameState._prevHp || _prevHp;
+    } catch(e) {}
     // limpiar flags y retornar (no ejecutar game loop aún)
     clearFrameFlags();
     return;
@@ -1004,130 +936,102 @@ function draw() {
       };
     }
   } catch (e) {}
+
+  // Sync main's local state back into the shared gameState module each frame
+  try {
+    // Only merge keys that are defined here to avoid clobbering values
+    // (e.g. lifecycle may create players and set them on gameState while
+    //  main's local vars are still undefined for a frame)
+    const sync = {};
+    if (typeof player1 !== 'undefined' && player1 !== null) sync.player1 = player1;
+    if (typeof player2 !== 'undefined' && player2 !== null) sync.player2 = player2;
+    if (typeof projectiles !== 'undefined' && projectiles !== null) sync.projectiles = projectiles;
+    if (typeof playersReady !== 'undefined') sync.playersReady = playersReady;
+    if (typeof cam !== 'undefined' && cam !== null) sync.cam = cam;
+    if (typeof PAUSED !== 'undefined') sync.PAUSED = PAUSED;
+    if (typeof appliedCamZoom !== 'undefined') sync.appliedCamZoom = appliedCamZoom;
+    if (typeof appliedHUDAlpha !== 'undefined') sync.appliedHUDAlpha = appliedHUDAlpha;
+    if (typeof MATCH_OVER !== 'undefined') sync.MATCH_OVER = MATCH_OVER;
+    if (typeof MATCH_WINNER !== 'undefined') sync.MATCH_WINNER = MATCH_WINNER;
+    if (typeof _matchMenu !== 'undefined' && _matchMenu !== null) sync._matchMenu = _matchMenu;
+    if (typeof _hitEffect !== 'undefined' && _hitEffect !== null) sync._hitEffect = _hitEffect;
+    if (typeof _prevHp !== 'undefined' && _prevHp !== null) sync._prevHp = _prevHp;
+    if (typeof _hsPrevActive !== 'undefined') sync._hsPrevActive = _hsPrevActive;
+    if (typeof _hsStartedAt !== 'undefined') sync._hsStartedAt = _hsStartedAt;
+    if (typeof _prevBlockstun !== 'undefined' && _prevBlockstun !== null) sync._prevBlockstun = _prevBlockstun;
+    if (typeof _blockstunZoom !== 'undefined' && _blockstunZoom !== null) sync._blockstunZoom = _blockstunZoom;
+    if (typeof _tyemanAssets !== 'undefined') sync._tyemanAssets = _tyemanAssets;
+    if (typeof _sbluerAssets !== 'undefined') sync._sbluerAssets = _sbluerAssets;
+    if (typeof _heartFrames !== 'undefined') sync._heartFrames = _heartFrames;
+    if (typeof _slotAssets !== 'undefined') sync._slotAssets = _slotAssets;
+    if (typeof _bootFrames !== 'undefined') sync._bootFrames = _bootFrames;
+    if (typeof selectionActive !== 'undefined') sync.selectionActive = selectionActive;
+    if (typeof choices !== 'undefined') sync.choices = choices;
+    if (typeof p1Choice !== 'undefined') sync.p1Choice = p1Choice;
+    if (typeof p2Choice !== 'undefined') sync.p2Choice = p2Choice;
+    if (typeof p1Confirmed !== 'undefined') sync.p1Confirmed = p1Confirmed;
+    if (typeof p2Confirmed !== 'undefined') sync.p2Confirmed = p2Confirmed;
+    if (typeof p1SelIndex !== 'undefined') sync.p1SelIndex = p1SelIndex;
+    if (typeof p2SelIndex !== 'undefined') sync.p2SelIndex = p2SelIndex;
+
+    assignGameState(sync);
+  } catch (e) { /* ignore sync errors */ }
 }
 
 // ---------- NEW: full reset helper to go back to character select ----------
-function resetToSelection() {
-  // Stop pause/hitstop and clear globals
-  PAUSED = false;
-  window.PAUSED = false;
-  try { window.HITSTOP_ACTIVE = false; window.HITSTOP_PENDING = false; window.HITSTOP_REMAINING_MS = 0; } catch(e){}
-
-  // Ensure match-over menu cleared as we leave gameplay
-  clearMatchOverState();
-
- 
-
-  // clear players / projectiles / ready flag
-  try { if (player1) { player1 = null; } } catch(e){}
-  try { if (player2) { player2 = null; } } catch(e){}
-  projectiles.length = 0;
-  playersReady = false;
-  selectionActive = true;
-
-  // reset selection indexes & confirmations
-  p1Confirmed = false; p2Confirmed = false;
-  p1SelIndex = 0; p2SelIndex = 1;
-  p1Choice = 0; p2Choice = 1;
-
-  // also clear any selection state stored on window by selectionManager
-  try {
-    if (typeof window !== 'undefined') {
-      if (window.choices) delete window.choices;
-      if (typeof window.p1Confirmed !== 'undefined') window.p1Confirmed = false;
-      if (typeof window.p2Confirmed !== 'undefined') window.p2Confirmed = false;
-      if (typeof window.p1Choice !== 'undefined') window.p1Choice = 0;
-      if (typeof window.p2Choice !== 'undefined') window.p2Choice = 1;
-      if (typeof window.p1SelIndex !== 'undefined') window.p1SelIndex = 0;
-      if (typeof window.p2SelIndex !== 'undefined') window.p2SelIndex = 1;
-      if (typeof window._stageSelectionDone !== 'undefined') window._stageSelectionDone = false;
-      if (typeof window._selectedStageRecord !== 'undefined') window._selectedStageRecord = null;
-    }
-  } catch (e) {}
-
-  // reset camera / hud / effects
-  cam = { x: 0, y: 0, zoom: 1 };
-  appliedCamZoom = cam.zoom || 1;
-  appliedHUDAlpha = 1;
-  _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
-  _prevHp = { p1: null, p2: null };
-  _hsPrevActive = false;
-  _hsStartedAt = 0;
-  _prevBlockstun = { p1: false, p2: false };
-  _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, playerId: null };
-
-  // clear input flags (defensive)
-  try {
-    if (typeof keysPressed === 'object') for (const k in keysPressed) keysPressed[k] = false;
-    if (typeof keysDown === 'object') for (const k in keysDown) keysDown[k] = false;
-    if (typeof keysUp === 'object') for (const k in keysUp) keysUp[k] = false;
-  } catch (e) {}
-
-  // re-init input module without players
-  try { initInput({ p1: null, p2: null, ready: false }); } catch (e) {}
-
-  // clear any per-player HUD state maps (safe)
-  try {
-    if (typeof window !== 'undefined') {
-      if (window._heartStateByPlayer && typeof window._heartStateByPlayer.clear === 'function') window._heartStateByPlayer.clear();
-      if (window._bootStateByPlayer && typeof window._bootStateByPlayer.clear === 'function') window._bootStateByPlayer.clear();
-    }
-  } catch(e){}
-
-  console.log('[RESET] returned to character select and fully reset state');
-}
+// resetToSelection moved to core/hudAndMatch.js (use _resetToSelection)
 // ---------- end reset helper ----------
 
 window.setup = setup;
 window.draw = draw;
 export { projectiles };
-function _drawMatchOverOverlay(menu = null) {
-  push();
-  noStroke();
-  fill(0, 200);
-  rect(0, 0, width, height);
+// function _drawMatchOverOverlay(menu = null) {
+//   push();
+//   noStroke();
+//   fill(0, 200);
+//   rect(0, 0, width, height);
 
-  const w = Math.min(520, width - 80);
-  const h = 220;
-  const x = (width - w) / 2;
-  const y = (height - h) / 2;
-  fill(28, 34, 42, 230);
-  stroke(255, 28);
-  rect(x, y, w, h, 8);
+//   const w = Math.min(520, width - 80);
+//   const h = 220;
+//   const x = (width - w) / 2;
+//   const y = (height - h) / 2;
+//   fill(28, 34, 42, 230);
+//   stroke(255, 28);
+//   rect(x, y, w, h, 8);
 
-  noStroke();
-  fill(255);
-  textAlign(CENTER, TOP);
-  textSize(28);
-  text('MATCH OVER', x + w / 2, y + 12);
+//   noStroke();
+//   fill(255);
+//   textAlign(CENTER, TOP);
+//   textSize(28);
+//   text('MATCH OVER', x + w / 2, y + 12);
 
-  textSize(18);
-  const winnerLabel = MATCH_WINNER === 'p1' ? (player1?.charId || 'P1') : (MATCH_WINNER === 'p2' ? (player2?.charId || 'P2') : '—');
-  text(`Winner: ${winnerLabel}`, x + w / 2, y + 56);
+//   textSize(18);
+//   const winnerLabel = MATCH_WINNER === 'p1' ? (player1?.charId || 'P1') : (MATCH_WINNER === 'p2' ? (player2?.charId || 'P2') : '—');
+//   text(`Winner: ${winnerLabel}`, x + w / 2, y + 56);
 
-  // draw menu options (like pause menu) and highlight selected
-  const items = (menu && Array.isArray(menu.items)) ? menu.items : ['Rematch','Character Select'];
-  const selIdx = menu ? (menu.idx || 0) : 0;
-  textSize(16);
-  const menuX = x + w / 2;
-  let menuY = y + 96;
-  for (let i = 0; i < items.length; i++) {
-    const ty = menuY + i * 36;
-    if (i === selIdx) {
-      fill(80,200,255);
-      rect(x + 36, ty - 8, w - 72, 30, 6);
-      fill(10);
-    } else {
-      fill(220);
-    }
-    textAlign(CENTER, CENTER);
-    text(items[i], menuX, ty + 6);
-  }
+//   // draw menu options (like pause menu) and highlight selected
+//   const items = (menu && Array.isArray(menu.items)) ? menu.items : ['Rematch','Character Select'];
+//   const selIdx = menu ? (menu.idx || 0) : 0;
+//   textSize(16);
+//   const menuX = x + w / 2;
+//   let menuY = y + 96;
+//   for (let i = 0; i < items.length; i++) {
+//     const ty = menuY + i * 36;
+//     if (i === selIdx) {
+//       fill(80,200,255);
+//       rect(x + 36, ty - 8, w - 72, 30, 6);
+//       fill(10);
+//     } else {
+//       fill(220);
+//     }
+//     textAlign(CENTER, CENTER);
+//     text(items[i], menuX, ty + 6);
+//   }
 
-  textSize(12);
-  fill(200);
-  textAlign(CENTER, TOP);
-  text('Navega con W/S (P1) o ↑/↓ (P2). Selecciona con I/O (P1) o B/N (P2).', x + w/2, y + h - 36);
+//   textSize(12);
+//   fill(200);
+//   textAlign(CENTER, TOP);
+//   text('Navega con W/S (P1) o ↑/↓ (P2). Selecciona con I/O (P1) o B/N (P2).', x + w/2, y + h - 36);
 
-  pop();
-}
+//   pop();
+// }
