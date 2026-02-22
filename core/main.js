@@ -27,6 +27,7 @@ import { state as gameState, assignFrom as assignGameState } from './gameState.j
 
 import { handleHUDAndMatch, resetToSelection as _resetToSelection } from './hudAndMatch.js';
 import { tryCreatePlayers, clearMatchOverState } from './lifecycle.js';
+import renderScene from './render.js';
 
 let player1, player2;
 let projectiles = [];
@@ -279,17 +280,16 @@ function handlePlayerLifeLost(player) {
 
 function draw() {
   try { if (typeof pollGamepads === 'function') pollGamepads(); } catch (e) {}
-  // Ensure we reflect any externally-created players/state from `gameState`
+  // Early sync from shared gameState to locals so lifecycle-created players
+  // or other modules are reflected immediately in this frame.
   try {
-    player1 = (gameState && gameState.player1) ? gameState.player1 : player1;
-    player2 = (gameState && gameState.player2) ? gameState.player2 : player2;
-    projectiles = (gameState && Array.isArray(gameState.projectiles)) ? gameState.projectiles : projectiles;
-    playersReady = (gameState && typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
-    selectionActive = (gameState && typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
-    _prevHp = (gameState && gameState._prevHp) ? gameState._prevHp : _prevHp;
-  } catch (e) {
-    // non-fatal
-  }
+    player1 = gameState.player1 || player1;
+    player2 = gameState.player2 || player2;
+    projectiles = (Array.isArray(gameState.projectiles) && gameState.projectiles.length) ? gameState.projectiles : projectiles;
+    playersReady = (typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
+    selectionActive = (typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
+    _prevHp = gameState._prevHp || _prevHp;
+  } catch (e) {}
   // allow toggling the stage editor immediately (works even during selection/screens)
   if (typeof keysPressed !== 'undefined' && keysPressed['4']) {
     setStageEditorActive(!isStageEditorActive());
@@ -661,158 +661,21 @@ function draw() {
     _prevHp.p2 = player2.hp;
   }
 
-  // render (siempre)
-  push();
-  // suavizar transición del zoom cuando se pausa/resume:
-  // targetZoom = cam.zoom * 2 cuando PAUSED, o cam.zoom cuando no.
-  const maxPauseZoom = 3;
-  const pauseMultiplier = 2;
-  const targetZoom = PAUSED ? Math.min((cam.zoom || 1) * pauseMultiplier, maxPauseZoom) : (cam.zoom || 1);
-
-  // --- calcular shake + zoom add si hay efecto activo ---
-  let shakeX = 0, shakeY = 0, zoomAdd = 0;
-  if (_hitEffect && _hitEffect.active) {
-    const now = millis();
-    const elapsed = now - _hitEffect.start;
-    if (elapsed >= _hitEffect.duration) {
-      _hitEffect.active = false;
-    } else {
-      const t = Math.max(0, Math.min(1, elapsed / _hitEffect.duration));
-      // ease out (strong at start, decay to 0)
-      const ease = Math.sin((1 - t) * Math.PI / 2);
-      const phase = now / 28;
-      // combinar senos para sensación orgánica
-      const xAmp = _hitEffect.mag * ease;
-      const yAmp = _hitEffect.mag * 0.55 * ease;
-      shakeX = (Math.sin(phase * 1.3) + Math.sin(phase * 0.67)) * xAmp * 0.45;
-      shakeY = (Math.cos(phase * 1.1) + Math.cos(phase * 0.5)) * yAmp * 0.45;
-      zoomAdd = _hitEffect.zoom * ease;
-    }
-  }
-
-  // --- APPLY BLOCKSTUN ZOOM (smooth, NO screenshake) ---
-  if (_blockstunZoom.active) {
-    const bev = millis() - _blockstunZoom.start;
-    if (bev >= (_blockstunZoom.duration || 0)) {
-      _blockstunZoom.active = false;
-    } else {
-      // fast in, slower out easing
-      const t = constrain(bev / (_blockstunZoom.duration || 1), 0, 1);
-      // ease: fast ramp up, smooth ease-out
-      const eased = 1 - Math.pow(1 - Math.min(1, t * 1.6), 3);
-      zoomAdd += (_blockstunZoom.targetAdd || 0.14) * eased;
-      // ensure no screenshake: do NOT modify shakeX/shakeY here
-    }
-  }
-
-  // lerp suave hacia target (ajusta factor 0.08 para más/menos rapidez)
-  appliedCamZoom = lerp(appliedCamZoom, targetZoom * (1 + zoomAdd), 0.08);
-  // aplicar cámara usando el zoom suavizado + offset de screen-shake, sin modificar `cam` real
-  applyCamera({ x: cam.x + shakeX, y: cam.y + shakeY, zoom: appliedCamZoom });
-  drawBackground();
-
-  // dibujar el piso del nivel (debe quedar debajo de los items)
-  // push();
-  // noStroke();
-  // fill(80, 50, 20);
-  // rect(0, height - 40, width, 40);
-  // pop();
-
-  // draw level items saved (always) so levels show even if editor is closed
+  // render (delegado a core/render.js)
   try {
-    if (typeof drawSavedItems === 'function') {
-      drawSavedItems({ x: cam.x + shakeX, y: cam.y + shakeY, zoom: appliedCamZoom });
-    }
+    const renderCtx = {
+      player1, player2, projectiles, cam,
+      appliedCamZoom, _hitEffect, _blockstunZoom, _prevBlockstun, PAUSED
+    };
+    const rr = renderScene(renderCtx) || {};
+    cam = rr.cam || cam;
+    appliedCamZoom = (typeof rr.appliedCamZoom === 'number') ? rr.appliedCamZoom : appliedCamZoom;
+    _hitEffect = rr._hitEffect || _hitEffect;
+    _blockstunZoom = rr._blockstunZoom || _blockstunZoom;
+    _prevBlockstun = rr._prevBlockstun || _prevBlockstun;
+    projectiles = Array.isArray(rr.projectiles) ? rr.projectiles : projectiles;
   } catch (e) {
-    console.warn('drawSavedItems failed', e);
-  }
-  
-  // Floor no longer drawn as solid. If debug overlay is active, show floor hitbox outline:
-  if (typeof window !== 'undefined' && window.SHOW_DEBUG_OVERLAYS) {
-    push();
-    // camera is already applied here, so draw in world coords
-    noFill();
-    stroke(255, 160, 60);
-    strokeWeight(2);
-    rect(0, height - 40, width, 40);
-    pop();
-  }
-
-  if (player1 && typeof player1.display === 'function') player1.display();
-  if (player2 && typeof player2.display === 'function') player2.display();
-
-  for (let i = 0; i < projectiles.length; i++) {
-    const p = projectiles[i];
-    if (p && typeof p.display === 'function') p.display();
-  }
-
-  // --- Mostrar hitboxes de proyectiles si está activado el overlay ---
-  if (window.SHOW_DEBUG_OVERLAYS) {
-    for (let i = 0; i < projectiles.length; i++) {
-      const p = projectiles[i];
-      if (!p) continue;
-      const hb = (typeof p.getHitbox === 'function') ? p.getHitbox() : null;
-      if (hb) {
-        push();
-        noFill();
-        stroke(0, 255, 255, 180); // color cian para distinguir
-        strokeWeight(1.5);
-        rect(hb.x, hb.y, hb.w, hb.h);
-        pop();
-      }
-    }
-  }
-
-  pop();
-
-  // --- NEW: if a frame-based hitstop was requested earlier, capture the just-rendered frame now ---
-  try {
-    if (typeof capturePendingHitstopSnapshot === 'function') {
-      capturePendingHitstopSnapshot();
-    }
-  } catch (e) {
-    // ignore capture errors, continue
-  }
-
-  // Mostrar un pequeño indicador cuando el overlay de debug (tecla '1') está activo.
-  // El cuadradito se colorea en verde si hay hitstop activo, rojo en caso contrario.
-  if (typeof window !== 'undefined' && window.SHOW_DEBUG_OVERLAYS) {
-    try {
-      push();
-      const size = 12;
-      const pad =118;
-      const padX = 78;
-      const hsActive = (typeof isHitstopActive === 'function') ? !!isHitstopActive() : !!window.HITSTOP_ACTIVE;
-      // obtener ms restantes: preferir la función pública que calcula frames+tiempo,
-      // si no existe o devuelve 0 usar el fallback global expuesto por hitstop.js
-      let msLeft = 0;
-      if (typeof remainingHitstopMs === 'function') {
-        try { msLeft = Math.max(0, Math.round(remainingHitstopMs())); } catch (e) { msLeft = 0; }
-      }
-      if ((!msLeft || msLeft === 0) && typeof window !== 'undefined') {
-        msLeft = Math.max(0, Math.round(window.HITSTOP_REMAINING_MS || 0));
-      }
-
-      noStroke();
-      fill(hsActive ? color(80, 220, 120, 220) : color(220, 80, 80, 200));
-      rect(pad, padX, size, size, 3);
-
-      // pequeño borde
-      stroke(0, 0, 0, 120);
-      noFill();
-      rect(pad, padX, size, size, 3);
-
-      // escribir ms restantes a la derecha del cuadradito
-      noStroke();
-      fill(240);
-      textSize(12);
-      textAlign(LEFT, CENTER);
-      text(`${msLeft}ms`, pad + size + 8, padX + size / 2);
-
-      pop();
-    } catch (e) {
-      // no romper dibujado principal por errores del indicador
-    }
+    console.warn('renderScene failed', e);
   }
 
   // draw HUD - pasar fallback seguro si player1/player2 no están listos
@@ -939,99 +802,46 @@ function draw() {
 
   // Sync main's local state back into the shared gameState module each frame
   try {
-    // Only merge keys that are defined here to avoid clobbering values
-    // (e.g. lifecycle may create players and set them on gameState while
-    //  main's local vars are still undefined for a frame)
+    // Prefer values already present in the shared gameState to avoid
+    // overwriting lifecycle-created objects with stale locals.
     const sync = {};
-    if (typeof player1 !== 'undefined' && player1 !== null) sync.player1 = player1;
-    if (typeof player2 !== 'undefined' && player2 !== null) sync.player2 = player2;
-    if (typeof projectiles !== 'undefined' && projectiles !== null) sync.projectiles = projectiles;
-    if (typeof playersReady !== 'undefined') sync.playersReady = playersReady;
-    if (typeof cam !== 'undefined' && cam !== null) sync.cam = cam;
-    if (typeof PAUSED !== 'undefined') sync.PAUSED = PAUSED;
-    if (typeof appliedCamZoom !== 'undefined') sync.appliedCamZoom = appliedCamZoom;
-    if (typeof appliedHUDAlpha !== 'undefined') sync.appliedHUDAlpha = appliedHUDAlpha;
-    if (typeof MATCH_OVER !== 'undefined') sync.MATCH_OVER = MATCH_OVER;
-    if (typeof MATCH_WINNER !== 'undefined') sync.MATCH_WINNER = MATCH_WINNER;
-    if (typeof _matchMenu !== 'undefined' && _matchMenu !== null) sync._matchMenu = _matchMenu;
-    if (typeof _hitEffect !== 'undefined' && _hitEffect !== null) sync._hitEffect = _hitEffect;
-    if (typeof _prevHp !== 'undefined' && _prevHp !== null) sync._prevHp = _prevHp;
-    if (typeof _hsPrevActive !== 'undefined') sync._hsPrevActive = _hsPrevActive;
-    if (typeof _hsStartedAt !== 'undefined') sync._hsStartedAt = _hsStartedAt;
-    if (typeof _prevBlockstun !== 'undefined' && _prevBlockstun !== null) sync._prevBlockstun = _prevBlockstun;
-    if (typeof _blockstunZoom !== 'undefined' && _blockstunZoom !== null) sync._blockstunZoom = _blockstunZoom;
-    if (typeof _tyemanAssets !== 'undefined') sync._tyemanAssets = _tyemanAssets;
-    if (typeof _sbluerAssets !== 'undefined') sync._sbluerAssets = _sbluerAssets;
-    if (typeof _heartFrames !== 'undefined') sync._heartFrames = _heartFrames;
-    if (typeof _slotAssets !== 'undefined') sync._slotAssets = _slotAssets;
-    if (typeof _bootFrames !== 'undefined') sync._bootFrames = _bootFrames;
-    if (typeof selectionActive !== 'undefined') sync.selectionActive = selectionActive;
-    if (typeof choices !== 'undefined') sync.choices = choices;
-    if (typeof p1Choice !== 'undefined') sync.p1Choice = p1Choice;
-    if (typeof p2Choice !== 'undefined') sync.p2Choice = p2Choice;
-    if (typeof p1Confirmed !== 'undefined') sync.p1Confirmed = p1Confirmed;
-    if (typeof p2Confirmed !== 'undefined') sync.p2Confirmed = p2Confirmed;
-    if (typeof p1SelIndex !== 'undefined') sync.p1SelIndex = p1SelIndex;
-    if (typeof p2SelIndex !== 'undefined') sync.p2SelIndex = p2SelIndex;
+    sync.player1 = gameState.player1 || (player1 || null);
+    sync.player2 = gameState.player2 || (player2 || null);
+    sync.projectiles = (Array.isArray(gameState.projectiles) && gameState.projectiles.length) ? gameState.projectiles : projectiles;
+    sync.playersReady = (typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
+    sync.cam = gameState.cam || cam;
+    sync.PAUSED = (typeof gameState.PAUSED !== 'undefined') ? gameState.PAUSED : PAUSED;
+    sync.appliedCamZoom = (typeof gameState.appliedCamZoom !== 'undefined') ? gameState.appliedCamZoom : appliedCamZoom;
+    sync.appliedHUDAlpha = (typeof gameState.appliedHUDAlpha !== 'undefined') ? gameState.appliedHUDAlpha : appliedHUDAlpha;
+    sync.MATCH_OVER = (typeof gameState.MATCH_OVER !== 'undefined') ? gameState.MATCH_OVER : MATCH_OVER;
+    sync.MATCH_WINNER = (typeof gameState.MATCH_WINNER !== 'undefined') ? gameState.MATCH_WINNER : MATCH_WINNER;
+    sync._matchMenu = gameState._matchMenu || _matchMenu;
+    sync._hitEffect = gameState._hitEffect || _hitEffect;
+    sync._prevHp = gameState._prevHp || _prevHp;
+    sync._hsPrevActive = (typeof gameState._hsPrevActive !== 'undefined') ? gameState._hsPrevActive : _hsPrevActive;
+    sync._hsStartedAt = (typeof gameState._hsStartedAt !== 'undefined') ? gameState._hsStartedAt : _hsStartedAt;
+    sync._prevBlockstun = gameState._prevBlockstun || _prevBlockstun;
+    sync._blockstunZoom = gameState._blockstunZoom || _blockstunZoom;
+    sync._tyemanAssets = (typeof gameState._tyemanAssets !== 'undefined') ? gameState._tyemanAssets : _tyemanAssets;
+    sync._sbluerAssets = (typeof gameState._sbluerAssets !== 'undefined') ? gameState._sbluerAssets : _sbluerAssets;
+    sync._heartFrames = (typeof gameState._heartFrames !== 'undefined') ? gameState._heartFrames : _heartFrames;
+    sync._slotAssets = (typeof gameState._slotAssets !== 'undefined') ? gameState._slotAssets : _slotAssets;
+    sync._bootFrames = (typeof gameState._bootFrames !== 'undefined') ? gameState._bootFrames : _bootFrames;
+    sync.selectionActive = (typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
+    sync.choices = (typeof gameState.choices !== 'undefined') ? gameState.choices : choices;
+    sync.p1Choice = (typeof gameState.p1Choice !== 'undefined') ? gameState.p1Choice : p1Choice;
+    sync.p2Choice = (typeof gameState.p2Choice !== 'undefined') ? gameState.p2Choice : p2Choice;
+    sync.p1Confirmed = (typeof gameState.p1Confirmed !== 'undefined') ? gameState.p1Confirmed : p1Confirmed;
+    sync.p2Confirmed = (typeof gameState.p2Confirmed !== 'undefined') ? gameState.p2Confirmed : p2Confirmed;
+    sync.p1SelIndex = (typeof gameState.p1SelIndex !== 'undefined') ? gameState.p1SelIndex : p1SelIndex;
+    sync.p2SelIndex = (typeof gameState.p2SelIndex !== 'undefined') ? gameState.p2SelIndex : p2SelIndex;
 
     assignGameState(sync);
   } catch (e) { /* ignore sync errors */ }
 }
 
-// ---------- NEW: full reset helper to go back to character select ----------
-// resetToSelection moved to core/hudAndMatch.js (use _resetToSelection)
-// ---------- end reset helper ----------
 
 window.setup = setup;
 window.draw = draw;
 export { projectiles };
-// function _drawMatchOverOverlay(menu = null) {
-//   push();
-//   noStroke();
-//   fill(0, 200);
-//   rect(0, 0, width, height);
 
-//   const w = Math.min(520, width - 80);
-//   const h = 220;
-//   const x = (width - w) / 2;
-//   const y = (height - h) / 2;
-//   fill(28, 34, 42, 230);
-//   stroke(255, 28);
-//   rect(x, y, w, h, 8);
-
-//   noStroke();
-//   fill(255);
-//   textAlign(CENTER, TOP);
-//   textSize(28);
-//   text('MATCH OVER', x + w / 2, y + 12);
-
-//   textSize(18);
-//   const winnerLabel = MATCH_WINNER === 'p1' ? (player1?.charId || 'P1') : (MATCH_WINNER === 'p2' ? (player2?.charId || 'P2') : '—');
-//   text(`Winner: ${winnerLabel}`, x + w / 2, y + 56);
-
-//   // draw menu options (like pause menu) and highlight selected
-//   const items = (menu && Array.isArray(menu.items)) ? menu.items : ['Rematch','Character Select'];
-//   const selIdx = menu ? (menu.idx || 0) : 0;
-//   textSize(16);
-//   const menuX = x + w / 2;
-//   let menuY = y + 96;
-//   for (let i = 0; i < items.length; i++) {
-//     const ty = menuY + i * 36;
-//     if (i === selIdx) {
-//       fill(80,200,255);
-//       rect(x + 36, ty - 8, w - 72, 30, 6);
-//       fill(10);
-//     } else {
-//       fill(220);
-//     }
-//     textAlign(CENTER, CENTER);
-//     text(items[i], menuX, ty + 6);
-//   }
-
-//   textSize(12);
-//   fill(200);
-//   textAlign(CENTER, TOP);
-//   text('Navega con W/S (P1) o ↑/↓ (P2). Selecciona con I/O (P1) o B/N (P2).', x + w/2, y + h - 36);
-
-//   pop();
-// }
