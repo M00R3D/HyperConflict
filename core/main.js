@@ -24,6 +24,8 @@ import './sceneManager.js';
 
 registerCharData();
 
+import { handleHUDAndMatch, resetToSelection as _resetToSelection } from './hudAndMatch.js';
+
 let player1, player2;
 let projectiles = [];
 let playersReady = false;
@@ -144,11 +146,11 @@ function clearMatchOverState() {
   window.MATCH_OVER = false;
   window.MATCH_WINNER = null;
 
-  if (_matchMenu) {
-    _matchMenu.active = false;
-    _matchMenu.idx = 0;
-    _matchMenu.lastInputAt = 0;
-  }
+      if (_matchMenu) {
+        _matchMenu.active = false;
+        _matchMenu.idx = 0;
+        _matchMenu.lastInputAt = 0;
+      }
 
   // clear per-player life-processing/handled flags so deaths can be detected again
   [player1, player2].forEach(p => {
@@ -190,7 +192,7 @@ function tryCreatePlayers() {
     console.warn('stage picker errored, continuing', e);
   }
 
-  // proceed to create players
+      // proceed to create players
   const tyeman = _tyemanAssets;
   const sbluer = _sbluerAssets;
   const choicesLocal = (typeof window !== 'undefined' && Array.isArray(window.choices)) ? window.choices : choices;
@@ -257,28 +259,28 @@ let totalPausedTime = 0;
 
 function compensatePauseTimers(dt) {
   // Compensar timers de los jugadores
-  [player1, player2].forEach(p => {
-    if (!p || typeof dt !== 'number' || dt <= 0) return;
-    try {
-      // tiempos de ataques/efectos
-      if (typeof p.attackStartTime === 'number') p.attackStartTime += dt;
-      if (typeof p.hitStartTime === 'number') p.hitStartTime += dt;
-      if (typeof p.blockStunStartTime === 'number') p.blockStunStartTime += dt;
-      if (typeof p._supersaltoStart === 'number') p._supersaltoStart += dt;
-      if (typeof p.dashStartTime === 'number') p.dashStartTime += dt;
-      if (typeof p.dashLightStart === 'number') p.dashLightStart += dt;
-      if (typeof p._launchedStart === 'number') p._launchedStart += dt;
-      if (typeof p._staminaLastRegen === 'number') p._staminaLastRegen += dt;
-      if (typeof p._staminaRegenLastTime === 'number') p._staminaRegenLastTime += dt;
-      if (typeof p._staminaConsumedAt === 'number') p._staminaConsumedAt += dt;
-      // dashLight frozen metadata (if any)
-      if (p._dashLightFrozen && typeof p._dashLightFrozen.pauseAt === 'number') {
-        p._dashLightFrozen.pauseAt += dt;
+    [player1, player2].forEach(p => {
+      if (!p || typeof dt !== 'number' || dt <= 0) return;
+      try {
+        // tiempos de ataques/efectos
+        if (typeof p.attackStartTime === 'number') p.attackStartTime += dt;
+        if (typeof p.hitStartTime === 'number') p.hitStartTime += dt;
+        if (typeof p.blockStunStartTime === 'number') p.blockStunStartTime += dt;
+        if (typeof p._supersaltoStart === 'number') p._supersaltoStart += dt;
+        if (typeof p.dashStartTime === 'number') p.dashStartTime += dt;
+        if (typeof p.dashLightStart === 'number') p.dashLightStart += dt;
+        if (typeof p._launchedStart === 'number') p._launchedStart += dt;
+        if (typeof p._staminaLastRegen === 'number') p._staminaLastRegen += dt;
+        if (typeof p._staminaRegenLastTime === 'number') p._staminaRegenLastTime += dt;
+        if (typeof p._staminaConsumedAt === 'number') p._staminaConsumedAt += dt;
+        // dashLight frozen metadata (if any)
+        if (p._dashLightFrozen && typeof p._dashLightFrozen.pauseAt === 'number') {
+          p._dashLightFrozen.pauseAt += dt;
+        }
+      } catch (e) {
+        /* ignore per-player compensation errors */
       }
-    } catch (e) {
-      /* ignore per-player compensation errors */
-    }
-  });
+    });
 
   // Compensar timers de los proyectiles
   projectiles.forEach(proj => {
@@ -918,116 +920,90 @@ function draw() {
     }
   }
 
-  // suavizar la opacidad del HUD (0 = invisible, 1 = visible)
-  const hudTarget = PAUSED ? 0 : 1;
-  appliedHUDAlpha = lerp(appliedHUDAlpha, hudTarget, 0.12);
+  // HUD & match handling (extracted into core/hudAndMatch.js)
+  const __hudCtx = {
+    PAUSED, appliedHUDAlpha, player1, player2, MATCH_OVER, MATCH_WINNER, _matchMenu,
+    keysPressed: (typeof keysPressed !== 'undefined') ? keysPressed : {},
+    keysDown: (typeof keysDown !== 'undefined') ? keysDown : {},
+    keysUp: (typeof keysUp !== 'undefined') ? keysUp : {},
+    projectiles,
+    _respawnPlayer: (typeof _respawnPlayer !== 'undefined') ? _respawnPlayer : null,
+    clearMatchOverState: (typeof clearMatchOverState !== 'undefined') ? clearMatchOverState : null,
+    resetToSelectionFn: _resetToSelection,
+    handlePlayerLifeLost: (typeof handlePlayerLifeLost !== 'undefined') ? handlePlayerLifeLost : null,
+    initInput: (typeof initInput !== 'undefined') ? initInput : null,
+    cam, appliedCamZoom, _hitEffect, _prevHp, _hsPrevActive, _hsStartedAt, _prevBlockstun, _blockstunZoom,
+    playersReady, selectionActive, p1Confirmed, p2Confirmed, p1SelIndex, p2SelIndex, p1Choice, p2Choice,
+    clearFrameFlags
+  };
+  handleHUDAndMatch(__hudCtx);
+  // copy back mutated values
+  appliedHUDAlpha = __hudCtx.appliedHUDAlpha;
+  cam = __hudCtx.cam || cam;
+  appliedCamZoom = __hudCtx.appliedCamZoom || appliedCamZoom;
+  _hitEffect = __hudCtx._hitEffect || _hitEffect;
+  _prevHp = __hudCtx._prevHp || _prevHp;
+  _hsPrevActive = __hudCtx._hsPrevActive || _hsPrevActive;
+  _hsStartedAt = __hudCtx._hsStartedAt || _hsStartedAt;
+  _prevBlockstun = __hudCtx._prevBlockstun || _prevBlockstun;
+  _blockstunZoom = __hudCtx._blockstunZoom || _blockstunZoom;
+  playersReady = (__hudCtx.playersReady === undefined) ? playersReady : __hudCtx.playersReady;
+  selectionActive = (__hudCtx.selectionActive === undefined) ? selectionActive : __hudCtx.selectionActive;
+  p1Confirmed = (__hudCtx.p1Confirmed === undefined) ? p1Confirmed : __hudCtx.p1Confirmed;
+  p2Confirmed = (__hudCtx.p2Confirmed === undefined) ? p2Confirmed : __hudCtx.p2Confirmed;
+  p1SelIndex = (__hudCtx.p1SelIndex === undefined) ? p1SelIndex : __hudCtx.p1SelIndex;
+  p2SelIndex = (__hudCtx.p2SelIndex === undefined) ? p2SelIndex : __hudCtx.p2SelIndex;
+  p1Choice = (__hudCtx.p1Choice === undefined) ? p1Choice : __hudCtx.p1Choice;
+  p2Choice = (__hudCtx.p2Choice === undefined) ? p2Choice : __hudCtx.p2Choice;
+  projectiles = __hudCtx.projectiles || projectiles;
+  player1 = __hudCtx.player1 || player1;
+  player2 = __hudCtx.player2 || player2;
+  if (typeof keysPressed !== 'undefined') Object.assign(keysPressed, __hudCtx.keysPressed || {});
+  if (typeof keysDown !== 'undefined') Object.assign(keysDown, __hudCtx.keysDown || {});
+  if (typeof keysUp !== 'undefined') Object.assign(keysUp, __hudCtx.keysUp || {});
+  MATCH_OVER = (__hudCtx.MATCH_OVER === undefined) ? MATCH_OVER : __hudCtx.MATCH_OVER;
 
-  // dim / fade overlay sobre el área del HUD para simular "fade out" de barras
-  if (appliedHUDAlpha < 0.999) {
-    push();
-    noStroke();
-    // ajusta rect height si tu HUD ocupa más/menos espacio
-    const hudHeight = 60;
-    // rellenar con negro semitransparente proporcional a la invisibilidad deseada
-    const coverAlpha = Math.round((1 - appliedHUDAlpha) * 220);
-    fill(0, coverAlpha);
-    rect(0, 0, width, hudHeight);
-    pop();
-  }
-
-  // --- life -> portrait transitions: poll HP and trigger life-loss handling ----
+  // re-expose resetToSelection on window to preserve legacy callers
   try {
-    if (player1 && typeof player1.hp === 'number' && player1.hp <= 0 && !MATCH_OVER) {
-      if (!player1._lifeHandled) {
-        player1._lifeHandled = true;
-        handlePlayerLifeLost(player1);
-      }
-    } else if (player1 && typeof player1.hp === 'number' && player1.hp > 0) {
-      player1._lifeHandled = false;
+    if (typeof window !== 'undefined') {
+      window.resetToSelection = function() {
+        const ctx = Object.assign({}, __hudCtx, {
+          player1,
+          player2,
+          projectiles,
+          keysPressed: (typeof keysPressed !== 'undefined') ? keysPressed : {},
+          keysDown: (typeof keysDown !== 'undefined') ? keysDown : {},
+          keysUp: (typeof keysUp !== 'undefined') ? keysUp : {},
+          clearMatchOverState: (typeof clearMatchOverState !== 'undefined') ? clearMatchOverState : null,
+          initInput: (typeof initInput !== 'undefined') ? initInput : null
+        });
+        _resetToSelection(ctx);
+        appliedHUDAlpha = ctx.appliedHUDAlpha;
+        cam = ctx.cam || cam;
+        appliedCamZoom = ctx.appliedCamZoom || appliedCamZoom;
+        _hitEffect = ctx._hitEffect || _hitEffect;
+        _prevHp = ctx._prevHp || _prevHp;
+        _hsPrevActive = ctx._hsPrevActive || _hsPrevActive;
+        _hsStartedAt = ctx._hsStartedAt || _hsStartedAt;
+        _prevBlockstun = ctx._prevBlockstun || _prevBlockstun;
+        _blockstunZoom = ctx._blockstunZoom || _blockstunZoom;
+        playersReady = (ctx.playersReady === undefined) ? playersReady : ctx.playersReady;
+        selectionActive = (ctx.selectionActive === undefined) ? selectionActive : ctx.selectionActive;
+        p1Confirmed = (ctx.p1Confirmed === undefined) ? p1Confirmed : ctx.p1Confirmed;
+        p2Confirmed = (ctx.p2Confirmed === undefined) ? p2Confirmed : ctx.p2Confirmed;
+        p1SelIndex = (ctx.p1SelIndex === undefined) ? p1SelIndex : ctx.p1SelIndex;
+        p2SelIndex = (ctx.p2SelIndex === undefined) ? p2SelIndex : ctx.p2SelIndex;
+        p1Choice = (ctx.p1Choice === undefined) ? p1Choice : ctx.p1Choice;
+        p2Choice = (ctx.p2Choice === undefined) ? p2Choice : ctx.p2Choice;
+        projectiles = ctx.projectiles || projectiles;
+        player1 = ctx.player1 || player1;
+        player2 = ctx.player2 || player2;
+        if (typeof keysPressed !== 'undefined') Object.assign(keysPressed, ctx.keysPressed || {});
+        if (typeof keysDown !== 'undefined') Object.assign(keysDown, ctx.keysDown || {});
+        if (typeof keysUp !== 'undefined') Object.assign(keysUp, ctx.keysUp || {});
+      };
     }
-
-    if (player2 && typeof player2.hp === 'number' && player2.hp <= 0 && !MATCH_OVER) {
-      if (!player2._lifeHandled) {
-        player2._lifeHandled = true;
-        handlePlayerLifeLost(player2);
-      }
-    } else if (player2 && typeof player2.hp === 'number' && player2.hp > 0) {
-      player2._lifeHandled = false;
-    }
-  } catch (e) {
-    // defensive: don't break render on errors here
-    console.warn('[life detect] error', e);
-  }
-
-  // If match over, draw overlay and accept rematch/return input with menu navigation
-  if (MATCH_OVER) {
-    _drawMatchOverOverlay(_matchMenu);
-
-    // input handling with small debounce to avoid accidental immediate accept
-    const now = millis();
-    const canInput = (now - (_matchMenu.lastInputAt || 0)) >= (_matchMenu.debounceMs || 220);
-
-    // navigation: P1 uses W/S, P2 uses arrowUp/arrowDown
-    const up = !!( (canInput && typeof keysPressed !== 'undefined') && (keysPressed['w'] || keysPressed['arrowup']) );
-    const down = !!( (canInput && typeof keysPressed !== 'undefined') && (keysPressed['s'] || keysPressed['arrowdown']) );
-
-    if (up) {
-      _matchMenu.idx = Math.max(0, (_matchMenu.idx || 0) - 1);
-      _matchMenu.lastInputAt = now;
-      if (keysPressed['w']) keysPressed['w'] = false;
-      if (keysPressed['arrowup']) keysPressed['arrowup'] = false;
-    } else if (down) {
-      _matchMenu.idx = Math.min((_matchMenu.items.length - 1), (_matchMenu.idx || 0) + 1);
-      _matchMenu.lastInputAt = now;
-      if (keysPressed['s']) keysPressed['s'] = false;
-      if (keysPressed['arrowdown']) keysPressed['arrowdown'] = false;
-    }
-
-    // selection: P1 (i/o), P2 (b/n) or Enter
-    const selP1 = !!(canInput && typeof keysPressed !== 'undefined' && (keysPressed['i'] || keysPressed['o']));
-    const selP2 = !!(canInput && typeof keysPressed !== 'undefined' && (keysPressed['b'] || keysPressed['n']));
-    const selEnter = !!(canInput && typeof keysPressed !== 'undefined' && (keysPressed['enter'] || keysPressed[' ']));
-
-    if (selP1 || selP2 || selEnter) {
-      const choice = _matchMenu.items[_matchMenu.idx || 0] || 'Rematch';
-      _matchMenu.lastInputAt = now;
-      // consume select keys
-      if (keysPressed['i']) keysPressed['i'] = false;
-      if (keysPressed['o']) keysPressed['o'] = false;
-      if (keysPressed['b']) keysPressed['b'] = false;
-      if (keysPressed['n']) keysPressed['n'] = false;
-      if (keysPressed['enter']) keysPressed['enter'] = false;
-      if (keysPressed[' ']) keysPressed[' '] = false;
-
-      if (choice === 'Rematch') {
-        try {
-          if (player1) {
-            player1.lives = player1.livesMax || 2;
-            _respawnPlayer(player1);
-            player1._lifeProcessing = false;
-            player1._lifeHandled = false;
-          }
-          if (player2) {
-            player2.lives = player2.livesMax || 2;
-            _respawnPlayer(player2);
-            player2._lifeProcessing = false;
-            player2._lifeHandled = false;
-          }
-          projectiles.length = 0;
-          // central reset of match flags & menu
-          clearMatchOverState();
-        } catch (e) {}
-      } else {
-        // Character Select
-        try {
-          clearMatchOverState();
-          resetToSelection();
-        } catch (e) {}
-      }
-    }
-  }
-
-  clearFrameFlags();
+  } catch (e) {}
 }
 
 // ---------- NEW: full reset helper to go back to character select ----------
