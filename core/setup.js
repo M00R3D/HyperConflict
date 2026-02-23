@@ -1,5 +1,6 @@
 // core/setup.js
 import { state } from './state.js';
+import { state as gameState } from './gameState.js';
 import { initInput } from './input.js';
 import { loadTyemanAssets, loadSbluerAssets, loadFernandoAssets } from './assetLoader.js';
 import { initPauseMenu } from './pauseMenu.js';
@@ -40,6 +41,18 @@ export async function setup() {
   state._tyemanAssets = await loadTyemanAssets();
   state._sbluerAssets = await loadSbluerAssets();
   try { state._fernandoAssets = await loadFernandoAssets(); } catch (e) { state._fernandoAssets = null; console.warn('loadFernandoAssets failed', e); }
+
+  // Mirror to core/gameState if present so lifecycle can read assets
+  try {
+    if (gameState) {
+      gameState._tyemanAssets = state._tyemanAssets;
+      gameState._sbluerAssets = state._sbluerAssets;
+      gameState._fernandoAssets = state._fernandoAssets;
+      gameState._slotAssets = state._slotAssets;
+      gameState._heartFrames = state._heartFrames;
+      gameState._bootFrames = state._bootFrames;
+    }
+  } catch (e) {}
 
   try { state._slotAssets = await loadSlotAssets(); } catch (e) { state._slotAssets = null; console.warn('loadSlotAssets failed', e); }
   try { state._heartFrames = await loadHeartFrames(); } catch (e) { state._heartFrames = null; console.error('loadHeartFrames failed', e); }

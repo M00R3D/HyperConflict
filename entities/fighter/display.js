@@ -109,6 +109,80 @@ export function display(self) {
     pop();
   }
 
+  
+  // --- DRAW FERNANDO WEAPON OVERLAY (global coords, not flipped by main sprite transform) ---
+  try {
+    if (self.charId === 'fernando') {
+      const weaponFramesByLayer = self.weaponFramesByLayer;
+      // if frames missing, try to detect global asset and warn once
+      if (!weaponFramesByLayer && typeof window !== 'undefined' && window._fernandoAssets && window._fernandoAssets.weapon && !self._weaponDebugLogged) {
+        console.warn('[display] fernando weapon frames available globally but not on instance; check lifecycle/assets assignment');
+        self._weaponDebugLogged = true;
+      }
+      if (weaponFramesByLayer && weaponFramesByLayer.length > 0 && (weaponFramesByLayer[0] || []).length > 0) {
+        const layerFrames = weaponFramesByLayer[0] || [];
+        const fiW = Math.max(0, (self.frameIndex || 0));
+        const img = layerFrames[fiW] || layerFrames[0];
+        if (img) {
+          // anchor near center but offset to side depending on facing
+          const baseAnchorX = Math.round(self.x + self.w / 2);
+          const sideOffset = Math.round(self.w * 0.2) * (self.facing === 1 ? -1 : 1);
+          const renderYOffset = 6; // align to main sprite's Y offset
+          const anchorX = baseAnchorX + sideOffset;
+          const anchorY = Math.round(self.y + renderYOffset + self.h / 2 - 6);
+
+          // walking bounce + small idle sway (defensive: coerce id/facing to numbers to avoid NaN)
+          const isWalking = (self.state && (self.state.current === 'walk' || self.state.current === 'run'));
+          const time = millis();
+          const walkFactor = isWalking ? 1 : 0.18;
+          const idNum = Number(self.id) || 0;
+          const faceNum = (typeof self.facing === 'number') ? self.facing : (Number(self.facing) || 1);
+          const bounce = Math.sin(time / 110 + idNum * 0.1) * 3 * walkFactor;
+          const rot = Math.sin(time / 160 + idNum * 0.08) * 0.16 * walkFactor * faceNum;
+
+          push();
+          translate(anchorX, anchorY + bounce);
+          rotate(rot);
+          // make it smaller than main sprite
+          const scaleDown = 0.64;
+          scale(scaleDown, scaleDown);
+
+          // draw centering the image on anchor
+          if (img.width && img.height) {
+            // try simple single-frame draw; if it's a sheet we slice horizontally if needed
+            const imgW = img.width; const imgH = img.height;
+            const horizGuess = Math.round(imgW / imgH) || 1;
+            let effectiveCount = 1; let localIdx = fiW; let sliceMode = 'none';
+            if (imgW >= imgH * 2 && horizGuess >= 2) { sliceMode = 'h'; effectiveCount = horizGuess; localIdx = fiW % effectiveCount; }
+            if (sliceMode === 'h') {
+              const fw = Math.round(imgW / effectiveCount);
+              image(img, -Math.round(self.w/2), -Math.round(self.h/2), Math.round(self.w), Math.round(self.h), fw * localIdx, 0, fw, imgH);
+            } else {
+              image(img, -Math.round(self.w/2), -Math.round(self.h/2), Math.round(self.w), Math.round(self.h));
+            }
+          } else {
+            image(img, -Math.round(self.w/2), -Math.round(self.h/2), Math.round(self.w), Math.round(self.h));
+          }
+          pop();
+        }
+      } else {
+        // debug fallback: draw a small magenta anchor so we can see where the weapon would be
+        if (!weaponFramesByLayer) {
+          const baseAnchorX = Math.round(self.x + self.w / 2);
+          const sideOffset = Math.round(self.w * 0.4) * (self.facing === 1 ? -1 : 1);
+          const anchorX = baseAnchorX + sideOffset;
+          const anchorY = Math.round(self.y + renderYOffset + self.h / 2 - 6);
+          push();
+          noStroke();
+          fill(255, 0, 255, 180);
+          rect(anchorX - 4, anchorY - 4, 8, 8);
+          pop();
+        }
+      }
+    }
+  } catch (e) {
+    // don't break rendering on any error
+  }
   // --- Dibujar overlay del dash LUEGO, en coordenadas globales (no afectadas por el flip) ---
   const dashFrames = self.dashLightFramesByLayer || [];
   const hasDashLight = dashFrames.length > 0;

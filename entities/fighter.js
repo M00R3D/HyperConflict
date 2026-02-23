@@ -41,6 +41,8 @@ class Fighter {
 
       
     });
+    // weapon (optional overlay) — no forma parte de la animación principal
+    this.weaponFramesByLayer = assets.weapon || null;
     // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
     // (se fusionarán por llave con las acciones por defecto más abajo)
     this._incomingActions = actions || {};

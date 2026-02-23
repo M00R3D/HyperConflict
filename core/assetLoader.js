@@ -148,6 +148,8 @@ async function loadFernandoAssets() {
     recovery: await loadOrNull('src/fernando/fernando_recovery.piskel'),
     taunt: await loadOrNull('src/fernando/fernando_taunt.piskel')
   };
+  // arma colgante/overlay (opcional)
+  raw.weapon = await loadOrNull('src/fernando/fernando_weapon.piskel');
 
   // Normalize each piskel's layers so spritesheets are split into per-frame images when needed
   const normalized = {};
