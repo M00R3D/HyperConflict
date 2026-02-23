@@ -777,6 +777,19 @@ function draw() {
           initInput: (typeof initInput !== 'undefined') ? initInput : null
         });
         _resetToSelection(ctx);
+        // ensure local and global PAUSED are updated from ctx so pause overlay closes
+        PAUSED = (typeof ctx.PAUSED === 'undefined') ? PAUSED : ctx.PAUSED;
+        try { if (typeof window !== 'undefined') window.PAUSED = PAUSED; } catch(e) {}
+        // sync key values into shared gameState so they survive the early-frame sync
+        try {
+          if (typeof gameState !== 'undefined') {
+            gameState.PAUSED = PAUSED;
+            gameState.selectionActive = (typeof ctx.selectionActive === 'undefined') ? gameState.selectionActive : ctx.selectionActive;
+            gameState.player1 = (typeof ctx.player1 === 'undefined') ? gameState.player1 : ctx.player1;
+            gameState.player2 = (typeof ctx.player2 === 'undefined') ? gameState.player2 : ctx.player2;
+            gameState.projectiles = (typeof ctx.projectiles === 'undefined') ? gameState.projectiles : ctx.projectiles;
+          }
+        } catch (e) {}
         appliedHUDAlpha = ctx.appliedHUDAlpha;
         cam = ctx.cam || cam;
         appliedCamZoom = ctx.appliedCamZoom || appliedCamZoom;
@@ -794,9 +807,9 @@ function draw() {
         p2SelIndex = (ctx.p2SelIndex === undefined) ? p2SelIndex : ctx.p2SelIndex;
         p1Choice = (ctx.p1Choice === undefined) ? p1Choice : ctx.p1Choice;
         p2Choice = (ctx.p2Choice === undefined) ? p2Choice : ctx.p2Choice;
-        projectiles = ctx.projectiles || projectiles;
-        player1 = ctx.player1 || player1;
-        player2 = ctx.player2 || player2;
+        projectiles = (typeof ctx.projectiles === 'undefined') ? projectiles : ctx.projectiles;
+        player1 = (typeof ctx.player1 === 'undefined') ? player1 : ctx.player1;
+        player2 = (typeof ctx.player2 === 'undefined') ? player2 : ctx.player2;
         if (typeof keysPressed !== 'undefined') Object.assign(keysPressed, ctx.keysPressed || {});
         if (typeof keysDown !== 'undefined') Object.assign(keysDown, ctx.keysDown || {});
         if (typeof keysUp !== 'undefined') Object.assign(keysUp, ctx.keysUp || {});

@@ -88,6 +88,9 @@ export function handlePauseInput(keysPressed = {}, players = {}) {
         closePause();
       } else if (cur === 'Character Select') {
         if (typeof _callbacks.onReturnToCharSelect === 'function') _callbacks.onReturnToCharSelect();
+        // best-effort: also clear global paused flag and invoke legacy reset helper
+        try { if (typeof window !== 'undefined') window.PAUSED = false; } catch(e) {}
+        try { if (typeof window !== 'undefined' && typeof window.resetToSelection === 'function') window.resetToSelection(); } catch(e) {}
         closePause();
       } else if (cur === 'Moveset') {
         _menu.view = 'moveset';

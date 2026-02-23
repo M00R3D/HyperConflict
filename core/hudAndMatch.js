@@ -61,8 +61,10 @@ export function resetToSelection(ctx = {}) {
   const win = (typeof window !== 'undefined') ? window : {};
 
   // Stop pause/hitstop and clear globals
-  if (typeof ctx.PAUSED !== 'undefined') ctx.PAUSED = false;
-  if (win) win.PAUSED = false;
+  // Ensure PAUSED is cleared everywhere (ctx, window, shared gameState)
+  try { ctx.PAUSED = false; } catch (e) {}
+  try { if (win) win.PAUSED = false; } catch (e) {}
+  try { if (typeof gameState !== 'undefined') gameState.PAUSED = false; } catch (e) {}
   try { if (win) { win.HITSTOP_ACTIVE = false; win.HITSTOP_PENDING = false; win.HITSTOP_REMAINING_MS = 0; } } catch(e){}
 
   // Ensure match-over menu cleared as we leave gameplay

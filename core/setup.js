@@ -25,6 +25,9 @@ export async function setup() {
   initPauseMenu({
     onResume: () => { state.PAUSED = false; window.PAUSED = false; },
     onReturnToCharSelect: () => {
+      // ensure game is unpaused before switching to character select
+      state.PAUSED = false;
+      if (typeof window !== 'undefined') window.PAUSED = false;
       if (typeof window.resetToSelection === 'function') window.resetToSelection();
     }
   });
