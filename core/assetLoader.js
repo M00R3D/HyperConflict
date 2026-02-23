@@ -145,7 +145,8 @@ async function loadFernandoAssets() {
     knocking: await loadOrNull('src/fernando/fernando_knocking.piskel'),
     grabbed: await loadOrNull('src/fernando/fernando_grabbed.piskel'),
     knocked: await loadOrNull('src/fernando/fernando_knocked.piskel'),
-    recovery: await loadOrNull('src/fernando/fernando_recovery.piskel')
+    recovery: await loadOrNull('src/fernando/fernando_recovery.piskel'),
+    taunt: await loadOrNull('src/fernando/fernando_taunt.piskel')
   };
 
   // Normalize each piskel's layers so spritesheets are split into per-frame images when needed
