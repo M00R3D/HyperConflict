@@ -28,6 +28,13 @@ export function display(self) {
   // ensure per-fighter alpha state for dashLight visuals
   self._dashLightAlpha = (typeof self._dashLightAlpha === 'number') ? self._dashLightAlpha : 1.0;
 
+  // render Y offset for specific characters (visual only, doesn't affect hitboxes/physics)
+  const renderYOffset = (self.charId === 'fernando') ? -6 : 0;
+  // extra height (px) to add to rendered sprites for specific characters
+  const renderExtraH = (self.charId === 'fernando') ? 5 : 0;
+  // extra width (px) to add to rendered sprites (negative => narrower)
+  const renderExtraW = (self.charId === 'fernando') ? -2 : 0;
+
   // si hay frames por capa y la capa 0 tiene frames, dibuja la animación
   if (framesByLayer && framesByLayer.length > 0 && (framesByLayer[0] || []).length > 0) {
     // --- Dibuja el sprite normal (con flip) dentro de su propia transform ---
@@ -78,25 +85,25 @@ export function display(self) {
 
         if (sliceMode === 'h') {
           const frameWidth = Math.round(imgW / effectiveCount);
-          const dstX = Math.round(self.x);
-          const dstY = Math.round(self.y);
-          const dstW = Math.round(self.w);
-          const dstH = Math.round(self.h);
+          const dstX = Math.round(self.x - (renderExtraW / 2));
+          const dstY = Math.round(self.y + renderYOffset - renderExtraH);
+          const dstW = Math.round(self.w + renderExtraW);
+          const dstH = Math.round(self.h + renderExtraH);
           const srcX = Math.round(frameWidth * (localIndex % effectiveCount));
           image(imgCandidate, dstX, dstY, dstW, dstH, srcX, 0, frameWidth, imgH);
         } else if (sliceMode === 'v') {
           const frameHeight = Math.round(imgH / effectiveCount);
-          const dstX = Math.round(self.x);
-          const dstY = Math.round(self.y);
-          const dstW = Math.round(self.w);
-          const dstH = Math.round(self.h);
+          const dstX = Math.round(self.x - (renderExtraW / 2));
+          const dstY = Math.round(self.y + renderYOffset - renderExtraH);
+          const dstW = Math.round(self.w + renderExtraW);
+          const dstH = Math.round(self.h + renderExtraH);
           const srcY = Math.round(frameHeight * (localIndex % effectiveCount));
           image(imgCandidate, dstX, dstY, dstW, dstH, 0, srcY, imgW, frameHeight);
         } else {
-          image(imgCandidate, Math.round(self.x), Math.round(self.y), Math.round(self.w), Math.round(self.h));
+          image(imgCandidate, Math.round(self.x - (renderExtraW / 2)), Math.round(self.y + renderYOffset - renderExtraH), Math.round(self.w + renderExtraW), Math.round(self.h + renderExtraH));
         }
       } else {
-        image(imgCandidate, Math.round(self.x), Math.round(self.y), Math.round(self.w), Math.round(self.h));
+        image(imgCandidate, Math.round(self.x), Math.round(self.y + renderYOffset - renderExtraH), Math.round(self.w), Math.round(self.h + renderExtraH));
       }
     }
     pop();
@@ -160,7 +167,7 @@ export function display(self) {
           : (self.x + self.w / 2 + lerp(forwardBaseFrozen, forwardPeakFrozen, easeInFrozen) * lightFacingFrozen);
         const anchorYFrozen = (typeof self.dashLightAnchorY === 'number')
           ? self.dashLightAnchorY
-          : (self.y + self.h / 2 - 6);
+          : (self.y + renderYOffset + self.h / 2 - 6 - (renderExtraH / 2));
 
         self._dashLightFrozen = {
           elapsed: Math.min(lightElapsed, lightDur),
@@ -245,7 +252,7 @@ export function display(self) {
         : (self.x + self.w / 2 + lerp(forwardBase, forwardPeak, easeIn) * lightFacing);
       anchorY = (typeof self.dashLightAnchorY === 'number')
         ? self.dashLightAnchorY
-        : (self.y + self.h / 2 - 6);
+        : (self.y + renderYOffset + self.h / 2 - 6 - (renderExtraH / 2));
     }
 
     // Alpha final (multiplicador para la opacidad)
@@ -290,22 +297,22 @@ export function display(self) {
 
         if (sliceMode2 === 'h') {
           const frameWidth = Math.round(imgW2 / effectiveCount2);
-          const dstX = Math.round(-self.w / 2);
+          const dstX = Math.round(- (self.w + renderExtraW) / 2);
           const dstY = Math.round(-self.h / 2);
-          const dstW = Math.round(self.w);
+          const dstW = Math.round(self.w + renderExtraW);
           const dstH = Math.round(self.h);
           const srcX = Math.round(frameWidth * (localIdx2 % effectiveCount2));
           image(img, dstX, dstY, dstW, dstH, srcX, 0, frameWidth, imgH2);
         } else if (sliceMode2 === 'v') {
           const frameHeight = Math.round(imgH2 / effectiveCount2);
-          const dstX = Math.round(-self.w / 2);
+          const dstX = Math.round(- (self.w + renderExtraW) / 2);
           const dstY = Math.round(-self.h / 2);
-          const dstW = Math.round(self.w);
+          const dstW = Math.round(self.w + renderExtraW);
           const dstH = Math.round(self.h);
           const srcY = Math.round(frameHeight * (localIdx2 % effectiveCount2));
           image(img, dstX, dstY, dstW, dstH, 0, srcY, imgW2, frameHeight);
         } else {
-          image(img, Math.round(-self.w / 2), Math.round(-self.h / 2), Math.round(self.w), Math.round(self.h));
+          image(img, Math.round(- (self.w + renderExtraW) / 2), Math.round(-self.h / 2), Math.round(self.w + renderExtraW), Math.round(self.h));
         }
       } else {
         image(img, Math.round(-self.w / 2), Math.round(-self.h / 2), Math.round(self.w), Math.round(self.h));
@@ -319,10 +326,10 @@ export function display(self) {
   }
 
   // fallback simple rect if no frames at all (keeps legacy)
-  if (!framesByLayer || framesByLayer.length === 0) {
+    if (!framesByLayer || framesByLayer.length === 0) {
     push();
     fill(self.col || 255);
-    rect(self.x, self.y, self.w, self.h);
+    rect(Math.round(self.x - (renderExtraW / 2)), Math.round(self.y + renderYOffset - renderExtraH), Math.round(self.w + renderExtraW), Math.round(self.h + renderExtraH));
     pop();
   }
 
@@ -354,7 +361,7 @@ export function display(self) {
         noStroke();
         fill(255);
         const labelX = Math.round(self.x + self.w / 2);
-        const labelY = Math.round(self.y - 6);
+        const labelY = Math.round(self.y + renderYOffset - 6);
         // usar texto congelado si existe (stateText definido al inicio de display)
         const label = (typeof stateText === 'string') ? stateText : ((self.state && self.state.current) || 'idle');
         text(label, labelX, labelY);
