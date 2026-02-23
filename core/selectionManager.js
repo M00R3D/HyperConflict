@@ -1,13 +1,14 @@
 import { keysPressed, keysDown, keysUp } from './input.js';
 
 // Local selection state (protegemos contra ReferenceError si main no exporta estas)
-let choices = ['tyeman','sbluer'];
+let choices = ['tyeman','sbluer','fernando'];
 let p1Confirmed = false;
 let p2Confirmed = false;
 let p1Choice = 0;
 let p2Choice = 1;
 let p1SelIndex = 0;
 let p2SelIndex = 1;
+let _fernandoAssets = null;
 export function drawCharacterSelect() {
   // If main cleared selection state (via window) prefer that authoritative value
   try {
@@ -37,12 +38,14 @@ export function drawCharacterSelect() {
   const globals = (typeof window !== 'undefined') ? {
     _tyemanAssets: window._tyemanAssets || null,
     _sbluerAssets: window._sbluerAssets || null,
+    _fernandoAssets: window._fernandoAssets || null,
     _slotAssets: window._slotAssets || null,
     _heartFrames: window._heartFrames || null,
     _bootFrames: window._bootFrames || null
-  } : { _tyemanAssets: null, _sbluerAssets: null, _slotAssets: null, _heartFrames: null, _bootFrames: null };
+  } : { _tyemanAssets: null, _sbluerAssets: null, _fernandoAssets: null, _slotAssets: null, _heartFrames: null, _bootFrames: null };
   const _tyemanAssets = globals._tyemanAssets;
   const _sbluerAssets = globals._sbluerAssets;
+  _fernandoAssets = globals._fernandoAssets;
   const _slotAssets = globals._slotAssets;
   const _heartFrames = globals._heartFrames;
   const _bootFrames = globals._bootFrames;
@@ -70,7 +73,7 @@ export function drawCharacterSelect() {
       } else {fill(18, 22, 30);rect(ix, iy, cellSize, cellSize, 6);}
       if (idx < choices.length) {
         const charId = choices[idx];
-        const assets = (charId === 'tyeman') ? _tyemanAssets : _sbluerAssets;
+        const assets = (charId === 'tyeman') ? _tyemanAssets : (charId === 'sbluer') ? _sbluerAssets : (charId === 'fernando') ? _fernandoAssets : null;
         const idleLayer = (assets?.idle && assets.idle[1]) ? assets.idle[1] : (assets?.idle && assets.idle[0]) ? assets.idle[0] : null;
         const frameImg = (idleLayer && idleLayer.length) ? idleLayer[0] : null; 
         if (frameImg) {
@@ -90,7 +93,7 @@ export function drawCharacterSelect() {
                                     : (p1SelIndex < choices.length ? p1SelIndex : null);
   if (p1SelectedIdx !== null) {
     const charId = choices[p1SelectedIdx];
-    const assets = charId === 'tyeman' ? _tyemanAssets : _sbluerAssets;
+    const assets = (charId === 'tyeman') ? _tyemanAssets : (charId === 'sbluer') ? _sbluerAssets : (charId === 'fernando') ? _fernandoAssets : null;
     const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
     const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
     if (tauntImg) {
@@ -114,7 +117,7 @@ export function drawCharacterSelect() {
                                     : (p2SelIndex < choices.length ? p2SelIndex : null);
   if (p2SelectedIdx !== null) {
     const charId = choices[p2SelectedIdx];
-    const assets = charId === 'tyeman' ? _tyemanAssets : _sbluerAssets;
+    const assets = (charId === 'tyeman') ? _tyemanAssets : (charId === 'sbluer') ? _sbluerAssets : (charId === 'fernando') ? _fernandoAssets : null;
     const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
     const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
     if (tauntImg) {

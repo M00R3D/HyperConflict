@@ -1,6 +1,7 @@
 // core/main.js
 import { Fighter } from '../../entities/fighter.js';import { Projectile } from '../../entities/projectile.js';
 import { updateCamera, applyCamera } from './camera.js';import { initInput, keysPressed, clearFrameFlags, setPlayersReady, pollGamepads } from './input.js';import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';import { drawInputQueues, drawHealthBars } from '../ui/hud.js';
+import { loadFernandoAssets } from './assetLoader.js';
 import { drawBackground } from '../ui/background.js';import { applyHitstop, isHitstopActive } from './hitstop.js';import { registerSpecialsForChar } from '../entities/fighter/specials.js';import { registerStatsForChar, registerActionsForChar, getStatsForChar, getActionsForChar } from './charConfig.js';
 import { initPauseMenu, handlePauseInput, drawPauseMenu, openPauseFor, closePause } from './pauseMenu.js';
 import { registerAttackHitboxesForChar } from './hitboxConfig.js'; 
@@ -90,13 +91,16 @@ async function setup() {
 
   window.SHOW_DEBUG_OVERLAYS = true;window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
   _tyemanAssets = await loadTyemanAssets();_sbluerAssets = await loadSbluerAssets();
+  let _fernandoAssets = null;
+  try { _fernandoAssets = await loadFernandoAssets(); } catch (e) { _fernandoAssets = null; console.warn('loadFernandoAssets failed', e); }
   // Exponer en window para que los módulos de UI/selection accedan (defensivo)
   if (typeof window !== 'undefined') {
     window._tyemanAssets = _tyemanAssets;
     window._sbluerAssets = _sbluerAssets;
+    window._fernandoAssets = _fernandoAssets;
   }
   console.log('[setup] assets loaded:', {
-    tyeman: !!_tyemanAssets, sbluer: !!_sbluerAssets
+    tyeman: !!_tyemanAssets, sbluer: !!_sbluerAssets, fernando: !!_fernandoAssets
   });
   try {_slotAssets = await loadSlotAssets();} catch (e) {
     _slotAssets = null;console.warn('loadSlotAssets failed', e);}
@@ -124,7 +128,7 @@ async function setup() {
   // Sync newly loaded assets and selection state into shared gameState
   try {
     assignGameState({
-      _tyemanAssets, _sbluerAssets, _heartFrames, _slotAssets, _bootFrames,
+      _tyemanAssets, _sbluerAssets, _fernandoAssets: (typeof _fernandoAssets !== 'undefined' ? _fernandoAssets : null), _heartFrames, _slotAssets, _bootFrames,
       selectionActive, playersReady, p1Confirmed, p2Confirmed, p1Choice, p2Choice
     });
   } catch (e) { /* ignore */ }

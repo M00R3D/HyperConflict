@@ -1,7 +1,7 @@
 // core/setup.js
 import { state } from './state.js';
 import { initInput } from './input.js';
-import { loadTyemanAssets, loadSbluerAssets } from './assetLoader.js';
+import { loadTyemanAssets, loadSbluerAssets, loadFernandoAssets } from './assetLoader.js';
 import { initPauseMenu } from './pauseMenu.js';
 import {
   initStageEditor,
@@ -36,6 +36,7 @@ export async function setup() {
 
   state._tyemanAssets = await loadTyemanAssets();
   state._sbluerAssets = await loadSbluerAssets();
+  try { state._fernandoAssets = await loadFernandoAssets(); } catch (e) { state._fernandoAssets = null; console.warn('loadFernandoAssets failed', e); }
 
   try { state._slotAssets = await loadSlotAssets(); } catch (e) { state._slotAssets = null; console.warn('loadSlotAssets failed', e); }
   try { state._heartFrames = await loadHeartFrames(); } catch (e) { state._heartFrames = null; console.error('loadHeartFrames failed', e); }
@@ -83,6 +84,7 @@ export async function setup() {
   // keep match/menu debug flags in sync
   window._tyemanAssets = state._tyemanAssets;
   window._sbluerAssets = state._sbluerAssets;
+  window._fernandoAssets = state._fernandoAssets;
   window._slotAssets = state._slotAssets;
   window._heartFrames = state._heartFrames;
   window._bootFrames = state._bootFrames;

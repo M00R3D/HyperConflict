@@ -86,4 +86,29 @@ export function registerSpecials(){
     taunt: { seq: ['T'], direction: 'any' },
     grab: { seq: ['G'], direction: 'any' }
   });
+
+  // Fernando: placeholder stats/actions/hitboxes and register specials
+  registerStatsForChar('fernando', {
+    maxSpeed: 2.2,
+    runMaxSpeed: 4.8,
+    acceleration: 1.0,
+    runAcceleration: 1.05,
+    friction: 0.11,
+    runFriction: 0.08
+  });
+
+  registerActionsForChar('fernando', {
+    punch: { duration: 500, frameDelay: 6 },
+    kick: { duration: 500, frameDelay: 6 },
+    grab: { duration: 500, frameDelay: 4 }
+  });
+
+  registerAttackHitboxesForChar('fernando', {});
+  registerBodyHitboxesForChar('fernando', {});
+
+  registerSpecialsForChar('fernando', {
+    taunt: { seq: ['T'], direction: 'any' },
+    grab: { seq: ['G'], direction: 'any' },
+    supersalto: { seq: ['↓','↑'], direction: 'any' }
+  });
 }

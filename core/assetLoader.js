@@ -6,6 +6,40 @@ async function loadOrNull(path) {try {    return await loadPiskel(path);  } catc
     return null;}
 }
 
+function normalizePiskelLayers(layers) {
+  if (!Array.isArray(layers)) return layers;
+  return layers.map((layerFrames) => {
+    if (!Array.isArray(layerFrames) || layerFrames.length === 0) return layerFrames;
+    // find a representative image
+    const rep = layerFrames.find(f => f && f.width && f.height);
+    if (!rep) return layerFrames;
+
+    let count = layerFrames.length || 0;
+    if (count <= 1) {
+      // try to infer count from aspect ratio
+      const horizGuess = Math.round(rep.width / rep.height) || 1;
+      const vertGuess = Math.round(rep.height / rep.width) || 1;
+      if (horizGuess >= 2) count = horizGuess;
+      else if (vertGuess >= 2) count = vertGuess;
+      else count = 1;
+    }
+
+    // if rep already matches a sheet containing multiple frames, split it
+    if (count > 1 && rep.width >= rep.height * count) {
+      const fw = Math.round(rep.width / count);
+      const out = new Array(count).fill(null).map((_, i) => rep.get(fw * i, 0, fw, rep.height));
+      return out;
+    }
+    if (count > 1 && rep.height >= rep.width * count) {
+      const fh = Math.round(rep.height / count);
+      const out = new Array(count).fill(null).map((_, i) => rep.get(0, fh * i, rep.width, fh));
+      return out;
+    }
+
+    return layerFrames;
+  });
+}
+
 async function loadTyemanAssets() {
   return {
     idle: await loadOrNull('src/tyeman/tyeman_idle.piskel'),
@@ -82,7 +116,47 @@ async function loadSbluerAssets() {
   recovery: await loadOrNull('src/sbluer/sbluer_recovery.piskel'),
   };
 }
-export { loadTyemanAssets, loadSbluerAssets };
+async function loadFernandoAssets() {
+  const raw = {
+    idle: await loadOrNull('src/fernando/fernando_idle.piskel'),
+    walk: await loadOrNull('src/fernando/fernando_walk.piskel'),
+    run: await loadOrNull('src/fernando/fernando_run.piskel'),
+    jump: await loadOrNull('src/fernando/fernando_jump.piskel'),
+    fall: await loadOrNull('src/fernando/fernando_fall.piskel'),
+    punch: await loadOrNull('src/fernando/fernando_punch.piskel'),
+    punch2: await loadOrNull('src/fernando/fernando_punch_2.piskel'),
+    punch3: await loadOrNull('src/fernando/fernando_punch_3.piskel'),
+    kick: await loadOrNull('src/fernando/fernando_kick.piskel'),
+    kick2: await loadOrNull('src/fernando/fernando_kick_2.piskel'),
+    kick3: await loadOrNull('src/fernando/fernando_kick_3.piskel'),
+    dash: await loadOrNull('src/fernando/fernando_dash.piskel'),
+    dashLight: await loadOrNull('src/fernando/fernando_dash_light.piskel'),
+    crouch: await loadOrNull('src/fernando/fernando_crouch.piskel'),
+    crouchWalk: await loadOrNull('src/fernando/fernando_crouch_walk.piskel'),
+    hit: await loadOrNull('src/fernando/fernando_hit.piskel'),
+    hit2: await loadOrNull('src/fernando/fernando_hit_2.piskel'),
+    hit3: await loadOrNull('src/fernando/fernando_hit_3.piskel'),
+    flyback: await loadOrNull('src/fernando/fernando_fly_back.piskel'),
+    flyup: await loadOrNull('src/fernando/fernando_fly_up.piskel'),
+    block: await loadOrNull('src/fernando/fernando_block.piskel'),
+    crouchBlock: await loadOrNull('src/fernando/fernando_crouch_block.piskel'),
+    grab: await loadOrNull('src/fernando/fernando_grab.piskel'),
+    grabbed: await loadOrNull('src/fernando/fernando_grabbed.piskel'),
+    knocking: await loadOrNull('src/fernando/fernando_knocking.piskel'),
+    grabbed: await loadOrNull('src/fernando/fernando_grabbed.piskel'),
+    knocked: await loadOrNull('src/fernando/fernando_knocked.piskel'),
+    recovery: await loadOrNull('src/fernando/fernando_recovery.piskel')
+  };
+
+  // Normalize each piskel's layers so spritesheets are split into per-frame images when needed
+  const normalized = {};
+  for (const k of Object.keys(raw)) {
+    const v = raw[k];
+    normalized[k] = Array.isArray(v) ? normalizePiskelLayers(v) : v;
+  }
+  return normalized;
+}
+export { loadTyemanAssets, loadSbluerAssets, loadFernandoAssets };
 export async function loadSlotAssets() {return {
     empty: await loadOrNull('src/slots/slot_empty.piskel'),
     rounderP1: await loadOrNull('src/slots/slot_rounder_p1.piskel'),

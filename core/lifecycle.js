@@ -64,6 +64,7 @@ export function tryCreatePlayers() {
   // proceed to create players
   const tyeman = gameState._tyemanAssets;
   const sbluer = gameState._sbluerAssets;
+  const fernando = gameState._fernandoAssets;
   const choicesLocal = (win && Array.isArray(win.choices)) ? win.choices : gameState.choices;
   const p1ChoiceLocal = (win && typeof win.p1Choice === 'number') ? win.p1Choice : gameState.p1Choice;
   const p2ChoiceLocal = (win && typeof win.p2Choice === 'number') ? win.p2Choice : gameState.p2Choice;
@@ -73,14 +74,22 @@ export function tryCreatePlayers() {
   const p1Actions = getActionsForChar(choicesLocal[p1ChoiceLocal]);
   const p2Actions = getActionsForChar(choicesLocal[p2ChoiceLocal]);
 
+  function assetsForChar(charId) {
+    if (charId === 'tyeman') return tyeman;
+    if (charId === 'sbluer') return sbluer;
+    if (charId === 'fernando') return fernando;
+    // fallback: try gameState lookup or null
+    return gameState[`_${charId}Assets`] || null;
+  }
+
   const p1 = new Fighter({
     x: 100, col: color(255,100,100), id: 'p1', charId: choicesLocal[p1ChoiceLocal],
-    assets: choicesLocal[p1ChoiceLocal] === 'tyeman' ? tyeman : sbluer,
+    assets: assetsForChar(choicesLocal[p1ChoiceLocal]),
     actions: p1Actions, ...p1Stats
   });
   const p2 = new Fighter({
     x: 600, col: color(100,100,255), id: 'p2', charId: choicesLocal[p2ChoiceLocal],
-    assets: choicesLocal[p2ChoiceLocal] === 'tyeman' ? tyeman : sbluer,
+    assets: assetsForChar(choicesLocal[p2ChoiceLocal]),
     actions: p2Actions, ...p2Stats
   });
 

@@ -47,21 +47,54 @@ export function display(self) {
       const imgCandidate = layerFrames[fi] || layerFrames[0];
       if (!imgCandidate) continue;
 
-      if (frameCount > 1 && imgCandidate.width && imgCandidate.height && imgCandidate.width >= imgCandidate.height * frameCount) {
-        const frameWidth = Math.round(imgCandidate.width / frameCount);
-        // round all coordinates/sizes to avoid fractional sampling that causes blur
-        const dstX = Math.round(self.x);
-        const dstY = Math.round(self.y);
-        const dstW = Math.round(self.w);
-        const dstH = Math.round(self.h);
-        const srcX = Math.round(frameWidth * fi);
-        image(
-          imgCandidate,
-          dstX, dstY,
-          dstW, dstH,
-          srcX, 0,
-          frameWidth, imgCandidate.height
-        );
+      if (imgCandidate.width && imgCandidate.height) {
+        // Determine if the image itself is a horizontal/vertical sheet
+        const imgW = imgCandidate.width;
+        const imgH = imgCandidate.height;
+
+        // guesses based on aspect ratio
+        const imgHorizGuess = Math.round(imgW / imgH) || 1;
+        const imgVertGuess = Math.round(imgH / imgW) || 1;
+
+        // Decide local slicing count from the image (if it looks like a sheet)
+        const imgInferredHoriz = (imgW >= imgH * 2 && imgHorizGuess >= 2) ? imgHorizGuess : 1;
+        const imgInferredVert = (imgH >= imgW * 2 && imgVertGuess >= 2) ? imgVertGuess : 1;
+
+        // prefer explicit frameCount (array length), but if the image itself contains multiple frames
+        // we must slice using the image's inferred count and a local frame index
+        let effectiveCount = Math.max(1, frameCount || 1);
+        let localIndex = fi;
+        let sliceMode = 'none';
+
+        if (imgInferredHoriz >= 2) {
+          sliceMode = 'h';
+          effectiveCount = Math.max(effectiveCount, imgInferredHoriz);
+          localIndex = fi % imgInferredHoriz;
+        } else if (imgInferredVert >= 2) {
+          sliceMode = 'v';
+          effectiveCount = Math.max(effectiveCount, imgInferredVert);
+          localIndex = fi % imgInferredVert;
+        }
+
+        if (sliceMode === 'h') {
+          const frameWidth = Math.round(imgW / effectiveCount);
+          const dstX = Math.round(self.x);
+          const dstY = Math.round(self.y);
+          const dstW = Math.round(self.w);
+          const dstH = Math.round(self.h);
+          const srcX = Math.round(frameWidth * (localIndex % effectiveCount));
+          image(imgCandidate, dstX, dstY, dstW, dstH, srcX, 0, frameWidth, imgH);
+        } else if (sliceMode === 'v') {
+          const frameHeight = Math.round(imgH / effectiveCount);
+          const dstX = Math.round(self.x);
+          const dstY = Math.round(self.y);
+          const dstW = Math.round(self.w);
+          const dstH = Math.round(self.h);
+          const srcY = Math.round(frameHeight * (localIndex % effectiveCount));
+          image(imgCandidate, dstX, dstY, dstW, dstH, 0, srcY, imgW, frameHeight);
+        } else {
+          image(imgCandidate, Math.round(self.x), Math.round(self.y), Math.round(self.w), Math.round(self.h));
+        }
       } else {
         image(imgCandidate, Math.round(self.x), Math.round(self.y), Math.round(self.w), Math.round(self.h));
       }
@@ -234,14 +267,46 @@ export function display(self) {
       const img = layerFrames[fi2] || layerFrames[0];
       if (!img) continue;
       const frameCount2 = (dashFrames[0]?.length) || 1;
-      if (frameCount2 > 1 && img.width && img.height && img.width >= img.height * frameCount2) {
-        const frameWidth = Math.round(img.width / frameCount2);
-        const dstX = Math.round(-self.w / 2);
-        const dstY = Math.round(-self.h / 2);
-        const dstW = Math.round(self.w);
-        const dstH = Math.round(self.h);
-        const srcX = Math.round(frameWidth * fi2);
-        image(img, dstX, dstY, dstW, dstH, srcX, 0, frameWidth, img.height);
+      if (img.width && img.height) {
+        const imgW2 = img.width;
+        const imgH2 = img.height;
+        const imgHorizGuess2 = Math.round(imgW2 / imgH2) || 1;
+        const imgVertGuess2 = Math.round(imgH2 / imgW2) || 1;
+        const imgInferredHoriz2 = (imgW2 >= imgH2 * 2 && imgHorizGuess2 >= 2) ? imgHorizGuess2 : 1;
+        const imgInferredVert2 = (imgH2 >= imgW2 * 2 && imgVertGuess2 >= 2) ? imgVertGuess2 : 1;
+
+        let effectiveCount2 = Math.max(1, frameCount2 || 1);
+        let localIdx2 = fi2;
+        let sliceMode2 = 'none';
+        if (imgInferredHoriz2 >= 2) {
+          sliceMode2 = 'h';
+          effectiveCount2 = Math.max(effectiveCount2, imgInferredHoriz2);
+          localIdx2 = fi2 % imgInferredHoriz2;
+        } else if (imgInferredVert2 >= 2) {
+          sliceMode2 = 'v';
+          effectiveCount2 = Math.max(effectiveCount2, imgInferredVert2);
+          localIdx2 = fi2 % imgInferredVert2;
+        }
+
+        if (sliceMode2 === 'h') {
+          const frameWidth = Math.round(imgW2 / effectiveCount2);
+          const dstX = Math.round(-self.w / 2);
+          const dstY = Math.round(-self.h / 2);
+          const dstW = Math.round(self.w);
+          const dstH = Math.round(self.h);
+          const srcX = Math.round(frameWidth * (localIdx2 % effectiveCount2));
+          image(img, dstX, dstY, dstW, dstH, srcX, 0, frameWidth, imgH2);
+        } else if (sliceMode2 === 'v') {
+          const frameHeight = Math.round(imgH2 / effectiveCount2);
+          const dstX = Math.round(-self.w / 2);
+          const dstY = Math.round(-self.h / 2);
+          const dstW = Math.round(self.w);
+          const dstH = Math.round(self.h);
+          const srcY = Math.round(frameHeight * (localIdx2 % effectiveCount2));
+          image(img, dstX, dstY, dstW, dstH, 0, srcY, imgW2, frameHeight);
+        } else {
+          image(img, Math.round(-self.w / 2), Math.round(-self.h / 2), Math.round(self.w), Math.round(self.h));
+        }
       } else {
         image(img, Math.round(-self.w / 2), Math.round(-self.h / 2), Math.round(self.w), Math.round(self.h));
       }

@@ -152,6 +152,70 @@ export function initFrames(self, frames) {
   self.knockingFramesByLayer = frames.knockingFramesByLayer || [];
   self.knockedFramesByLayer = frames.knockedFramesByLayer || [];
   self.recoveryFramesByLayer = frames.recoveryFramesByLayer || [];
+
+  // Ajuste automático de tamaño del fighter basado en las dimensiones reales de las frames.
+  try {
+    const candidates = [
+      self.idleFramesByLayer,
+      self.walkFramesByLayer,
+      self.runFramesByLayer,
+      self.punchFramesByLayer,
+      self.kickFramesByLayer,
+      self.crouchFramesByLayer,
+      self.hitFramesByLayer
+    ];
+    let nativeW = null, nativeH = null;
+    for (const list of candidates) {
+      if (!Array.isArray(list) || list.length === 0) continue;
+      for (const layer of list) {
+        if (!layer || !Array.isArray(layer) || layer.length === 0) continue;
+        // Representative image (first element)
+        const rep = layer[0];
+        if (!rep || typeof rep.width !== 'number' || typeof rep.height !== 'number') continue;
+
+        const aspect = rep.width / Math.max(1, rep.height);
+        const invAspect = rep.height / Math.max(1, rep.width);
+
+        // Caso A: hoja horizontal (mucho más ancha que alta)
+        if (aspect >= 1.5) {
+          const horizGuess = Math.max(1, Math.round(rep.width / rep.height));
+          nativeW = Math.round(rep.width / horizGuess);
+          nativeH = Math.round(rep.height);
+          break;
+        }
+
+        // Caso B: hoja vertical (mucho más alta que ancha)
+        if (invAspect >= 1.5) {
+          const vertGuess = Math.max(1, Math.round(rep.height / rep.width));
+          nativeW = Math.round(rep.width);
+          nativeH = Math.round(rep.height / vertGuess);
+          break;
+        }
+
+        // Caso C: múltiples imágenes individuales (cada elemento es una frame)
+        if (layer.length > 1) {
+          nativeW = Math.round(rep.width);
+          nativeH = Math.round(rep.height);
+          break;
+        }
+
+        // Caso D: fallback, único elemento sin hoja aparente -> tomar sus dimensiones
+        nativeW = Math.round(rep.width);
+        nativeH = Math.round(rep.height);
+        break;
+      }
+      if (nativeW && nativeH) break;
+    }
+    if (nativeW && nativeH) {
+      // aplicar sólo si son razonables
+      if (nativeW > 6 && nativeH > 6) {
+        self.w = nativeW;
+        self.h = nativeH;
+      }
+    }
+  } catch (e) {
+    /* silent */
+  }
 }
 
 export function initComboAndInput(self) {
