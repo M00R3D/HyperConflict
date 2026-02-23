@@ -68,10 +68,11 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
    const heartsCount = 6;
    const quartersPerHeart = 4;
    const totalQuartersMax = heartsCount * quartersPerHeart; // 24
-  // ahora 8 botas (doble stamina), dibujadas en 2 filas x 4 columnas, tamaño reducido
-  const bootsCount = 8;
+  // boots/stamina visual constants (defined to avoid ReferenceError)
   const quartersPerBoot = 4;
-  const totalBootQuartersMax = bootsCount * quartersPerBoot; // 32
+  const bootW = 20;
+  const bootH = 20;
+  // Stamina/boots removed: we no longer draw boots or stamina UI.
 
   // draw small life portraits (2 lives) above hearts
   const drawLifePortraits = (player, xBase, alignRight = false) => {
@@ -192,14 +193,7 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
   const padding = 6;
   const groupWidth = heartsCount * (heartW + padding) - padding;
   const y = heartYOffset;
-  // boots drawing area (below hearts) - display más pequeño y en grid 2x4
-  const bootW = 18; // más pequeño
-  const bootH = 18;
-  const bootPadding = 6;
-  const cols = 4; // columns per row
-  const rows = Math.ceil(bootsCount / cols); // 2
-  const bootGroupWidth = cols * (bootW + bootPadding) - bootPadding;
-  const bootsY = y + heartH + 10; // vertical offset under hearts
+  // no boots UI
 
   // WAVE motion config (smooth up/down motion)
   const waveAmp = 2;            // pixels of vertical amplitude
@@ -410,142 +404,7 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
     push(); noStroke(); fill(180, 200, 100); rect(adjX, adjY, dstW, dstH, 4); pop();
   };
 
-   // draw boots for a player (mirrored layout for P2)
-   const drawPlayerBoots = (player, xStart, alignRight = false) => {
-     // PROTECCIÓN: si no hay player (por ejemplo durante selección), no intentar leer state
-     if (!player) return;
-
-     const rawSt = (typeof player?.stamina === 'number') ? player.stamina : 0;
-     const pMax = (typeof player?.staminaMax === 'number' && player.staminaMax > 0) ? player.staminaMax : totalBootQuartersMax;
-     // map player's actual stamina range to 0..totalBootQuartersMax
-     const st = Math.max(0, Math.min(totalBootQuartersMax, Math.round(rawSt * totalBootQuartersMax / pMax)));
- 
-     // cuantos cuartos se han consumido en total (0..totalBootQuartersMax)
-     const consumedTotal = Math.max(0, totalBootQuartersMax - st);
- 
-     const bs = _getBootState(player, bootsCount);
- 
-     // Wavy / keyboard pattern config
-     const globalTime = millis() / 1000;
-     const baseFreq = 0.9; // base cycles per second (tweak for speed)
-     const patterns = ['sine','pulse','stair','keyboard']; // cycled per-boot
-
-     for (let i = 0; i < bootsCount; i++) {
-       // grid position (rows x cols)
-       const col = i % cols;
-       const row = Math.floor(i / cols);
-       // logical ordering: left-to-right top-to-bottom for P1; mirrored for P2
-       const logicalIdx = alignRight ? (bootsCount - 1 - i) : i;
-       // consumido en esta bota (0..quartersPerBoot)
-       const consumedInBoot = Math.max(0, Math.min(quartersPerBoot, consumedTotal - logicalIdx * quartersPerBoot));
-       // frameIndex = cuartos consumidos en esta bota -> 0=full, 4=empty
-       const frameIndex = Math.max(0, Math.min(quartersPerBoot, consumedInBoot));
-
-       // compute dx/dy in grid
-       const leftBootsStart = 12;
-       const rightBootsStart = Math.round(width - 12 - bootGroupWidth); // leftmost x for P2 group
-       const baseX = alignRight ? rightBootsStart : leftBootsStart;
-       const dx = baseX + col * (bootW + bootPadding);
-       const dy = bootsY + row * (bootH + 6);
-
-       // actualizar estado de escala por bota: target cuando empty -> shrink, cuando full -> normal
-       const isEmpty = (frameIndex === quartersPerBoot);
-       const targetScale = isEmpty ? 0.6 : 1.0;
-       // iniciar valor si falta
-       bs.scales[i] = (typeof bs.scales[i] === 'number') ? bs.scales[i] : targetScale;
-       // interpolación suave (usar lerp de p5)
-       bs.scales[i] = lerp(bs.scales[i], targetScale, 0.12);
-
-       // PATTERN: elegir alternancia por índice para "teclado gamer" feel
-       const pattern = patterns[i % patterns.length];
-       // parámetros por-pattern
-       const ampBase = 6; // px max amplitude baseline
-       let targetOffsetY = 0;
-       let targetOffsetX = 0;
-       const freq = baseFreq * (1 + (i % 3) * 0.12); // slight per-boot freq variance
-       const phase = i * 0.5;
-
-       if (pattern === 'sine') {
-         targetOffsetY = Math.sin((globalTime * freq * Math.PI * 2) + phase) * (ampBase * 0.6);
-         targetOffsetX = Math.sin((globalTime * freq * Math.PI * 2) + phase * 0.7) * 1.2;
-       } else if (pattern === 'pulse') {
-         // soft pulse: abs(sin) shaped bounce
-         const v = Math.abs(Math.sin((globalTime * freq * Math.PI) + phase));
-         // remap 0..1 to -1..1 and apply easing
-         targetOffsetY = (v * 2 - 1) * (ampBase * 0.72);
-         targetOffsetX = Math.sin(globalTime * freq * Math.PI * 2 + phase) * 0.9;
-       } else if (pattern === 'stair') {
-         // stair / keyboard-step: emulate stepped keys using sawtooth then smooth
-         const t = (globalTime * freq + i * 0.08) % 1;
-         // create 3-step stair [-1,0,1]
-         const step = Math.floor(t * 3) / 1 - 1;
-         targetOffsetY = step * (ampBase * 0.65);
-         targetOffsetX = Math.sin(globalTime * freq * Math.PI * 2 + phase) * 0.6;
-       } else { // keyboard
-         // keyboard gamer: alternating quick arpeggio: small upward bounce per adjacent boot
-         const sign = (i % 2 === 0) ? 1 : -1;
-         const ar = Math.sin((globalTime * freq * Math.PI * 2 * 1.6) + (i * 0.33));
-         targetOffsetY = (ar * 0.8 + sign * 0.15) * (ampBase * 0.7);
-         targetOffsetX = Math.sin(globalTime * freq * Math.PI * 2 + phase * 1.2) * 1.6;
-       }
-
-       // INIT offsets if missing
-       bs.offsetY[i] = (typeof bs.offsetY[i] === 'number') ? bs.offsetY[i] : 0;
-       bs.offsetX[i] = (typeof bs.offsetX[i] === 'number') ? bs.offsetX[i] : 0;
-       // smooth interpolation toward target offsets
-       bs.offsetY[i] = lerp(bs.offsetY[i], targetOffsetY, 0.12);
-       bs.offsetX[i] = lerp(bs.offsetX[i], targetOffsetX, 0.14);
-
-       // tiny pulse when just became empty/full (opcional subtle feedback)
-             if (bs.lastFrame[i] !== frameIndex) {
-               bs.lastFrame[i] = frameIndex;
-               bs.pulseStart[i] = millis();
-             }
-      
-             // small pulse when the frame changed
-             const pulseAge = millis() - (bs.pulseStart[i] || 0);
-             let pulseScale = 1;
-             if (bs.pulseStart[i] && pulseAge > 0 && pulseAge < 220) {
-               const t = pulseAge / 220;
-               // ease out pulse
-               pulseScale = 1 + 0.14 * (1 - Math.pow(1 - t, 2));
-             }
-      
-             // compute final scale and draw (apply offsets and flip if needed)
-             const finalScale = Math.max(0.01, bs.scales[i] * pulseScale);
-             const drawX = Math.round(dx + (bs.offsetX[i] || 0));
-             const drawY = Math.round(dy + (bs.offsetY[i] || 0));
-             drawBootAt(frameIndex, drawX, drawY, !!alignRight, finalScale);
-           } // end for bootsCount
-      
-         }; // end drawPlayerBoots
-      
-         // draw boots groups for both players
-         drawPlayerBoots(p1, leftX, false);
-         drawPlayerBoots(p2, rightStart, true);
-
-  // EXHAUSTED label: mostrar cuando stamina <= 0 (por jugador), anclado debajo del grupo de botas
-  const exhaustedY = bootsY + rows * (bootH + 6) + 8;
-  const drawExhausted = (player, alignRight = false) => {
-    if (!player || typeof player.stamina !== 'number') return;
-    if (player.stamina <= 0) {
-      push();
-      textSize(12);
-      textAlign(CENTER, TOP);
-      noStroke();
-      fill(140, 24, 24, 220);
-      const boxW = 92;
-      const boxH = 20;
-      const centerX = alignRight ? Math.round(width - 12 - bootGroupWidth/2) : Math.round(12 + bootGroupWidth/2);
-      rectMode(CENTER);
-      rect(centerX, exhaustedY + boxH/2, boxW, boxH, 6);
-      fill(255);
-      text('EXHAUSTED', centerX, exhaustedY + 4);
-      pop();
-    }
-  };
-  drawExhausted(p1, false);
-  drawExhausted(p2, true);
+  // Boots/stamina UI removed.
 
  } // end drawHealthBars
 

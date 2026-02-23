@@ -122,13 +122,7 @@ export function setState(self, newState) {
     ]);
     const wasInAttack = attackStates.has(prevState);
     const nowInAttack = attackStates.has(newState);
-    if (wasInAttack && !nowInAttack) {
-      // marca consumo reciente para pausar regen durante el tiempo configurado
-      self._staminaConsumedAt = millis();
-      // reset acumulador y lastTime para evitar que se acumule un delta grande mientras estaba atacando/hit
-      self._staminaRegenAccum = 0;
-      self._staminaRegenLastTime = millis();
-    }
+    // Stamina removed: no need to mark recent consumption on state transitions.
   } catch (e) {
     /* silent */
   }
@@ -197,8 +191,8 @@ export function exitHitIfElapsed(self) {
     // - si el nivel de hit fue 3 o más
     // - o si estamos exhaustos (stamina <= 0)
     const hitLevel = (typeof self.hitLevel === 'number') ? self.hitLevel : 0;
-    const exhausted = (typeof self.stamina === 'number') ? (self.stamina <= 0) : false;
-    const shouldKnock = (hitLevel >= 3) || exhausted;
+    // stamina removed: only use hit level to decide knockdown
+    const shouldKnock = (hitLevel >= 3);
 
     if (shouldKnock) {
       try {

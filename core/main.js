@@ -187,9 +187,7 @@ function compensatePauseTimers(dt) {
         if (typeof p.dashStartTime === 'number') p.dashStartTime += dt;
         if (typeof p.dashLightStart === 'number') p.dashLightStart += dt;
         if (typeof p._launchedStart === 'number') p._launchedStart += dt;
-        if (typeof p._staminaLastRegen === 'number') p._staminaLastRegen += dt;
-        if (typeof p._staminaRegenLastTime === 'number') p._staminaRegenLastTime += dt;
-        if (typeof p._staminaConsumedAt === 'number') p._staminaConsumedAt += dt;
+        // stamina timers removed: nothing to compensate here
         // dashLight frozen metadata (if any)
         if (p._dashLightFrozen && typeof p._dashLightFrozen.pauseAt === 'number') {
           p._dashLightFrozen.pauseAt += dt;
@@ -216,7 +214,8 @@ function compensatePauseTimers(dt) {
 function _respawnPlayer(player) {
   if (!player) return;
   player.hp = player.hpMax || 24;
-  player.stamina = player.staminaMax ?? player.stamina;
+  // stamina system removed: ensure no stamina fields on respawn
+  try { delete player.stamina; delete player.staminaMax; } catch (e) {}
   player.alive = true;
   player.attacking = false;
   player.attackType = null;

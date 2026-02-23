@@ -238,23 +238,7 @@ export function hit(self, attacker = null) {
     return;
   }
 
-  // --- NEW: If defender is already exhausted (stamina <= 0), any successful hit forces knocked ---
-  try {
-    if (typeof this.stamina === 'number' && this.stamina <= 0) {
-      // Always use forceSetState so knocked visual/state applies immediately (no PAUSE/HITSTOP dependence)
-      try {
-        console.log(`[Attacks.hit] ${self.id || '?'} is EXHAUSTED -> forcing knocked`);
-        Anim.forceSetState(this, 'knocked');
-      } catch (e) {
-        console.warn('[Attacks.hit] forceSetState failed, marking _forceKnocked', this.id, e);
-        this._forceKnocked = true;
-      }
-      // clean up and early return
-      this.attacking = false; this.attackType = null; this._hitTargets = null;
-      this.vx = 0; this.vy = 0;
-      return;
-    }
-  } catch (e) { /* silent */ }
+  // Stamina system removed: ignore exhausted checks.
 
   // Si Attacks.hit ya aplicó daño externamente, no volver a aplicarlo.
   // Si no se aplicó daño (hpBefore === this.hp), aplicamos daño básico desde attacker.damageQuarters o fallback 1.
@@ -263,16 +247,7 @@ export function hit(self, attacker = null) {
     this.hp = Math.max(0, this.hp - damageQuarters);
   }
 
-  // --- NUEVO: Si el ataque es un punch/kick, el golpeado pierde 2 STA
-  try {
-    const meleeHits = ['punch','punch2','punch3','kick','kick2','kick3'];
-    if (meleeHits.includes(atk)) {
-      if (typeof this.stamina === 'number') {
-        this.stamina = Math.max(0, (this.stamina || 0) - 2); // restar 2 STA al golpeado
-        this._staminaConsumedAt = millis();
-      }
-    }
-  } catch (e) { /* silent */ }
+  // Stamina system removed: do not modify stamina on hit.
 
   // marcar hit state y tiempos
   this.isHit = true;
@@ -377,7 +352,7 @@ export function hit(self, attacker = null) {
   // (this covers cases where earlier code returned due to being in isHit; ensure this runs when a new hit lands)
   try {
     // If we just received this hit but previously were already in hit3 (rare path), force knock
-    if ((this.hitLevel || 0) >= 3 && typeof this.stamina === 'number' && this.stamina <= 0) {
+    if ((this.hitLevel || 0) >= 3) {
       // already handled above; redundant safety
       if (window.PAUSED || window.HITSTOP_ACTIVE) {
         this._forceKnocked = true;

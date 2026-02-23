@@ -205,17 +205,7 @@ export function doSpecial(self, moveName) {
     self.attackStartTime = millis();
     self.attackDuration = 1700; // 1700 ms = 1.7s
 
-    // RECARGA: recuperar alrededor de 4 cuartos de stamina al hacer taunt
-    try {
-      if (typeof self.stamina === 'number' && typeof self.staminaMax === 'number') {
-        const regain = 4; // cuartos a recuperar
-        self.stamina = Math.min(self.staminaMax, (self.stamina || 0) + regain);
-        // reset acumulador de regen para evitar acumulaciones instantáneas
-        self._staminaRegenAccum = 0;
-        self._staminaRegenLastTime = millis();
-        self._staminaConsumedAt = millis(); // pausa breve de regen si hay lógica dependiente
-      }
-    } catch (e) { /* silent */ }
+    // Stamina removed: no regen on taunt.
     return;
   } else if (moveName === 'bun') {
     // require stamina before bun (4 quarters)

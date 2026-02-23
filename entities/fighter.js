@@ -149,22 +149,7 @@ class Fighter {
       }
     } catch (e) { /* silent */ }
 
-    // Consumir 1 unidad de stamina al iniciar un ataque melee (punch / kick).
-    // Nos aseguramos de consumirlo una sola vez por inicio de ataque usando attackStartTime.
-    try {
-      const meleeNames = ['punch','punch2','punch3','kick','kick2','kick3'];
-      const atype = String(this.attackType || '').toLowerCase();
-      if (meleeNames.includes(atype) && this.attacking) {
-        const lastConsumedForStart = this._lastStaminaConsumedForAttackStart || 0;
-        if (this.attackStartTime && lastConsumedForStart !== this.attackStartTime) {
-          if (typeof this.stamina === 'number') {
-            this.stamina = Math.max(0, this.stamina - 1); // restar 1 STA al ejecutor
-            this._staminaConsumedAt = millis();
-          }
-          this._lastStaminaConsumedForAttackStart = this.attackStartTime;
-        }
-      }
-    } catch (e) { /* silent */ }
+    // Stamina system removed: no consumption on melee attack start.
   }
 
   attackHits(opponent) { return (typeof Attacks !== 'undefined' && typeof Attacks.attackHits === 'function') ? Attacks.attackHits(this, opponent) : false; }
@@ -251,16 +236,7 @@ class Fighter {
       this.hp = Math.max(0, this.hp - damageQuarters);
     }
 
-    // NUEVO: Si el ataque es un punch/kick, el golpeado pierde 2 STA
-    try {
-      const meleeHits = ['punch','punch2','punch3','kick','kick2','kick3'];
-      if (meleeHits.includes(atk)) {
-        if (typeof this.stamina === 'number') {
-          this.stamina = Math.max(0, this.stamina - 2); // restar 2 STA al golpeado
-          this._staminaConsumedAt = millis();
-        }
-      }
-    } catch (e) { /* silent */ }
+    // Stamina system removed: do not modify stamina when hit.
 
     // marcar hit state y tiempos
     this.isHit = true;
@@ -918,62 +894,9 @@ class Fighter {
 
   display() { Display.display(this); }
 
-  // helper: attempt to consume stamina by name (cost uses staminaCosts map)
+  // Stamina removed: compatibility stub for legacy calls — always allow actions.
   consumeStaminaFor(actionName) {
-    if (typeof this.stamina !== 'number' || !this.staminaCosts) return true;
-    const cost = Math.max(0, (this.staminaCosts[actionName] || 0));
-    if (cost <= 0) return true;
-
-    // If enough stamina, consume and mark last consumption time as before
-    if (this.stamina >= cost) {
-      this.stamina = Math.max(0, this.stamina - cost);
-      // registrar tiempo de consumo para pausar regen un rato y resetar acumulador
-      try { this._staminaConsumedAt = millis(); this._staminaRegenAccum = 0; this._staminaRegenLastTime = millis(); } catch (e) {}
-      return true;
-    }
-
-    // NOT ENOUGH STAMINA ->
-    // Special case: attempting a dash with no stamina should simply fail (no knock)
-    if (actionName === 'dash') {
-      return false; // don't force knocked on dash attempts
-    }
-
-    // For other actions, when not enough stamina, force knockdown (existing behaviour)
-    try {
-      // set stamina to zero and force knocked state
-      this.stamina = 0;
-      // limpiar flags de ataque/locks para evitar comportamiento extraño
-      this.attacking = false;
-      this.attackType = null;
-      this._hitTargets = null;
-      // intentar aplicar knocked inmediatamente (usa forceSetState si estamos en pausa/hitstop)
-      try {
-        // import dinámico para evitar romper orden de carga si no es soportado por el entorno
-        const Anim = require('./animation.js');
-        if (window.PAUSED || window.HITSTOP_ACTIVE) {
-          if (Anim && typeof Anim.forceSetState === 'function') {
-            Anim.forceSetState(this, 'knocked');
-          } else {
-            this._forceKnocked = true;
-          }
-        } else {
-          this.setState('knocked');
-        }
-      } catch (e) {
-        // fallback: marcar para aplicar después del freeze si no podemos forzar ahora
-        this._forceKnocked = true;
-        console.warn(`[Fighter.consumeStaminaFor] could not force setState knocked for ${this.id}`, e);
-      }
-      // opcional: resetear velocidades para que el personaje quede estático momentáneamente
-      this.vx = 0; this.vy = 0;
-      // pausar regen y marcar consumo
-      this._staminaConsumedAt = millis();
-      this._staminaRegenAccum = 0;
-      this._staminaRegenLastTime = millis();
-    } catch (e) {
-      console.warn(`[Fighter.consumeStaminaFor] error forcing knocked for ${this.id} action=${actionName}`, e);
-    }
-    return false;
+    return true;
   }
 
   dash(dir) {
