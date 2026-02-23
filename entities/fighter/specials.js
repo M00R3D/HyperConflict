@@ -11,6 +11,7 @@ const defaultSpecialDefs = {
   shoryuken: { seq: ['←','→','P'], direction: 'forward' },
   bun: { seq: ['←','→','P'], direction: 'forward' },
   supersalto: { seq: ['↓','↑'], direction: 'any' },
+  dash: { seq: ['→','→'], direction: 'any' },
   ty_tats: { seq: ['↓','↙','←','K'], direction: 'backward' },
   taunt: { seq: ['T'], direction: 'any' }
 };
@@ -256,6 +257,24 @@ export function doSpecial(self, moveName) {
     const p = new Projectile(px, py, dir, 5, self.id, { string: stringFrames }, opts, bunFrames);
     p._ownerRef = self;
     projectiles.push(p);
+    return;
+  } else if (moveName === 'dash') {
+    // Determine last directional symbol in buffer to decide dash direction
+    const buf = self.inputBuffer || [];
+    if (!buf || buf.length === 0) return;
+    const lastSym = buf[buf.length - 1] && buf[buf.length - 1].symbol;
+    const rightSet = new Set(['→','↗','↘']);
+    const leftSet = new Set(['←','↖','↙']);
+    let dir = 1;
+    if (leftSet.has(lastSym)) dir = -1;
+    else if (rightSet.has(lastSym)) dir = 1;
+    else return;
+
+    // Only dash on ground and when not in hit/attacking/grab etc
+    const canDash = (!!self.onGround) && !self.isHit && !self.attacking && !self._grabLock;
+    if (!canDash) return;
+
+    try { self.dash(dir); } catch (e) { /* silent */ }
     return;
   }
 }

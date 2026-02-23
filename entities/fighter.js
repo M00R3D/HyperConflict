@@ -100,7 +100,14 @@ class Fighter {
     this.state = { current: "idle", timer: 0, canCancel: true };
 
     this.lastTapTime = { left: 0, right: 0 };
-    this.lastReleaseTime = { left: 0, right: 0 }; // <-- nuevo
+    this.lastReleaseTime = { left: 0, right: 0 };
+    // New: pendingTap is set on key release and can be invalidated by intervening keys
+    this.pendingTap = { left: { time: 0, valid: false }, right: { time: 0, valid: false } };
+    // Track when the current key press started per side (used to validate pendingTap on release)
+    this.lastPressStart = { left: 0, right: 0 };
+    // When any cancelling key (non-dir or opposite) occurs we set this timestamp; releases check it
+    this.lastCancelAt = 0;
+    this.lastNonDirPress = 0;
     this.dashDirection = 0;
 
     this.setState('idle');
@@ -391,6 +398,29 @@ class Fighter {
     // detectar specials inmediatamente después de que el buffer reciba el input
     // (permite activar supersalto antes de que la asignación de vy "normal" quede final)
     this.checkSpecialMoves();
+    // track cancelling presses (non-directional or opposite-direction) and mark lastCancelAt
+    try {
+      const nowKs = millis();
+      if (this.id === 'p1') {
+        for (const k in keysPressed) {
+          if (!keysPressed[k]) continue;
+          if (k !== 'a' && k !== 'd') {
+            this.lastCancelAt = nowKs; // non-direction cancels pending taps
+            this.pendingTap.left.valid = false; this.pendingTap.right.valid = false;
+            break;
+          }
+        }
+      } else {
+        for (const k in keysPressed) {
+          if (!keysPressed[k]) continue;
+          if (k !== 'arrowleft' && k !== 'arrowright') {
+            this.lastCancelAt = nowKs;
+            this.pendingTap.left.valid = false; this.pendingTap.right.valid = false;
+            break;
+          }
+        }
+      }
+    } catch (e) {}
     // limpiar flag auxiliar (opcional, se recalculará en la siguiente frame)
     delete this._prevOnGround;
     
@@ -401,7 +431,14 @@ class Fighter {
     if (this.id === 'p1') {
       // Izquierda
       if (keysPressed['a']) {
-        if (now - this.lastReleaseTime.left < 250 && this.state.current !== "dash") {
+        // pressing opposite direction should cancel any pending double-tap from the other side
+        try { this.lastReleaseTime.right = 0; } catch (e) {}
+        // require two adjacent '←' entries in the input buffer within the double-tap window
+        const bufAllL = this.inputBuffer || [];
+        const lastL = bufAllL[bufAllL.length - 1];
+        const prevL = bufAllL[bufAllL.length - 2];
+        const lastTwoLeft = lastL && prevL && lastL.symbol === '←' && prevL.symbol === '←' && (lastL.time - prevL.time) <= 250;
+        if (lastTwoLeft && this.state.current !== "dash" && this.lastCancelAt <= prevL.time) {
           this.dash(-1);
         }
         this.lastTapTime.left = now;
@@ -413,7 +450,14 @@ class Fighter {
       }
       // Derecha
       if (keysPressed['d']) {
-        if (now - this.lastReleaseTime.right < 250 && this.state.current !== "dash") {
+        // pressing opposite direction should cancel any pending double-tap from the other side
+        try { this.lastReleaseTime.left = 0; } catch (e) {}
+        // require two adjacent '→' entries in the input buffer within the double-tap window
+        const bufAllR = this.inputBuffer || [];
+        const lastR = bufAllR[bufAllR.length - 1];
+        const prevR = bufAllR[bufAllR.length - 2];
+        const lastTwoRight = lastR && prevR && lastR.symbol === '→' && prevR.symbol === '→' && (lastR.time - prevR.time) <= 250;
+        if (lastTwoRight && this.state.current !== "dash" && this.lastCancelAt <= prevR.time) {
           this.dash(1);
         }
         this.lastTapTime.right = now;
@@ -424,9 +468,14 @@ class Fighter {
         this.lastReleaseTime.right = now;
       }
     } else {
-      // Izquierda
+      // P2 (arrow keys)
       if (keysPressed['arrowleft']) {
-        if (now - this.lastReleaseTime.left < 250 && this.state.current !== "dash") {
+        try { this.lastReleaseTime.right = 0; } catch (e) {}
+        const bufAllL2 = this.inputBuffer || [];
+        const lastL2 = bufAllL2[bufAllL2.length - 1];
+        const prevL2 = bufAllL2[bufAllL2.length - 2];
+        const lastTwoLeft2 = lastL2 && prevL2 && lastL2.symbol === '←' && prevL2.symbol === '←' && (lastL2.time - prevL2.time) <= 250;
+        if (lastTwoLeft2 && this.state.current !== "dash" && this.lastCancelAt <= prevL2.time) {
           this.dash(-1);
         }
         this.lastTapTime.left = now;
@@ -435,9 +484,13 @@ class Fighter {
       if (keysUp['arrowleft']) {
         this.lastReleaseTime.left = now;
       }
-      // Derecha
       if (keysPressed['arrowright']) {
-        if (now - this.lastReleaseTime.right < 250 && this.state.current !== "dash") {
+        try { this.lastReleaseTime.left = 0; } catch (e) {}
+        const bufAllR2 = this.inputBuffer || [];
+        const lastR2 = bufAllR2[bufAllR2.length - 1];
+        const prevR2 = bufAllR2[bufAllR2.length - 2];
+        const lastTwoRight2 = lastR2 && prevR2 && lastR2.symbol === '→' && prevR2.symbol === '→' && (lastR2.time - prevR2.time) <= 250;
+        if (lastTwoRight2 && this.state.current !== "dash" && this.lastCancelAt <= prevR2.time) {
           this.dash(1);
         }
         this.lastTapTime.right = now;
@@ -447,30 +500,27 @@ class Fighter {
         this.lastReleaseTime.right = now;
       }
     }
+
     // --- bloqueo: mantener "back" relativo al facing activa bloqueo ---
     // back = izquierda cuando facing === 1 ; back = derecha cuando facing === -1
     const holdingBack = (this.facing === 1 && this.keys.left) || (this.facing === -1 && this.keys.right);
 
     // determinar amenaza del oponente:
-    // - si está en su ventana "attacking" (opp.attacking)
-    // - o si atacó recientemente (ventana de gracia) — permite que el defensor se prepare aunque el hit no coincida exactamente
     let opponentThreat = false;
     if (this.opponent) {
       try {
         const opp = this.opponent;
-        const now = millis();
+        const now2 = millis();
         const attackActive = !!opp.attacking;
-        const recentAttack = !!(opp.attackStartTime && (now - opp.attackStartTime) < ((opp.attackDuration || 400) + 250));
+        const recentAttack = !!(opp.attackStartTime && (now2 - opp.attackStartTime) < ((opp.attackDuration || 400) + 250));
         opponentThreat = attackActive || recentAttack;
       } catch (e) {
         opponentThreat = !!(this.opponent && this.opponent.attacking);
       }
     }
-
-    // bloquear sólo en suelo, si se mantiene back, no estamos en hit/attacking, Y existe amenaza del oponente
+    // determinar bloqueo (back + en suelo + no hit/attacking + amenaza)
     this.blocking = !!(holdingBack && this.onGround && !this.isHit && !this.attacking && opponentThreat);
-   }
-   handleInputRelease(type) { return Buffer.handleInputRelease(this, type); }
+  }
    
    update() {
     // antes de todo, consumir pending knockback si existe y no estamos en hitstop/pause

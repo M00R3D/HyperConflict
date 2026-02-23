@@ -39,7 +39,11 @@ export function addInput(self, symbol) {
   } else {
     // evitar duplicados idénticos al final (legacy)
     const last = self.inputBuffer.length > 0 ? self.inputBuffer[self.inputBuffer.length - 1] : null;
-    if (last && last.symbol === symbol) return;
+    // Allow consecutive identical entries for left/right to support double-tap detection.
+    if (last && last.symbol === symbol) {
+      if (symbol !== '←' && symbol !== '→') return;
+      // if it's a left/right duplicate, allow it (will record a separate timestamp)
+    }
   }
 
   self.inputBuffer.push({ symbol, time: now });
