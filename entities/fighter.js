@@ -46,7 +46,7 @@ class Fighter {
       const hasAsset = !!(assets && assets.crouchpunch);
       const lenCamel = (this.crouchPunchFramesByLayer && this.crouchPunchFramesByLayer[0]) ? this.crouchPunchFramesByLayer[0].length : 0;
       const lenLower = (this.crouchpunchFramesByLayer && this.crouchpunchFramesByLayer[0]) ? this.crouchpunchFramesByLayer[0].length : 0;
-      console.log('[Fighter ctor]', { id: this.id, charId: this.charId, assetsHasCrouchpunch: hasAsset, crouchPunch_len_camel: lenCamel, crouchpunch_len_lower: lenLower });
+      // console.log('[Fighter ctor]', { id: this.id, charId: this.charId, assetsHasCrouchpunch: hasAsset, crouchPunch_len_camel: lenCamel, crouchpunch_len_lower: lenLower });
     } catch (e) {}
     // weapon (optional overlay) — no forma parte de la animación principal
     this.weaponFramesByLayer = assets.weapon || null;
@@ -292,7 +292,7 @@ class Fighter {
           this._knockback.vx = (this._knockback.vx || 0) * 2;
           this._knockback.vy = (this._knockback.vy || 0) * 2;
         } catch (e) { /* silent */ }
-        console.log('[KB FORCE APPLY] doubled existing knockback (re-hit in air)', { target: this.id, from: attacker?.id, now: this._knockback });
+        // console.log('[KB FORCE APPLY] doubled existing knockback (re-hit in air)', { target: this.id, from: attacker?.id, now: this._knockback });
       } else {
         // crear/rewire knockback persistente según la tabla
         const finalH = Math.round(Math.abs(cfg.h || 0));
@@ -314,7 +314,7 @@ class Fighter {
         this._launchedDuration = Math.max(this._launchedDuration || 0, 600);
         this.onGround = false;
 
-        console.log('[KB FORCE APPLY] applied per-attack knockback', { target: this.id, from: attacker?.id, charId, attackName, cfg, kb });
+        // console.log('[KB FORCE APPLY] applied per-attack knockback', { target: this.id, from: attacker?.id, charId, attackName, cfg, kb });
       }
     } catch (e) {
       console.warn('[KB FORCE APPLY] failed', e);
@@ -521,7 +521,7 @@ class Fighter {
           this._launchedStart = pk._markLaunched.start || millis();
           this._launchedDuration = pk._markLaunched.duration || 600;
         }
-        console.log('[KB APPLIED DURING UPDATE]', { target: this.id, vx: this.vx, vy: this.vy });
+        // console.log('[KB APPLIED DURING UPDATE]', { target: this.id, vx: this.vx, vy: this.vy });
       } catch (e) { console.warn('[KB APPLY] during update failed', e); }
     }
 
@@ -581,7 +581,7 @@ class Fighter {
     // Si existía un knock forzado mientras estábamos en pausa/hitstop, aplicarlo ahora
     if (this._forceKnocked && !window.PAUSED && !window.HITSTOP_ACTIVE) {
       try {
-        console.log(`[Fighter.update] applying _forceKnocked -> setState('knocked') for ${this.id}`);
+        // console.log(`[Fighter.update] applying _forceKnocked -> setState('knocked') for ${this.id}`);
         this.setState('knocked');
       } catch (e) {
         console.warn(`[Fighter.update] failed to apply forced knocked for ${this.id}`, e);
@@ -858,7 +858,7 @@ class Fighter {
           this._launchedStart = pk._markLaunched.start || millis();
           this._launchedDuration = pk._markLaunched.duration || 600;
         }
-        console.log('[KB APPLIED DURING HITSTOP]', { target: this.id, vx: this.vx, vy: this.vy });
+        // console.log('[KB APPLIED DURING HITSTOP]', { target: this.id, vx: this.vx, vy: this.vy });
         // no borrar inmediatamente: keep applied=true to signal consumed
       } catch (e) { console.warn('[KB APPLY] during hitstop failed', e); }
     }
@@ -888,7 +888,7 @@ class Fighter {
       // limpiar pendingKnockback después de tocar suelo si fue aplicado
       if (this._pendingKnockback && this._pendingKnockback.applied) {
         delete this._pendingKnockback;
-        console.log('[KB CLEARED ON LAND]', { target: this.id });
+        // console.log('[KB CLEARED ON LAND]', { target: this.id });
       }
     } else {
       this.onGround = false;

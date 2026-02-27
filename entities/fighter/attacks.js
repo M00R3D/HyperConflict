@@ -14,7 +14,7 @@ export function attack(self, key) {
   let attackName = chain[step] || chain[0];
 
   // Debug: show requested attack and crouch state
-  try { console.log('[attack] request', { id: self.id, char: self.charId, key, attackName, crouching: !!self.crouching }); } catch (e) {}
+  // try { console.log('[attack] request', { id: self.id, char: self.charId, key, attackName, crouching: !!self.crouching }); } catch (e) {}
 
   // If crouching, prefer a crouch-specific variant if defined.
   // Example: when `punch` is requested while crouching, prefer `crouchpunch` or `crouchPunch2`.
@@ -27,10 +27,10 @@ export function attack(self, key) {
       const camelCrouch = 'crouch' + base.charAt(0).toUpperCase() + base.slice(1) + num;
       // prefer lowercase key (assets/init use `crouchpunch`), fall back to camelCase
       if (self.actions && self.actions[lowerCrouch]) {
-        try { console.log('[attack] using crouch variant (lower)', lowerCrouch); } catch (e) {}
+        // try { console.log('[attack] using crouch variant (lower)', lowerCrouch); } catch (e) {}
         attackName = lowerCrouch;
       } else if (self.actions && self.actions[camelCrouch]) {
-        try { console.log('[attack] using crouch variant (camel)', camelCrouch); } catch (e) {}
+        // try { console.log('[attack] using crouch variant (camel)', camelCrouch); } catch (e) {}
         attackName = camelCrouch;
       }
     }
@@ -168,7 +168,7 @@ export function shoot(self) {
 export function hit(self, attacker = null) {
   // seguridad: nada que procesar
   if (!attacker) return;
-  try { console.log(`[Attacks.hit] ${self.id || '?'} hit by ${attacker.id || '?'} attack=${attacker.attackType}`); } catch(e){}
+  // try { console.log(`[Attacks.hit] ${self.id || '?'} hit by ${attacker.id || '?'} attack=${attacker.attackType}`); } catch(e){}
 
   // (Se eliminó el bloqueo que forzaba un knockback por defecto aquí)
   // La aplicación del knockback se realiza más abajo usando la tabla por-ataque (getKnockbackForAttack).
@@ -250,7 +250,7 @@ export function hit(self, attacker = null) {
   // Si YA estábamos en hit3 y recibimos otro golpe, forzar knocked inmediatamente.
   if (prevHitLevel === 3) {
     try {
-      console.log(`[Attacks.hit] ${self.id || '?'} was in hit3 and got hit again -> forcing knocked`);
+      // console.log(`[Attacks.hit] ${self.id || '?'} was in hit3 and got hit again -> forcing knocked`);
       Anim.forceSetState(self, 'knocked');
     } catch (e) {
       console.warn('[Attacks.hit] failed to force knocked, marking _forceKnocked', self.id, e);
@@ -352,7 +352,7 @@ export function hit(self, attacker = null) {
     this._launchedDuration = Math.max(this._launchedDuration || 0, 600);
 
     // no forzar borrar pending; se consumirá en update/updateDuranteHitstop
-    console.log('[KB APPLY CONFIG]', { target: this.id, from: attacker?.id, charId, attackName, cfg, finalH, finalV, away });
+    // console.log('[KB APPLY CONFIG]', { target: this.id, from: attacker?.id, charId, attackName, cfg, finalH, finalV, away });
   } catch (e) {
     console.warn('[KB FORCE] failed to set persistent knockback', e);
   }

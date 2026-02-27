@@ -3,7 +3,7 @@ export function setState(self, newState) {
   // NO cambiar de estado si está en pausa o durante hitstop
   if (window.PAUSED || window.HITSTOP_ACTIVE) {
     try {
-      console.log(`[Anim.setState] blocked by PAUSE/HITSTOP: ${self?.id || '?'} trying -> ${newState}`);
+      // console.log(`[Anim.setState] blocked by PAUSE/HITSTOP: ${self?.id || '?'} trying -> ${newState}`);
     } catch (e) { /* ignore logging errors */ }
     return;
   }
@@ -19,7 +19,7 @@ export function setState(self, newState) {
     };
     if (!allowIf(newState)) {
       try {
-        console.log(`[Anim.setState] transition blocked by taunt lock: ${self.id || '?'} ${self.state.current} -> ${newState}`);
+        // console.log(`[Anim.setState] transition blocked by taunt lock: ${self.id || '?'} ${self.state.current} -> ${newState}`);
       } catch (e) { /* ignore logging errors */ }
       return;
     }
@@ -31,14 +31,14 @@ export function setState(self, newState) {
     // si está bloqueando en suelo o en crouch, ignorar intentos de poner hit
     if (self && (self.blocking || self.state?.current === 'block' || self.state?.current === 'crouchBlock')) {
       try {
-        console.log(`[Anim.setState] hit transition ignored due blocking: ${self.id || '?'} state=${self.state?.current} -> ${newState}`);
+        // console.log(`[Anim.setState] hit transition ignored due blocking: ${self.id || '?'} state=${self.state?.current} -> ${newState}`);
       } catch (e) { /* ignore logging errors */ }
       return;
     }
   }
 
   try {
-    console.log('[Anim.setState] request', { id: self?.id, char: self?.charId, prev: self?.state?.current, newState, hasAction: !!(self && self.actions && self.actions[newState]), framesLen: ((self && self.actions && self.actions[newState] && self.actions[newState].anim && self.actions[newState].anim[0]) ? self.actions[newState].anim[0].length : (self && self.currentFramesByLayer && self.currentFramesByLayer[0] ? self.currentFramesByLayer[0].length : 0)) });
+    // console.log('[Anim.setState] request', { id: self?.id, char: self?.charId, prev: self?.state?.current, newState, hasAction: !!(self && self.actions && self.actions[newState]), framesLen: ((self && self.actions && self.actions[newState] && self.actions[newState].anim && self.actions[newState].anim[0]) ? self.actions[newState].anim[0].length : (self && self.currentFramesByLayer && self.currentFramesByLayer[0] ? self.currentFramesByLayer[0].length : 0)) });
   } catch (e) {}
 
   if (self.state && self.state.current === newState) return;
@@ -301,7 +301,7 @@ export function forceSetState(self, newState) {
       self.frameIndex = Math.max(0, (layer0.length || 1) - 1);
       self.frameTimer = 0;
       self._knockedAnimationEnded = true;
-      try { console.log(`[Anim.forceSetState] forced ${self.id || '?'} -> knocked (visual applied)`); } catch (e) {}
+      // try { console.log(`[Anim.forceSetState] forced ${self.id || '?'} -> knocked (visual applied)`); } catch (e) {}
       return;
     }
 
@@ -310,7 +310,7 @@ export function forceSetState(self, newState) {
       self.currentFramesByLayer = self.recoveryFramesByLayer || self.hitFramesByLayer || self.currentFramesByLayer || [];
       self.frameIndex = 0;
       self.frameTimer = 0;
-      try { console.log(`[Anim.forceSetState] forced ${self.id || '?'} -> recovery (visual applied)`); } catch (e) {}
+      // try { console.log(`[Anim.forceSetState] forced ${self.id || '?'} -> recovery (visual applied)`); } catch (e) {}
       return;
     }
 

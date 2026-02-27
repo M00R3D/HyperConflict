@@ -35,7 +35,7 @@ function loadPiskel(jsonPath) {
       const layers = await Promise.all(layerPromises);
       try {
         const counts = layers.map(l => (Array.isArray(l) ? l.length : 0));
-        console.log('[loadPiskel] loaded', jsonPath, 'layer counts =', counts);
+        // console.log('[loadPiskel] loaded', jsonPath, 'layer counts =', counts);
       } catch (e) {}
       resolve(layers);
     });

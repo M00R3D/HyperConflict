@@ -38,7 +38,7 @@ export function display(self) {
     // si hay frames por capa y la capa 0 tiene frames, dibuja la animación
     if (stateText !== 'idle') {
       try {
-        console.log('[display] render attempt', { id: self.id, char: self.charId, state: stateText, currentFrames0: (self.currentFramesByLayer && self.currentFramesByLayer[0] ? self.currentFramesByLayer[0].length : 0), idleFrames0: (self.idleFramesByLayer && self.idleFramesByLayer[0] ? self.idleFramesByLayer[0].length : 0) });
+        // console.log('[display] render attempt', { id: self.id, char: self.charId, state: stateText, currentFrames0: (self.currentFramesByLayer && self.currentFramesByLayer[0] ? self.currentFramesByLayer[0].length : 0), idleFrames0: (self.idleFramesByLayer && self.idleFramesByLayer[0] ? self.idleFramesByLayer[0].length : 0) });
       } catch (e) {}
     }
     if (framesByLayer && framesByLayer.length > 0 && (framesByLayer[0] || []).length > 0) {
