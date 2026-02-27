@@ -7,6 +7,7 @@ function loadPiskel(jsonPath) {
         resolve([]);
         return;
       }
+      try { console.log('[loadPiskel] loading', jsonPath, 'piskel.layers.length =', data.piskel.layers.length); } catch (e) {}
       const layerPromises = data.piskel.layers.map(async (layerStr) => {
         let layer = JSON.parse(layerStr);
         if (!layer?.chunks?.length) return [];
@@ -32,6 +33,10 @@ function loadPiskel(jsonPath) {
       });
 
       const layers = await Promise.all(layerPromises);
+      try {
+        const counts = layers.map(l => (Array.isArray(l) ? l.length : 0));
+        console.log('[loadPiskel] loaded', jsonPath, 'layer counts =', counts);
+      } catch (e) {}
       resolve(layers);
     });
   });

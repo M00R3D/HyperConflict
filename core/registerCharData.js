@@ -14,6 +14,10 @@ export function registerCharData() {
             punch: { duration: 400, frameDelay: 6 },
             punch2: { duration: 400, frameDelay: 6 },
             punch3: { duration: 800, frameDelay: 5 },
+            // crouch variants: used when pressing punch while crouching
+            crouchPunch: { duration: 380, frameDelay: 6 },
+            crouchPunch2: { duration: 420, frameDelay: 6 },
+            crouchPunch3: { duration: 800, frameDelay: 5 },
             kick: { duration: 400, frameDelay: 6 },
             kick2: { duration: 700, frameDelay: 6 },
             kick3: { duration: 1000, frameDelay: 6 },
@@ -32,6 +36,10 @@ export function registerCharData() {
             punch: { duration: 700, frameDelay: 7 },
             punch2: { duration: 1000, frameDelay: 6 },
             punch3: { duration: 1000, frameDelay: 6 },
+            // crouch variants
+            crouchPunch: { duration: 680, frameDelay: 7 },
+            crouchPunch2: { duration: 1000, frameDelay: 6 },
+            crouchPunch3: { duration: 1000, frameDelay: 6 },
             kick: { duration: 700, frameDelay: 7 },
             kick2: { duration: 1000, frameDelay: 6 },
             kick3: { duration: 1000, frameDelay: 6 },
@@ -43,6 +51,8 @@ export function registerCharData() {
             punch:  { offsetX: 16, offsetY: 6, w: 20, h: 20 },
             punch2: { offsetX: 18, offsetY: 6, w: 22, h: 20 },
             punch3: { offsetX: 20, offsetY: 4, w: 28, h: 24 },
+            // crouch punch: lower and wider than standing punch
+            crouchPunch: { offsetX: 12, offsetY: 14, w: 30, h: 20 },
             kick:   { offsetX: 23, offsetY: 16, w: 11, h: 13 },
             kick2:   { offsetX: 23, offsetY: 16, w: 15, h: 13 },
             kick3:   { offsetX: 20, offsetY: 4, w: 17, h: 15 }
@@ -51,11 +61,14 @@ export function registerCharData() {
             // ejemplo: sbluer tweaks
             registerAttackHitboxesForChar('sbluer', {
             punch: { offsetX: 14, offsetY: 6, w: 18, h: 18 },
+            // crouch punch: lower and larger
+            crouchPunch: { offsetX: 10, offsetY: 14, w: 26, h: 20 },
             kick3:  { offsetX: 24, offsetY: 4, w: 30, h: 26 }
             });
 
             registerBodyHitboxesForChar('tyeman', {
             idle:  { offsetX: 6, offsetY: 0, w: 22, h: 32 },
+            crouch: { offsetX: 6, offsetY: 10, w: 22, h: 22 },
             kick:  { offsetX: 6, offsetY: 0, w: 22, h: 32 },
             kick2:  { offsetX: 6, offsetY: 1, w: 20, h: 32 },
             kick3:  { offsetX: 6, offsetY: 10, w: 22, h: 23 },
@@ -66,6 +79,7 @@ export function registerCharData() {
 
             registerBodyHitboxesForChar('sbluer', {
             idle: { offsetX: 7, offsetY: 0, w: 22, h: 32 },
+            crouch: { offsetX: 7, offsetY: 12, w: 22, h: 22 },
             kick:  { offsetX: 6, offsetY: 0, w: 22, h: 32 },
             // kick: { offsetX: 20, offsetY: 8, w: 28, h: 18 }
             });

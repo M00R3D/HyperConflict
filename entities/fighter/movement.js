@@ -98,6 +98,8 @@ export function updateMovement(self) {
     self.state.current === "punch" ||
     self.state.current === "punch2" ||
     self.state.current === "punch3" ||
+     self.state.current === "crouchpunch" ||
+     self.state.current === "crouchPunch" ||
     self.state.current === "kick" ||
     self.state.current === "kick2" ||
     self.state.current === "kick3"

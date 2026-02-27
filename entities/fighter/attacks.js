@@ -11,7 +11,31 @@ export function attack(self, key) {
   let step = self.comboStepByKey[key] || 0;
   if (now - last > self.comboWindow) step = 0;
 
-  const attackName = chain[step] || chain[0];
+  let attackName = chain[step] || chain[0];
+
+  // Debug: show requested attack and crouch state
+  try { console.log('[attack] request', { id: self.id, char: self.charId, key, attackName, crouching: !!self.crouching }); } catch (e) {}
+
+  // If crouching, prefer a crouch-specific variant if defined.
+  // Example: when `punch` is requested while crouching, prefer `crouchpunch` or `crouchPunch2`.
+  if (self.crouching && typeof attackName === 'string') {
+    const m = attackName.match(/^(\D+)(\d*)$/);
+    if (m) {
+      const base = m[1];
+      const num = m[2] || '';
+      const lowerCrouch = ('crouch' + base + num).toLowerCase();
+      const camelCrouch = 'crouch' + base.charAt(0).toUpperCase() + base.slice(1) + num;
+      // prefer lowercase key (assets/init use `crouchpunch`), fall back to camelCase
+      if (self.actions && self.actions[lowerCrouch]) {
+        try { console.log('[attack] using crouch variant (lower)', lowerCrouch); } catch (e) {}
+        attackName = lowerCrouch;
+      } else if (self.actions && self.actions[camelCrouch]) {
+        try { console.log('[attack] using crouch variant (camel)', camelCrouch); } catch (e) {}
+        attackName = camelCrouch;
+      }
+    }
+  }
+
   const action = self.actions[attackName];
   if (!action) { console.warn('Acción no definida en actions:', attackName); return; }
 

@@ -38,9 +38,16 @@ class Fighter {
       knockingFramesByLayer: assets.knocking, // <-- AGREGADO
       knockedFramesByLayer: assets.knocked,   // <-- AGREGADO
       recoveryFramesByLayer: assets.recovery, // <-- AGREGADO
-
+      crouchPunchFramesByLayer: assets.crouchpunch, // <-- AGREGADO
       
     });
+    // Diagnostic: log presence/lengths of crouchpunch-related assets/frames
+    try {
+      const hasAsset = !!(assets && assets.crouchpunch);
+      const lenCamel = (this.crouchPunchFramesByLayer && this.crouchPunchFramesByLayer[0]) ? this.crouchPunchFramesByLayer[0].length : 0;
+      const lenLower = (this.crouchpunchFramesByLayer && this.crouchpunchFramesByLayer[0]) ? this.crouchpunchFramesByLayer[0].length : 0;
+      console.log('[Fighter ctor]', { id: this.id, charId: this.charId, assetsHasCrouchpunch: hasAsset, crouchPunch_len_camel: lenCamel, crouchpunch_len_lower: lenLower });
+    } catch (e) {}
     // weapon (optional overlay) — no forma parte de la animación principal
     this.weaponFramesByLayer = assets.weapon || null;
     // recibir `actions` desde opts pero aplicarlos después de crear el mapping por defecto
@@ -88,6 +95,7 @@ class Fighter {
       knocked: { anim: this.knockedFramesByLayer, frameDelay: 7, duration: (this.knockedDurationMs || 800) },
       recovery: { anim: this.recoveryFramesByLayer, frameDelay: 7, duration: (this.recoveryDurationMs || 1200) },
       // dashLight: { anim: this.dashLightFramesByLayer, frameDelay: 10, duration: 300 }, // <-- nuevo estado intermedio (no usado)
+      crouchpunch: { anim: this.crouchPunchFramesByLayer, frameDelay: 6, duration: 500 }, // <-- nuevo ataque de ejemplo
     };
 
     // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)

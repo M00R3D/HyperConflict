@@ -77,6 +77,7 @@ async function loadTyemanAssets() {
   knocking: await loadOrNull('src/tyeman/tyeman_knocking.piskel'),
   knocked: await loadOrNull('src/tyeman/tyeman_knocked.piskel'),
   recovery: await loadOrNull('src/tyeman/tyeman_recovery.piskel'),
+  crouchpunch: await loadOrNull('src/tyeman/tyeman_crouch_punch.piskel'),
   };
 }
  
@@ -114,6 +115,7 @@ async function loadSbluerAssets() {
   knocking: await loadOrNull('src/sbluer/sbluer_knocking.piskel'),
   knocked: await loadOrNull('src/sbluer/sbluer_knocked.piskel'),
   recovery: await loadOrNull('src/sbluer/sbluer_recovery.piskel'),
+  crouchpunch: await loadOrNull('src/sbluer/sbluer_crouch_punch.piskel'),
   };
 }
 async function loadFernandoAssets() {
@@ -146,6 +148,7 @@ async function loadFernandoAssets() {
     grabbed: await loadOrNull('src/fernando/fernando_grabbed.piskel'),
     knocked: await loadOrNull('src/fernando/fernando_knocked.piskel'),
     recovery: await loadOrNull('src/fernando/fernando_recovery.piskel'),
+    crouchpunch: await loadOrNull('src/fernando/fernando_crouch_punch.piskel'),
     taunt: await loadOrNull('src/fernando/fernando_taunt.piskel')
   };
   // arma colgante/overlay (opcional)

@@ -35,8 +35,13 @@ export function display(self) {
   // extra width (px) to add to rendered sprites (negative => narrower)
   const renderExtraW = (self.charId === 'fernando') ? -2 : 0;
 
-  // si hay frames por capa y la capa 0 tiene frames, dibuja la animación
-  if (framesByLayer && framesByLayer.length > 0 && (framesByLayer[0] || []).length > 0) {
+    // si hay frames por capa y la capa 0 tiene frames, dibuja la animación
+    if (stateText !== 'idle') {
+      try {
+        console.log('[display] render attempt', { id: self.id, char: self.charId, state: stateText, currentFrames0: (self.currentFramesByLayer && self.currentFramesByLayer[0] ? self.currentFramesByLayer[0].length : 0), idleFrames0: (self.idleFramesByLayer && self.idleFramesByLayer[0] ? self.idleFramesByLayer[0].length : 0) });
+      } catch (e) {}
+    }
+    if (framesByLayer && framesByLayer.length > 0 && (framesByLayer[0] || []).length > 0) {
     // --- Dibuja el sprite normal (con flip) dentro de su propia transform ---
     push();
     if (self.facing === -1) {

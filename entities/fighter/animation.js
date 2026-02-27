@@ -37,6 +37,10 @@ export function setState(self, newState) {
     }
   }
 
+  try {
+    console.log('[Anim.setState] request', { id: self?.id, char: self?.charId, prev: self?.state?.current, newState, hasAction: !!(self && self.actions && self.actions[newState]), framesLen: ((self && self.actions && self.actions[newState] && self.actions[newState].anim && self.actions[newState].anim[0]) ? self.actions[newState].anim[0].length : (self && self.currentFramesByLayer && self.currentFramesByLayer[0] ? self.currentFramesByLayer[0].length : 0)) });
+  } catch (e) {}
+
   if (self.state && self.state.current === newState) return;
 
   // Guardar estado previo para detectar salidas de ataques
@@ -102,6 +106,16 @@ export function setState(self, newState) {
     case 'knocking':  self.currentFramesByLayer = self.knockingFramesByLayer || self.hitFramesByLayer; break;
     case 'knocked':   self.currentFramesByLayer = self.knockedFramesByLayer || self.hitFramesByLayer; break;
     case 'recovery':  self.currentFramesByLayer = self.recoveryFramesByLayer || self.hitFramesByLayer; break;
+    case 'crouchpunch':
+      self.currentFramesByLayer = (self.crouchPunchFramesByLayer && (self.crouchPunchFramesByLayer[0] || []).length > 0)
+        ? self.crouchPunchFramesByLayer
+        : (self.crouchFramesByLayer && (self.crouchFramesByLayer[0] || []).length > 0 ? self.crouchFramesByLayer : self.idleFramesByLayer);
+      break;
+    case 'crouchPunch':
+      self.currentFramesByLayer = (self.crouchPunchFramesByLayer && (self.crouchPunchFramesByLayer[0] || []).length > 0)
+        ? self.crouchPunchFramesByLayer
+        : (self.crouchFramesByLayer && (self.crouchFramesByLayer[0] || []).length > 0 ? self.crouchFramesByLayer : self.idleFramesByLayer);
+      break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 
