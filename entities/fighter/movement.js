@@ -106,8 +106,17 @@ export function updateMovement(self) {
   ) {
     // si hay knockback dejamos que eius vx persista (no aplicar decrementos que cancelen el empuje)
     if (!self._knockback) {
-      if(self.vx>0 && self.vy==0) self.vx -= 0.04;
-      else if(self.vx<0 && self.vy==0) self.vx += 0.04;
+      // For regular standing attacks we slightly reduce horizontal velocity to settle.
+      if (self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch') {
+        // lock movement fully for crouch punch: zero velocities and clear directional inputs
+        self.vx = 0;
+        self.vy = 0;
+        self.keys.left = false; self.keys.right = false; self.keys.up = false;
+        self.runActive = false;
+      } else {
+        if(self.vx>0 && self.vy==0) self.vx -= 0.04;
+        else if(self.vx<0 && self.vy==0) self.vx += 0.04;
+      }
     }
   }
 

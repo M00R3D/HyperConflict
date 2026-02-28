@@ -286,6 +286,8 @@ export function initHitboxes(self) {
     tats: { offsetX: 20, offsetY: 4, w: 18, h: 24 },
     // grab ampliada: más ancho y alto para cubrir variaciones de sprite/pose
     grab: { offsetX: 10, offsetY: 4, w: 32, h: 32 }, // <-- AUMENTADA
+    // crouchpunch: lower (closer to floor) and slightly wider than standing punch
+    crouchpunch: { offsetX: 14, offsetY: 12, w: 26, h: 12 },
   };
 }
 

@@ -2,6 +2,12 @@ import { registerStatsForChar, registerActionsForChar } from './charConfig.js';
 import { registerAttackHitboxesForChar, registerBodyHitboxesForChar } from './hitboxConfig.js';
 import { registerSpecialsForChar } from '../entities/fighter/specials.js';
 export function registerCharData() {
+            registerActionsForChar('fernando', {
+            // punch: { duration: 500, frameDelay: 6 },
+            // kick: { duration: 500, frameDelay: 6 },
+            // grab: { duration: 500, frameDelay: 4 }
+            kick3: { duration: 1000, frameDelay: 3 },
+            });
             registerStatsForChar('tyeman', {
             maxSpeed: 3,
             runMaxSpeed: 6,
@@ -17,7 +23,7 @@ export function registerCharData() {
             // crouch variants: used when pressing punch while crouching
             crouchPunch: { duration: 380, frameDelay: 6 },
             crouchPunch2: { duration: 420, frameDelay: 6 },
-            crouchPunch3: { duration: 800, frameDelay: 5 },
+            crouchPunch3: { duration: 800, frameDelay: 5  },
             kick: { duration: 400, frameDelay: 6 },
             kick2: { duration: 700, frameDelay: 6 },
             kick3: { duration: 1000, frameDelay: 6 },

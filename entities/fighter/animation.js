@@ -8,6 +8,21 @@ export function setState(self, newState) {
     return;
   }
 
+  // If current state marked as non-cancellable (e.g. crouchpunch), prevent most transitions
+  if (self && self.state && self.state.canCancel === false) {
+    // allow hit/knock transitions to interrupt
+    if (typeof newState === 'string' && newState.startsWith('hit')) {
+      // allow
+    } else if (newState === 'knocked') {
+      // allow
+    } else if (newState === 'idle' && !self.attacking) {
+      // allow automatic return to idle once the attack flag cleared
+    } else {
+      // block other transitions while non-cancellable
+      return;
+    }
+  }
+
   // Si estamos en un taunt activo, bloquear cualquier transición que no sea daño/knockdown.
   // Permitimos solo 'hit1'/'hit2'/'hit3' (interrupción por daño) o 'knocked' (knockdown).
   if (self && self.state && self.state.current === 'taunt' && self.attacking) {
@@ -122,6 +137,16 @@ export function setState(self, newState) {
   // inicializa índices/timers de animación
   self.frameIndex = 0;
   self.frameTimer = 0;
+
+  // set canCancel flag: crouchpunch is non-cancellable until it finishes
+  try {
+    if (newState === 'crouchpunch' || newState === 'crouchPunch') {
+      self.state.canCancel = false;
+    } else {
+      // default: allow cancels
+      self.state.canCancel = true;
+    }
+  } catch (e) {}
 
   // Si SALIMOS de un estado de ataque importante, evitar que la regeneración nos devuelva
   // instantáneamente lo gastado: marcar consumo reciente y resetar acumulador/lastTime.

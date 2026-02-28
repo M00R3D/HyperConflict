@@ -22,17 +22,33 @@ export function attack(self, key) {
     const m = attackName.match(/^(\D+)(\d*)$/);
     if (m) {
       const base = m[1];
-      const num = m[2] || '';
-      const lowerCrouch = ('crouch' + base + num).toLowerCase();
-      const camelCrouch = 'crouch' + base.charAt(0).toUpperCase() + base.slice(1) + num;
-      // prefer lowercase key (assets/init use `crouchpunch`), fall back to camelCase
+      // Only map to a single crouch variant (no numbered escalation)
+      const lowerCrouch = ('crouch' + base).toLowerCase();
+      const camelCrouch = 'crouch' + base.charAt(0).toUpperCase() + base.slice(1);
       if (self.actions && self.actions[lowerCrouch]) {
-        // try { console.log('[attack] using crouch variant (lower)', lowerCrouch); } catch (e) {}
         attackName = lowerCrouch;
       } else if (self.actions && self.actions[camelCrouch]) {
-        // try { console.log('[attack] using crouch variant (camel)', camelCrouch); } catch (e) {}
         attackName = camelCrouch;
       }
+    }
+  }
+
+  // If we're already mid-attack, only allow this new attack when it is
+  // a legitimate combo continuation (next element in the chain). This
+  // prevents spamming single attacks like crouchpunch while an attack
+  // (or hitstop) is still active.
+  if (self.attacking) {
+    try {
+      const currentAtk = (self.attackType || '').toString();
+      const idx = (currentAtk && Array.isArray(chain)) ? chain.indexOf(currentAtk) : -1;
+      const nextIdx = (idx >= 0) ? (idx + 1) : -1;
+      const nextName = (nextIdx >= 0 && chain[nextIdx]) ? chain[nextIdx] : null;
+      // allow only when the requested attack matches the next combo element
+      if (!(nextName && nextName === attackName)) {
+        return;
+      }
+    } catch (e) {
+      return;
     }
   }
 
@@ -48,8 +64,13 @@ export function attack(self, key) {
   self._hitTargets = new Set();
   self.lastAttackTimeByKey[key] = now;
   self.inputLockedByKey[key] = true;
-  self.comboStepByKey[key] = (step + 1);
-  if (self.comboStepByKey[key] >= chain.length) self.comboStepByKey[key] = 0;
+  // If we used a crouch-specific single attack, avoid escalating the combo
+  if (attackName === 'crouchpunch' || attackName === 'crouchPunch') {
+    self.comboStepByKey[key] = 0;
+  } else {
+    self.comboStepByKey[key] = (step + 1);
+    if (self.comboStepByKey[key] >= chain.length) self.comboStepByKey[key] = 0;
+  }
 }
 
 export function attackHits(self, opponent) {
@@ -247,6 +268,16 @@ export function hit(self, attacker = null) {
     resolvedHitLevel = this._consecutiveHits;
   }
 
+  // SPECIAL: si el defensor estaba ejecutando un `crouchpunch`, convertir el resultado
+  // en un hit3 y aplicar un knockback moderado/consistente.
+  try {
+    if (this.state && (this.state.current === 'crouchpunch' || this.state.current === 'crouchPunch')) {
+      resolvedHitLevel = 3;
+      // marcar flag temporal para que la sección de knockback aplique una fuerza media
+      this._receivedHitWhileCrouchPunch = true;
+    }
+  } catch (e) { /* silent */ }
+
   // Si YA estábamos en hit3 y recibimos otro golpe, forzar knocked inmediatamente.
   if (prevHitLevel === 3) {
     try {
@@ -306,7 +337,13 @@ export function hit(self, attacker = null) {
     const attackName = String((attacker && attacker.attackType) || 'default').toLowerCase();
 
     // obtener configuración por personaje/ataque
-    const cfg = getKnockbackForAttack(charId, attackName) || { h: 5, v: 5 };
+    // si el objetivo recibió el golpe mientras ejecutaba crouchpunch, forzamos
+    // una configuración de knockback media (override local)
+    let cfg = getKnockbackForAttack(charId, attackName) || { h: 5, v: 5 };
+    if (this._receivedHitWhileCrouchPunch) {
+      cfg = { h: 8, v: 8 };
+      delete this._receivedHitWhileCrouchPunch;
+    }
 
     // determinar dirección "away" (1 => a la derecha, -1 => a la izquierda)
     const away = Math.sign((self.x || 0) - (attacker.x || 0)) || ((attacker.facing || 1) * -1) || 1;
@@ -411,6 +448,10 @@ export function updateAttackState(self) {
     // (Solo aplicamos esto para 'taunt' porque otros ataques pueden manejar su propia recovery)
     try {
       if (endedAttackType === 'taunt' && self.state && self.state.current === 'taunt') {
+        self.setState('idle');
+      }
+      // Si terminamos un crouchpunch, volver a idle automáticamente
+      if ((endedAttackType === 'crouchpunch' || endedAttackType === 'crouchPunch') && self.state && (self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch')) {
         self.setState('idle');
       }
     } catch (e) { /* silent */ }
