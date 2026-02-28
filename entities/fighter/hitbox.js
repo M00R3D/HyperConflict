@@ -39,13 +39,16 @@ export function getAttackHitbox(self) {
   try {
     const reg = getAttackHitboxForChar(self.charId, self.attackType);
     if (reg && typeof reg === 'object' && reg.w !== undefined) {
+      try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando reg found', { attackType: self.attackType, reg }); } catch(e) {}
       // permitir defs compactos: { offsetX, offsetY, w, h }
-      return {
+      const box = {
         x: self.facing === 1 ? self.x + reg.offsetX : self.x + self.w - (reg.offsetX || 0) - reg.w,
         y: self.y + (reg.offsetY || 0),
         w: reg.w,
         h: reg.h
       };
+      try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando computed atkHB', JSON.stringify({ attackType: self.attackType, box, selfX: self.x, selfW: self.w, facing: self.facing })); } catch(e) {}
+      return box;
     }
   } catch (e) {
     // si falla la consulta, continuar con fallback (no romper)
@@ -54,11 +57,14 @@ export function getAttackHitbox(self) {
   // 2) fallback a las hitboxes definidas en la instancia (legacy)
   const raw = self.attackHitboxes[self.attackType] || self.attackHitboxes[self.attackType.replace(/\d+$/, '')];
   if (!raw) return null;
-  return {
+  try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando fallback raw', { attackType: self.attackType, raw }); } catch(e) {}
+  const box = {
     x: self.facing === 1 ? self.x + raw.offsetX : self.x + self.w - raw.offsetX - raw.w,
     y: self.y + raw.offsetY,
     w: raw.w, h: raw.h
   };
+  try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando computed atkHB fallback', JSON.stringify({ attackType: self.attackType, box, selfX: self.x, selfW: self.w, facing: self.facing })); } catch(e) {}
+  return box;
 }
 
 export function getKeysForSymbol(self, sym) {

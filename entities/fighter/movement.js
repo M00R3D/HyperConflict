@@ -100,6 +100,8 @@ export function updateMovement(self) {
     self.state.current === "punch3" ||
      self.state.current === "crouchpunch" ||
      self.state.current === "crouchPunch" ||
+     self.state.current === "crouchkick" ||
+     self.state.current === "crouchKick" ||
     self.state.current === "kick" ||
     self.state.current === "kick2" ||
     self.state.current === "kick3"
@@ -107,7 +109,10 @@ export function updateMovement(self) {
     // si hay knockback dejamos que eius vx persista (no aplicar decrementos que cancelen el empuje)
     if (!self._knockback) {
       // For regular standing attacks we slightly reduce horizontal velocity to settle.
-      if (self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch') {
+      if (
+        self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch' ||
+        self.state.current === 'crouchkick' || self.state.current === 'crouchKick'
+      ) {
         // lock movement fully for crouch punch: zero velocities and clear directional inputs
         self.vx = 0;
         self.vy = 0;
@@ -127,7 +132,11 @@ export function updateMovement(self) {
     self.state.current === "punch3" ||
     self.state.current === "kick" ||
     self.state.current === "kick2" ||
-    self.state.current === "kick3"
+    self.state.current === "kick3" ||
+    self.state.current === "crouchkick" ||
+    self.state.current === "crouchKick" ||
+    self.state.current === "crouchpunch" ||
+    self.state.current === "crouchPunch"
   ) {
     if (self._wasInDash) {
       // Si venía de dash, lo cortamos
@@ -163,14 +172,18 @@ export function updateMovement(self) {
 
   // Si estás en estado 'hit', NO permitimos controlar vx ni girar con las teclas
   if (!self.isHit) {
-    // NO permitir modificar vx durante ataques
+    // NO permitir modificar vx durante ataques (incluye variantes crouch)
     const isAttackingState = (
       self.state.current === "punch" ||
       self.state.current === "punch2" ||
       self.state.current === "punch3" ||
       self.state.current === "kick" ||
       self.state.current === "kick2" ||
-      self.state.current === "kick3"
+      self.state.current === "kick3" ||
+      self.state.current === "crouchpunch" ||
+      self.state.current === "crouchPunch" ||
+      self.state.current === "crouchkick" ||
+      self.state.current === "crouchKick"
     );
     if (!isAttackingState) {
       if (self.keys.left && self.state.current !== "fall" && self.state.current !== "jump") self.vx -= effectiveAcc;

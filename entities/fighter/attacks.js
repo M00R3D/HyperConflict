@@ -180,6 +180,13 @@ export function attackHits(self, opponent) {
     atkHB.y < oppHB.y + oppHB.h &&
     atkHB.y + atkHB.h > oppHB.y
   );
+  try {
+    if (self && self.charId === 'fernando') {
+      const now = millis();
+      const elapsed = now - (self.attackStartTime || 0);
+      console.log('[attackHits] fernando check', JSON.stringify({ attackType: self.attackType, elapsed, attackDuration: self.attackDuration, frameIndex: self.frameIndex, atkHB, oppId: opponent && opponent.id, oppHB, collided }));
+    }
+  } catch(e) {}
 
   if (collided) {
     // marcar como golpeado por esta activación para evitar múltiples hits

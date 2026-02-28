@@ -129,12 +129,15 @@ export function registerSpecials(){
   registerActionsForChar('fernando', {
     punch: { duration: 500, frameDelay: 6 },
     kick: { duration: 500, frameDelay: 6 },
+    // crouch variants
+    crouchPunch: { duration: 500, frameDelay: 6 },
     // crouch kick (single)
     crouchKick: { duration: 700, frameDelay: 6 },
     grab: { duration: 500, frameDelay: 4 }
   });
 
   registerAttackHitboxesForChar('fernando', {
+    crouchPunch: { offsetX: 12, offsetY: 14, w: 28, h: 20 },
     crouchKick: { offsetX: 12, offsetY: 12, w: 34, h: 22 }
   });
   registerBodyHitboxesForChar('fernando', {});
