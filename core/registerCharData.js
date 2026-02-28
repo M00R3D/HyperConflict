@@ -1,5 +1,6 @@
 import { registerStatsForChar, registerActionsForChar } from './charConfig.js';
 import { registerAttackHitboxesForChar, registerBodyHitboxesForChar } from './hitboxConfig.js';
+import { setKnockbackForAttack } from './knockback.js';
 import { registerSpecialsForChar } from '../entities/fighter/specials.js';
 export function registerCharData() {
             registerActionsForChar('fernando', {
@@ -24,6 +25,8 @@ export function registerCharData() {
             crouchPunch: { duration: 380, frameDelay: 6 },
             crouchPunch2: { duration: 420, frameDelay: 6 },
             crouchPunch3: { duration: 800, frameDelay: 5  },
+            // single-hit crouch kick (stronger than crouch punch)
+            crouchKick: { duration: 520, frameDelay: 6 },
             kick: { duration: 400, frameDelay: 6 },
             kick2: { duration: 700, frameDelay: 6 },
             kick3: { duration: 1000, frameDelay: 6 },
@@ -46,6 +49,8 @@ export function registerCharData() {
             crouchPunch: { duration: 680, frameDelay: 7 },
             crouchPunch2: { duration: 1000, frameDelay: 6 },
             crouchPunch3: { duration: 1000, frameDelay: 6 },
+            // single-hit crouch kick
+            crouchKick: { duration: 820, frameDelay: 7 },
             kick: { duration: 700, frameDelay: 7 },
             kick2: { duration: 1000, frameDelay: 6 },
             kick3: { duration: 1000, frameDelay: 6 },
@@ -59,6 +64,8 @@ export function registerCharData() {
             punch3: { offsetX: 20, offsetY: 4, w: 28, h: 24 },
             // crouch punch: lower and wider than standing punch
             crouchPunch: { offsetX: 12, offsetY: 14, w: 30, h: 20 },
+            // crouch kick: lower and wider/higher range than crouch punch
+            crouchKick: { offsetX: 10, offsetY: 12, w: 36, h: 20 },
             kick:   { offsetX: 23, offsetY: 16, w: 11, h: 13 },
             kick2:   { offsetX: 23, offsetY: 16, w: 15, h: 13 },
             kick3:   { offsetX: 20, offsetY: 4, w: 17, h: 15 }
@@ -69,6 +76,8 @@ export function registerCharData() {
             punch: { offsetX: 14, offsetY: 6, w: 18, h: 18 },
             // crouch punch: lower and larger
             crouchPunch: { offsetX: 10, offsetY: 14, w: 26, h: 20 },
+            // crouch kick for sbluer
+            crouchKick: { offsetX: 8, offsetY: 12, w: 34, h: 22 },
             kick3:  { offsetX: 24, offsetY: 4, w: 30, h: 26 }
             });
 
@@ -120,11 +129,22 @@ export function registerSpecials(){
   registerActionsForChar('fernando', {
     punch: { duration: 500, frameDelay: 6 },
     kick: { duration: 500, frameDelay: 6 },
+    // crouch kick (single)
+    crouchKick: { duration: 700, frameDelay: 6 },
     grab: { duration: 500, frameDelay: 4 }
   });
 
-  registerAttackHitboxesForChar('fernando', {});
+  registerAttackHitboxesForChar('fernando', {
+    crouchKick: { offsetX: 12, offsetY: 12, w: 34, h: 22 }
+  });
   registerBodyHitboxesForChar('fernando', {});
+
+  // Configure knockback for the new crouchKick (a bit stronger than crouchPunch)
+  try {
+    setKnockbackForAttack('tyeman', 'crouchKick', { h: 8, v: 6 });
+    setKnockbackForAttack('sbluer', 'crouchKick', { h: 9, v: 7 });
+    setKnockbackForAttack('fernando', 'crouchKick', { h: 7, v: 8 });
+  } catch (e) { /* ignore if not available */ }
 
   registerSpecialsForChar('fernando', {
     taunt: { seq: ['T'], direction: 'any' },

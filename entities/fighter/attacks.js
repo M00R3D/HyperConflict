@@ -3,6 +3,8 @@ import * as Anim from './animation.js';
 import { getKnockbackForAttack } from '../../core/knockback.js';
 export function attack(self, key) {
   const now = millis();
+  // Prevent starting new attacks while game is paused or during hitstop
+  if (typeof window !== 'undefined' && (window.PAUSED || window.HITSTOP_ACTIVE)) return;
   const chain = self.comboChainsByKey[key];
   if (!chain || chain.length === 0) return;
   if (self.inputLockedByKey[key]) return;
@@ -25,10 +27,12 @@ export function attack(self, key) {
       // Only map to a single crouch variant (no numbered escalation)
       const lowerCrouch = ('crouch' + base).toLowerCase();
       const camelCrouch = 'crouch' + base.charAt(0).toUpperCase() + base.slice(1);
-      if (self.actions && self.actions[lowerCrouch]) {
-        attackName = lowerCrouch;
-      } else if (self.actions && self.actions[camelCrouch]) {
+      // Prefer camelCase if provided by char-specific actions (registerCharData uses camel),
+      // fall back to lowercase legacy keys if necessary.
+      if (self.actions && self.actions[camelCrouch]) {
         attackName = camelCrouch;
+      } else if (self.actions && self.actions[lowerCrouch]) {
+        attackName = lowerCrouch;
       }
     }
   }
@@ -65,12 +69,21 @@ export function attack(self, key) {
   self.lastAttackTimeByKey[key] = now;
   self.inputLockedByKey[key] = true;
   // If we used a crouch-specific single attack, avoid escalating the combo
-  if (attackName === 'crouchpunch' || attackName === 'crouchPunch') {
+  if (
+    attackName === 'crouchpunch' || attackName === 'crouchPunch' ||
+    attackName === 'crouchkick' || attackName === 'crouchKick'
+  ) {
     self.comboStepByKey[key] = 0;
   } else {
     self.comboStepByKey[key] = (step + 1);
     if (self.comboStepByKey[key] >= chain.length) self.comboStepByKey[key] = 0;
   }
+  // Diagnostic: log start for Fernando to help debug timing/hitbox issues
+  try {
+    if (self && self.charId === 'fernando') {
+      console.log('[Attacks.attack] started', { id: self.id, char: self.charId, attackName, attackDuration: self.attackDuration });
+    }
+  } catch (e) {}
 }
 
 export function attackHits(self, opponent) {
@@ -450,8 +463,11 @@ export function updateAttackState(self) {
       if (endedAttackType === 'taunt' && self.state && self.state.current === 'taunt') {
         self.setState('idle');
       }
-      // Si terminamos un crouchpunch, volver a idle automáticamente
-      if ((endedAttackType === 'crouchpunch' || endedAttackType === 'crouchPunch') && self.state && (self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch')) {
+      // Si terminamos un crouchpunch o crouchkick, volver a idle automáticamente
+      if (
+        (endedAttackType === 'crouchpunch' || endedAttackType === 'crouchPunch' || endedAttackType === 'crouchkick' || endedAttackType === 'crouchKick')
+        && self.state && (self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch' || self.state.current === 'crouchkick' || self.state.current === 'crouchKick')
+      ) {
         self.setState('idle');
       }
     } catch (e) { /* silent */ }

@@ -156,6 +156,9 @@ export function initFrames(self, frames) {
   self.crouchPunchFramesByLayer = frames.crouchPunchFramesByLayer || frames.crouchpunch || [];
   // alias (lowercase) for legacy code
   self.crouchpunchFramesByLayer = self.crouchPunchFramesByLayer;
+  // Crouch-kick frames (optional): support both `crouchKickFramesByLayer` and `crouchkick` keys
+  self.crouchKickFramesByLayer = frames.crouchKickFramesByLayer || frames.crouchkick || [];
+  self.crouchkickFramesByLayer = self.crouchKickFramesByLayer;
 
   // Ajuste automático de tamaño del fighter basado en las dimensiones reales de las frames.
   try {

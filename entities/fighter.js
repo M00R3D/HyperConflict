@@ -39,6 +39,7 @@ class Fighter {
       knockedFramesByLayer: assets.knocked,   // <-- AGREGADO
       recoveryFramesByLayer: assets.recovery, // <-- AGREGADO
       crouchPunchFramesByLayer: assets.crouchpunch, // <-- AGREGADO
+      crouchKickFramesByLayer: assets.crouchkick, // <-- AGREGADO
       
     });
     // Diagnostic: log presence/lengths of crouchpunch-related assets/frames
@@ -96,6 +97,8 @@ class Fighter {
       recovery: { anim: this.recoveryFramesByLayer, frameDelay: 7, duration: (this.recoveryDurationMs || 1200) },
       // dashLight: { anim: this.dashLightFramesByLayer, frameDelay: 10, duration: 300 }, // <-- nuevo estado intermedio (no usado)
       crouchpunch: { anim: this.crouchPunchFramesByLayer, frameDelay: 6, duration: 500 }, // <-- nuevo ataque de ejemplo
+      crouchkick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
+      crouchKick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
     };
 
     // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)
@@ -104,6 +107,16 @@ class Fighter {
         this.actions[k] = Object.assign({}, this.actions[k] || {}, this._incomingActions[k]);
       }
     }
+    // create aliases between camelCase and lowercase crouch action keys so incoming
+    // per-character configs (which may use `crouchKick`) override defaults regardless of casing
+    try {
+      if (this.actions) {
+        if (this.actions.crouchKick && !this.actions.crouchkick) this.actions.crouchkick = Object.assign({}, this.actions.crouchKick);
+        if (this.actions.crouchkick && !this.actions.crouchKick) this.actions.crouchKick = Object.assign({}, this.actions.crouchkick);
+        if (this.actions.crouchPunch && !this.actions.crouchpunch) this.actions.crouchpunch = Object.assign({}, this.actions.crouchPunch);
+        if (this.actions.crouchpunch && !this.actions.crouchPunch) this.actions.crouchPunch = Object.assign({}, this.actions.crouchpunch);
+      }
+    } catch (e) {}
     delete this._incomingActions;
     
     // estado inicial
@@ -629,7 +642,12 @@ class Fighter {
       const stateName = 'hit' + Math.max(1, Math.min(3, lvl));
       this.setState(stateName);
     } else if (this.attacking && this.attackType) {
-      this.setState(this.attackType);
+      // normalize attack state name to lowercase to match asset keys (avoid casing mismatches)
+      try {
+        this.setState(String(this.attackType).toLowerCase());
+      } catch (e) {
+        this.setState(this.attackType);
+      }
     } else if (this.blocking && this.onGround) {
       // bloqueo en pie o agachado: si además estamos agachando, usar crouchBlock
       if (this.crouching) this.setState('crouchBlock');

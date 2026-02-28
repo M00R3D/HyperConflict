@@ -131,6 +131,24 @@ export function setState(self, newState) {
         ? self.crouchPunchFramesByLayer
         : (self.crouchFramesByLayer && (self.crouchFramesByLayer[0] || []).length > 0 ? self.crouchFramesByLayer : self.idleFramesByLayer);
       break;
+    case 'crouchkick':
+        self.currentFramesByLayer = (self.crouchKickFramesByLayer && (self.crouchKickFramesByLayer[0] || []).length > 0)
+          ? self.crouchKickFramesByLayer
+          : (self.crouchFramesByLayer && (self.crouchFramesByLayer[0] || []).length > 0 ? self.crouchFramesByLayer : self.idleFramesByLayer);
+        try { console.log('[Anim.setState] crouchkick -> chose frames:', {
+          id: self?.id, char: self?.charId, hasCrouchKickFrames: !!(self.crouchKickFramesByLayer && (self.crouchKickFramesByLayer[0] || []).length > 0),
+          chosenIsCrouchKick: self.currentFramesByLayer === self.crouchKickFramesByLayer
+        }); } catch(e){}
+      break;
+    case 'crouchKick':
+        self.currentFramesByLayer = (self.crouchKickFramesByLayer && (self.crouchKickFramesByLayer[0] || []).length > 0)
+          ? self.crouchKickFramesByLayer
+          : (self.crouchFramesByLayer && (self.crouchFramesByLayer[0] || []).length > 0 ? self.crouchFramesByLayer : self.idleFramesByLayer);
+        try { console.log('[Anim.setState] crouchKick -> chose frames:', {
+          id: self?.id, char: self?.charId, hasCrouchKickFrames: !!(self.crouchKickFramesByLayer && (self.crouchKickFramesByLayer[0] || []).length > 0),
+          chosenIsCrouchKick: self.currentFramesByLayer === self.crouchKickFramesByLayer
+        }); } catch(e){}
+      break;
     default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
   }
 
@@ -140,7 +158,7 @@ export function setState(self, newState) {
 
   // set canCancel flag: crouchpunch is non-cancellable until it finishes
   try {
-    if (newState === 'crouchpunch' || newState === 'crouchPunch') {
+    if (newState === 'crouchpunch' || newState === 'crouchPunch' || newState === 'crouchkick' || newState === 'crouchKick') {
       self.state.canCancel = false;
     } else {
       // default: allow cancels

@@ -25,6 +25,16 @@ export function display(self) {
   } else {
     framesByLayer = self.currentFramesByLayer || self.idleFramesByLayer;
   }
+  // Debug: if we're in any crouch-related state, log which frames are actually used
+  try {
+    const st = (self.state && self.state.current) || 'idle';
+    if (st && st.toLowerCase().includes('crouch')) {
+      console.log('[display] state=', st, 'usedFrames=', (framesByLayer === self.crouchKickFramesByLayer) ? 'crouchKickFramesByLayer' : (framesByLayer === self.crouchFramesByLayer ? 'crouchFramesByLayer' : (framesByLayer === self.idleFramesByLayer ? 'idleFramesByLayer' : 'other')),
+        'hasCrouchKickFrames=', !!(self.crouchKickFramesByLayer && (self.crouchKickFramesByLayer[0] || []).length > 0),
+        'hasCrouchFrames=', !!(self.crouchFramesByLayer && (self.crouchFramesByLayer[0] || []).length > 0),
+        'frameIndex=', self.frameIndex || 0);
+    }
+  } catch (e) {}
   // ensure per-fighter alpha state for dashLight visuals
   self._dashLightAlpha = (typeof self._dashLightAlpha === 'number') ? self._dashLightAlpha : 1.0;
 

@@ -10,8 +10,16 @@ export function getAttackHitboxForChar(charId, attackName) {
   if (!charId || !attackName) return null;
   const table = _attackHitboxesByChar[charId];
   if (!table) return null;
-  // buscar nombre exacto; si no existe intentar versión sin número final (p.e. punch3 -> punch)
-  let def = table[attackName] || table[attackName.replace(/\d+$/, '')] || null;
+    // buscar nombre exacto; si no existe intentar varias normalizaciones
+    //  - exacto
+    //  - todo en minúsculas (registro legacy puede usar lowercase)
+    //  - sin número final (p.e. punch3 -> punch)
+    //  - minúsculas sin número final
+    const exact = table[attackName];
+    const lower = table[String(attackName).toLowerCase()];
+    const stripNum = table[String(attackName).replace(/\d+$/, '')];
+    const lowerStrip = table[String(attackName).toLowerCase().replace(/\d+$/, '')];
+    let def = exact || lower || stripNum || lowerStrip || null;
   return def || null;
 }
 
