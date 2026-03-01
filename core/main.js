@@ -511,6 +511,34 @@ function draw() {
       if (p && typeof p.update === 'function') p.update();
 
       if (p && !p.toRemove && typeof p.hits === 'function') {
+        // allow player's punch/kick to repel the projectile if their attack overlaps it
+        try {
+          if (player1 && player1.attacking && player1.attackType) {
+            const at = (player1.attackType || '').toString().toLowerCase();
+            const canRepel = at.startsWith('punch') || at === 'punch' || at.startsWith('kick') || at === 'kick' || at.startsWith('crouchpunch') || at.startsWith('crouchkick');
+            if (canRepel && typeof player1.getAttackHitbox === 'function') {
+              const aHB = player1.getAttackHitbox();
+              const pHB = (typeof p.getHitbox === 'function') ? p.getHitbox() : null;
+              if (aHB && pHB && aHB.x < pHB.x + pHB.w && aHB.x + aHB.w > pHB.x && aHB.y < pHB.y + pHB.h && aHB.y + aHB.h > pHB.y) {
+                // repel: flip direction away from hitter, give upward impulse, start rotating and falling
+                p._repelled = true;
+                p._repelStartY = p.y;
+                p.dir = player1.facing || ((p.x >= player1.x) ? 1 : -1);
+                p.rotation = 0;
+                p.rotationSpeed = (Math.random() * 40) - 20; // random spin
+                p.vy = -(1 + Math.random() * 2);
+                p.gravity = 0.45;
+                p.speed = Math.max(2, (p.speed || 6) * 0.5);
+                p._hitTargets = new Set(); // allow hitting again after repel
+                p.persistent = false;
+                // change ownership optionally so it can hit previous owner; set ownerId to hitter
+                p.ownerId = player1.id;
+                // skip normal projectile->player hit processing this frame
+              }
+            }
+          }
+        } catch (e) { /* ignore */ }
+
         // colisión contra player1
         if (p.hits(player1) && p.ownerId !== player1.id) {
           if (!p._hitTargets) p._hitTargets = new Set();
@@ -605,6 +633,31 @@ function draw() {
             }
           }
         }
+        // allow player's punch/kick to repel the projectile if their attack overlaps it
+        try {
+          if (player2 && player2.attacking && player2.attackType) {
+            const at2 = (player2.attackType || '').toString().toLowerCase();
+            const canRepel2 = at2.startsWith('punch') || at2 === 'punch' || at2.startsWith('kick') || at2 === 'kick' || at2.startsWith('crouchpunch') || at2.startsWith('crouchkick');
+            if (canRepel2 && typeof player2.getAttackHitbox === 'function') {
+              const aHB2 = player2.getAttackHitbox();
+              const pHB2 = (typeof p.getHitbox === 'function') ? p.getHitbox() : null;
+              if (aHB2 && pHB2 && aHB2.x < pHB2.x + pHB2.w && aHB2.x + aHB2.w > pHB2.x && aHB2.y < pHB2.y + pHB2.h && aHB2.y + aHB2.h > pHB2.y) {
+                p._repelled = true;
+                p._repelStartY = p.y;
+                p.dir = player2.facing || ((p.x >= player2.x) ? 1 : -1);
+                p.rotation = 0;
+                p.rotationSpeed = (Math.random() * 40) - 20;
+                p.vy = -(1 + Math.random() * 2);
+                p.gravity = 0.45;
+                p.speed = Math.max(2, (p.speed || 6) * 0.5);
+                p._hitTargets = new Set();
+                p.persistent = false;
+                p.ownerId = player2.id;
+              }
+            }
+          }
+        } catch (e) { /* ignore */ }
+
         // colisión contra player2
         if (p.hits(player2) && p.ownerId !== player2.id) {
           if (!p._hitTargets) p._hitTargets = new Set();

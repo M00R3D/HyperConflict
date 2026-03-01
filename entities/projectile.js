@@ -131,6 +131,12 @@ class Projectile {
     this.frameIndex = 0;
     this._frameTimer = 0;
     this._finishedAnimation = false;
+    // repel state (when hit by punch/kick)
+    this._repelled = false;
+    this.rotation = this.rotation || 0;
+    this.rotationSpeed = this.rotationSpeed || 0;
+    this.vy = this.vy || 0;
+    this.gravity = this.gravity || 0;
   }
 
   update() {
@@ -138,6 +144,37 @@ class Projectile {
     const now = millis();
     const dt = Math.max(0, (this._lastUpdate ? (now - this._lastUpdate) : 16));
     this._lastUpdate = now;
+
+    // repelled behaviour: spin and fall to ground
+    if (this._repelled) {
+      const moveAmount = (this.speed || 6) * (dt / 16);
+      this.x += moveAmount * this.dir;
+      this.vy = (this.vy || 0) + (this.gravity || 0.45) * (dt / 16);
+      this.y += this.vy;
+      this.rotation = (this.rotation || 0) + (this.rotationSpeed || 0) * (dt / 16);
+      // ground contact: compute opacity as approaches ground and remove on touch
+      const groundY = (typeof height === 'number') ? (height - (this.h || 16)) : 0;
+      const startY = (typeof this._repelStartY === 'number') ? this._repelStartY : (this.y - 1);
+      const totalFall = Math.max(1, groundY - startY);
+      const distFromGround = Math.max(0, groundY - this.y);
+      const ratio = Math.max(0, Math.min(1, distFromGround / totalFall));
+      // alpha goes from ~60 (near ground) up to 255 (high above)
+      this.alpha = Math.round(60 + (195 * ratio));
+      if (this.y >= groundY) {
+        this.y = groundY;
+        this.toRemove = true;
+      }
+      // anim loop if frames exist
+      if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+        this._frameTimer++;
+        if (this._frameTimer >= this.frameDelay) {
+          this._frameTimer = 0;
+          const n = this.framesByLayer[0].length;
+          this.frameIndex = (this.frameIndex + 1) % n;
+        }
+      }
+      return;
+    }
 
     // hadouken parabólico
     if (this.typeId === 1) {
@@ -278,8 +315,8 @@ class Projectile {
       const drawW = isBun ? (this.w * (this.spriteScale || 1)) : this.w;
       const drawH = isBun ? (this.h * (this.spriteScale || 1)) : this.h;
 
-      // draw string for bun (between owner and projectile)
-      if (this.typeId === 5 && this._ownerRef && this.stringFramesByLayer && this.stringFramesByLayer.length > 0) {
+      // draw string for bun (between owner and projectile) — skip if repelido
+      if (this.typeId === 5 && !this._repelled && this._ownerRef && this.stringFramesByLayer && this.stringFramesByLayer.length > 0) {
         try {
           // select an image frame for the string (its own index)
           const img = (this.stringFramesByLayer[0] && this.stringFramesByLayer[0][this._stringFrameIndex]) || this.stringFramesByLayer[0][0];
@@ -338,8 +375,12 @@ class Projectile {
         translate(-(this.x + drawW / 2), -this.y);
       }
 
-      // rotación/scale cases (existing)
-      if (this.typeId === 1) {
+      // apply rotation when repelido or existing rotation cases
+      if (this._repelled) {
+        translate(this.x + (this.w||drawW) / 2, this.y + (this.h||drawH) / 2);
+        rotate(radians(this.rotation || 0));
+        translate(-(this.x + (this.w||drawW) / 2), -(this.y + (this.h||drawH) / 2));
+      } else if (this.typeId === 1) {
         translate(this.x + this.w / 2, this.y + this.h / 2);
         rotate(radians(this.rotation));
         translate(-(this.x + this.w / 2), -(this.y + this.h / 2));
@@ -361,7 +402,9 @@ class Projectile {
         const frameCount = framesByLayer[0].length || 1;
         const frameWidth = img.width / frameCount;
         // aplicar alpha para typeId 4
-        if (this.typeId === 4) {
+        if (this._repelled) {
+          tint(255, (typeof this.alpha === 'number') ? this.alpha : 255);
+        } else if (this.typeId === 4) {
           tint(255, this.alpha || 255);
         }
 
@@ -395,6 +438,15 @@ class Projectile {
   }
 
   hits(fighter) {
+    // special-case: if this is a stapler projectile and the fighter
+    // just dashed recently, treat as non-colliding (allow pass-through)
+    try {
+      const DASH_GRACE_MS = 230;
+      if (this.attackType === 'stapler' && fighter && typeof fighter.lastDashTime === 'number') {
+        if ((millis() - fighter.lastDashTime) <= DASH_GRACE_MS) return false;
+      }
+    } catch (e) { /* ignore timing errors and continue to hit test */ }
+
     const hb = this.getHitbox();
     const f = fighter.getCurrentHitbox();
     return (
