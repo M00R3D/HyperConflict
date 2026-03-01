@@ -247,8 +247,9 @@ export function initComboAndInput(self) {
     o: ['kick', 'kick2', 'kick3'],
     b: ['punch', 'punch2', 'punch3'],
     n: ['kick', 'kick2', 'kick3'],
-    p: ['stapler'],
-    m: ['stapler']
+    // p/m (gimmick neutral) mapped to stapler only for Tyeman; other chars have no action here
+    p: (self.charId === 'tyeman') ? ['stapler'] : [],
+    m: (self.charId === 'tyeman') ? ['stapler'] : []
   };
 
   self.comboStepByKey = {};
