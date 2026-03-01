@@ -532,13 +532,12 @@ function draw() {
                 player1.vx = 0;
                 if (!p.persistent) p.toRemove = true;
               } else {
-                // successful hit by bun: apply attraction pull towards owner and trigger return
-                applyHitstop(160);
+                // bun behavior: attract opponent towards owner and trigger return (no damage)
+                try { applyHitstop(160); } catch (e) {}
                 if (owner) {
                   const dx = (owner.x + owner.w/2) - (player1.x + player1.w/2);
-                  const pullStrength = 0.12; // ajuste: fuerza de atracción
+                  const pullStrength = 0.12; // fuerza de atracción
                   player1.vx = constrain(dx * pullStrength, -12, 12);
-                  // ligera elevación para feel
                   player1.vy = Math.min(player1.vy, -2.2);
                 }
                 // mark projectile to return
@@ -565,8 +564,42 @@ function draw() {
                 player1.vx = 0;
                 if (!p.persistent) p.toRemove = true;
               } else {
-                player1.hit(owner);
-                if (!p.persistent) p.toRemove = true;
+                // If projectile is a stapler staple, construct a lightweight attacker
+                // object so we can reuse the fighter hit logic (force hit1 + small knockback).
+                if (p.attackType === 'stapler') {
+                  try { applyHitstop(80); } catch (e) {}
+                  const attackerObj = {
+                    attackType: 'stapler',
+                    damageQuarters: (typeof p.damageQuarters === 'number') ? p.damageQuarters : 1,
+                    charId: p.charId || (owner && owner.charId) || null,
+                    ownerId: p.ownerId,
+                    x: p.x,
+                    ownerRef: owner,
+                    forcedHitLevel: 1
+                  };
+                  try { player1.hit(attackerObj); } catch (e) { console.warn('projectile stapler hit error', e); }
+                  // ensure a small immediate push so the feel is slight knockback
+                  if (owner) {
+                    const awaySign = (player1.x >= (owner.x || 0)) ? 1 : -1;
+                    player1.vx = awaySign * 1.6;
+                    player1.vy = Math.min(player1.vy, -1.2);
+                  }
+                  if (!p.persistent) p.toRemove = true;
+                } else if (p.damageQuarters) {
+                  try { applyHitstop(80); } catch (e) {}
+                  const dmg = p.damageQuarters || 1;
+                  player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg);
+                  if (owner) {
+                    const awaySign = (player1.x >= (owner.x || 0)) ? 1 : -1;
+                    const push = 1.8;
+                    player1.vx = awaySign * push;
+                    player1.vy = Math.min(player1.vy, -1.2);
+                  }
+                  if (!p.persistent) p.toRemove = true;
+                } else {
+                  player1.hit(owner);
+                  if (!p.persistent) p.toRemove = true;
+                }
               }
               p._hitTargets.add(player1.id);
             }
@@ -591,7 +624,8 @@ function draw() {
                 player2.vx = 0;
                 if (!p.persistent) p.toRemove = true;
               } else {
-                applyHitstop(160);
+                // bun behavior: attract opponent towards owner and trigger return (no damage)
+                try { applyHitstop(160); } catch (e) {}
                 const ownerRef = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
                 if (ownerRef) {
                   const dx = (ownerRef.x + ownerRef.w/2) - (player2.x + player2.w/2);
@@ -605,6 +639,7 @@ function draw() {
               }
             }
           } else {
+            // existing logic for non-bun projectiles
             if (!p._hitTargets.has(player2.id)) {
               const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
               const attackerInFront = owner ? ((owner.x > player2.x && player2.facing === 1) || (owner.x < player2.x && player2.facing === -1)) : false;
@@ -619,8 +654,40 @@ function draw() {
                 player2.vx = 0;
                 if (!p.persistent) p.toRemove = true;
               } else {
-                player2.hit(owner);
-                if (!p.persistent) p.toRemove = true;
+                // If projectile is a stapler staple, reuse fighter hit logic with forced hit1
+                if (p.attackType === 'stapler') {
+                  try { applyHitstop(80); } catch (e) {}
+                  const attackerObj = {
+                    attackType: 'stapler',
+                    damageQuarters: (typeof p.damageQuarters === 'number') ? p.damageQuarters : 1,
+                    charId: p.charId || (owner && owner.charId) || null,
+                    ownerId: p.ownerId,
+                    x: p.x,
+                    ownerRef: owner,
+                    forcedHitLevel: 1
+                  };
+                  try { player2.hit(attackerObj); } catch (e) { console.warn('projectile stapler hit error', e); }
+                  if (owner) {
+                    const awaySign = (player2.x >= (owner.x || 0)) ? 1 : -1;
+                    player2.vx = awaySign * 1.6;
+                    player2.vy = Math.min(player2.vy, -1.2);
+                  }
+                  if (!p.persistent) p.toRemove = true;
+                } else if (p.damageQuarters) {
+                  try { applyHitstop(80); } catch (e) {}
+                  const dmg = p.damageQuarters || 1;
+                  player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg);
+                  if (owner) {
+                    const awaySign = (player2.x >= (owner.x || 0)) ? 1 : -1;
+                    const push = 1.8;
+                    player2.vx = awaySign * push;
+                    player2.vy = Math.min(player2.vy, -1.2);
+                  }
+                  if (!p.persistent) p.toRemove = true;
+                } else {
+                  player2.hit(owner);
+                  if (!p.persistent) p.toRemove = true;
+                }
               }
               p._hitTargets.add(player2.id);
             }

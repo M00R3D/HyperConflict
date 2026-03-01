@@ -119,6 +119,9 @@ class Projectile {
     this.speed = opts.speed ?? this.speed;
     this.frameDelay = opts.frameDelay ?? this.frameDelay;
 
+    // allow per-projectile hitbox override via opts.hitbox = { offsetX, offsetY, w, h }
+    this._hitboxOverride = (opts && typeof opts.hitbox === 'object') ? Object.assign({}, opts.hitbox) : null;
+
     // persistencia: si true, no se elimina al golpear a un rival
     this.persistent = !!opts.persistent || this.persistent;
     // evitar golpear repetidamente al mismo objetivo
@@ -199,12 +202,21 @@ class Projectile {
         // BUN behaviour: move outwards until maxRange or collision sets returning
         const moveAmount = (this.speed || 6) * (dt / 16);
         if (!this.returning) {
-          this.x += moveAmount * this.dir;
-          // si excede maxRange, comenzar retorno
-          if (Math.abs(this.x - (this._startX || 0)) >= this.maxRange) {
-            this.returning = true;
-            this.dir = -this.dir;
-          }
+            this.x += moveAmount * this.dir;
+            // si excede maxRange, comenzar retorno
+            if (Math.abs(this.x - (this._startX || 0)) >= this.maxRange) {
+              this.returning = true;
+              this.dir = -this.dir;
+            } else {
+              // si alcanza el borde del escenario sin haber golpeado, iniciar retorno
+              const margin = 4;
+              const leftEdge = 0 + margin;
+              const rightEdge = (typeof width === 'number') ? (width - margin) : 800;
+              if ((this.dir === 1 && this.x >= rightEdge) || (this.dir === -1 && this.x <= leftEdge)) {
+                this.returning = true;
+                this.dir = -this.dir;
+              }
+            }
         } else {
           // regreso hacia ownerRef si existe
           if (this._ownerRef && !this._ownerRef.toRemove) {
@@ -373,12 +385,12 @@ class Projectile {
   }
 
   getHitbox() {
-    const def = PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
+    const def = this._hitboxOverride || PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
     return {
-      x: this.x + def.offsetX,
-      y: this.y + def.offsetY,
-      w: def.w,
-      h: def.h
+      x: this.x + (def.offsetX || 0),
+      y: this.y + (def.offsetY || 0),
+      w: (def.w || 0),
+      h: (def.h || 0)
     };
   }
 
@@ -402,11 +414,32 @@ class Projectile {
 const PROJECTILE_HITBOXES = {
   1: { offsetX: 2, offsetY: -6, w: 34, h: 32 },   // hadouken parabólico
   2: { offsetX: -16, offsetY: -16, w: 32, h: 32 },   // fireball
-  3: { offsetX: -12, offsetY: -12, w: 24, h: 24 },   // shuriken
+  3: { offsetX: -12, offsetY: -12, w: 6, h: 3 },   // shuriken
   4: { offsetX: -10, offsetY: -18, w: 20, h: 36 },   // tats barrera
   5: { offsetX: 1, offsetY: 0,  w: 18, h: 6  },    // bun
+  6: { offsetX: 2, offsetY: 0,  w: 18, h: 6  },    // staple (tyeman stapler)
   // default para otros tipos
   default: { offsetX: -8, offsetY: -8, w: 16, h: 16 }
 };
+
+// Helper API to read/update projectile hitbox table at runtime
+export function getProjectileHitboxConfig(id) {
+  if (typeof id === 'undefined' || id === null) return Object.assign({}, PROJECTILE_HITBOXES.default);
+  const v = PROJECTILE_HITBOXES[id] || PROJECTILE_HITBOXES.default;
+  return Object.assign({}, v);
+}
+
+export function setProjectileHitboxConfig(id, def = {}) {
+  if (typeof id === 'undefined' || id === null) return;
+  PROJECTILE_HITBOXES[id] = Object.assign({}, PROJECTILE_HITBOXES[id] || {}, def);
+}
+
+export function registerProjectileHitboxes(map = {}) {
+  if (!map || typeof map !== 'object') return;
+  for (const k in map) {
+    if (!Object.prototype.hasOwnProperty.call(map, k)) continue;
+    PROJECTILE_HITBOXES[k] = Object.assign({}, PROJECTILE_HITBOXES[k] || {}, map[k]);
+  }
+}
 
 export { Projectile, PROJECTILE_HITBOXES };

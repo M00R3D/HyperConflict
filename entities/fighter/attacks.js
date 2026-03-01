@@ -1,6 +1,8 @@
 // entities/fighter/attacks.js
 import * as Anim from './animation.js';
 import { getKnockbackForAttack } from '../../core/knockback.js';
+import { Projectile } from '../../entities/projectile.js';
+import { state } from '../../core/state.js';
 export function attack(self, key) {
   const now = millis();
   // Prevent starting new attacks while game is paused or during hitstop
@@ -84,6 +86,27 @@ export function attack(self, key) {
       console.log('[Attacks.attack] started', { id: self.id, char: self.charId, attackName, attackDuration: self.attackDuration });
     }
   } catch (e) {}
+
+  // --- Special: spawn staple projectile for Tyeman's stapler attack ---
+  try {
+    if (attackName === 'stapler') {
+      const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
+      const dir = (self.facing === -1) ? -1 : 1;
+      const sx = Math.round(self.x + (dir === 1 ? self.w : 0));
+      const sy = Math.round(self.y + self.h / 2);
+      // Staple should NOT behave like the bun (no attraction/return).
+      // Use a non-bun typeId (0 = default) but draw at bun-sized dimensions.
+      // use a dedicated typeId 6 for the staple so its hitbox can be configured centrally
+      const p = new Projectile(sx, sy, dir, 6, self.id, {}, { speed: 14, w: 18, h: 6, frameDelay: 4, spriteScale: 1, duration: 2000 }, (self.stapleFramesByLayer || null));
+      p.attackType = 'stapler';
+      p.damageQuarters = 1;
+      p.ownerRef = self;
+      p._ownerRef = self;
+      p.ownerId = self.id;
+      p.charId = self.charId;
+      if (projArr && Array.isArray(projArr)) projArr.push(p);
+    }
+  } catch (e) { try { console.warn('[Attacks.attack] failed to spawn stapler projectile', e); } catch (ee) {} }
 }
 
 export function attackHits(self, opponent) {
@@ -198,12 +221,11 @@ export function attackHits(self, opponent) {
 
 export function shoot(self) {
   const dir = self.keys.right ? 1 : (self.keys.left ? -1 : (self.id === 'p1' ? 1 : -1));
-  const Projectile = require('../../entities/projectile.js').Projectile;
-  // en módulos ESM usar import; para simplicidad (evitar ciclos) puedes usar la clase que ya pasaste en constructor
-  const p = new (require('../../entities/projectile.js').Projectile)(self.x + self.w / 2, self.y + self.h / 2, dir, 0, self.id);
-  // push via projectiles global (preservando tu patrón original)
-  const proj = require('../../core/main.js').projectiles;
-  proj.push(p);
+  const sx = Math.round(self.x + self.w / 2);
+  const sy = Math.round(self.y + self.h / 2);
+  const p = new Projectile(sx, sy, dir, 0, self.id, {}, { speed: 8, w: 16, h: 16 }, (self.projectileFramesByLayer || null));
+  const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
+  if (projArr && Array.isArray(projArr)) projArr.push(p);
 }
 
 export function hit(self, attacker = null) {
