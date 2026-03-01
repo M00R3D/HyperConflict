@@ -390,18 +390,20 @@ export function handleInput(self) {
     self.crouching = keysDown['s'];
     if (keysPressed['i']) self.attack('i');
     if (keysPressed['o']) self.attack('o');
+    if (keysPressed['p']) self.attack('p');
     // removed direct immediate grab call - rely on buffer + specials
     // if (keysPressed['u']) self.grab && self.grab();
-    if (keysUp['i'] || keysUp['o']) { self.inputLockedByKey['i'] = false; self.inputLockedByKey['o'] = false; }
+    if (keysUp['i'] || keysUp['o'] || keysUp['p']) { self.inputLockedByKey['i'] = false; self.inputLockedByKey['o'] = false; self.inputLockedByKey['p'] = false; }
   } else {
     setRunTap('left', 'arrowleft'); setRunTap('right', 'arrowright');
     if (keysDown['arrowup'] && self.onGround) { self.vy = self.jumpStrength; self.onGround = false; self.runActive = false; }
     self.crouching = keysDown['arrowdown'];
     if (keysPressed['b']) self.attack('b');
     if (keysPressed['n']) self.attack('n');
+    if (keysPressed['m']) self.attack('m');
     // removed direct immediate grab call - rely on buffer + specials
     // if (keysPressed['v']) self.grab && self.grab();
-    if (keysUp['b'] || keysUp['n']) { self.inputLockedByKey['b'] = false; self.inputLockedByKey['n'] = false; }
+    if (keysUp['b'] || keysUp['n'] || keysUp['m']) { self.inputLockedByKey['b'] = false; self.inputLockedByKey['n'] = false; self.inputLockedByKey['m'] = false; }
   }
 }
 

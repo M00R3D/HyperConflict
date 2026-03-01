@@ -40,6 +40,8 @@ class Fighter {
       recoveryFramesByLayer: assets.recovery, // <-- AGREGADO
       crouchPunchFramesByLayer: assets.crouchpunch, // <-- AGREGADO
       crouchKickFramesByLayer: assets.crouchkick, // <-- AGREGADO
+      staplerFramesByLayer: assets.stapler,
+      stapleProjFramesByLayer: assets.staple,
       
     });
     // Diagnostic: log presence/lengths of crouchpunch-related assets/frames
@@ -99,6 +101,7 @@ class Fighter {
       crouchpunch: { anim: this.crouchPunchFramesByLayer, frameDelay: 6, duration: 500 }, // <-- nuevo ataque de ejemplo
       crouchkick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
       crouchKick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
+      stapler: { anim: this.staplerFramesByLayer, frameDelay: 5, duration: 360 },
     };
 
     // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)

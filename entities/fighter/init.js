@@ -141,6 +141,10 @@ export function initFrames(self, frames) {
   self.bunProjFramesByLayer = frames.bunProj || null;
   self.bunStringFramesByLayer = frames.bunString || null;
 
+  // stapler/staple (tyeman special): overlay frames and projectile frames
+  self.staplerFramesByLayer = frames.staplerFramesByLayer || frames.stapler || [];
+  self.stapleFramesByLayer = frames.stapleProjFramesByLayer || frames.staple || null;
+
   // --- AGREGAR ESTAS LÍNEAS ---
   // ensure flyback/flyup frames are assigned (prevent falling back to generic 'hit' frames)
   self.flybackFramesByLayer = frames.flybackFramesByLayer || frames.flyback || [];
@@ -243,6 +247,8 @@ export function initComboAndInput(self) {
     o: ['kick', 'kick2', 'kick3'],
     b: ['punch', 'punch2', 'punch3'],
     n: ['kick', 'kick2', 'kick3'],
+    p: ['stapler'],
+    m: ['stapler']
   };
 
   self.comboStepByKey = {};

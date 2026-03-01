@@ -1,7 +1,7 @@
 // core/input.js
 let playerRefs = { p1: null, p2: null };let playersReady = false;
-const p1ControlKeys = new Set(['w','a','s','d','i','o',' ', 'u']);
-const p2ControlKeys = new Set(['arrowup','arrowleft','arrowdown','arrowright','b','n','backspace', 'v']);
+const p1ControlKeys = new Set(['w','a','s','d','i','o',' ', 'u','p']);
+const p2ControlKeys = new Set(['arrowup','arrowleft','arrowdown','arrowright','b','n','backspace', 'v','m']);
 
 let keysDown = {};let keysUp = {};let keysPressed = {};let keysDownTime = {};let keysUpTime = {};
 let _inited = false;

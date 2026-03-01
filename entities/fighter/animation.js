@@ -149,7 +149,19 @@ export function setState(self, newState) {
           chosenIsCrouchKick: self.currentFramesByLayer === self.crouchKickFramesByLayer
         }); } catch(e){}
       break;
-    default:          self.currentFramesByLayer = self.idleFramesByLayer; break;
+    default:
+      // If this state corresponds to a registered action with its own animation,
+      // prefer that animation (e.g., 'stapler' action). Otherwise fallback to idle.
+      try {
+        if (self.actions && self.actions[newState] && self.actions[newState].anim) {
+          self.currentFramesByLayer = self.actions[newState].anim;
+        } else {
+          self.currentFramesByLayer = self.idleFramesByLayer;
+        }
+      } catch (e) {
+        self.currentFramesByLayer = self.idleFramesByLayer;
+      }
+      break;
   }
 
   // inicializa índices/timers de animación

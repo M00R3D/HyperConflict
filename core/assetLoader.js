@@ -79,6 +79,8 @@ async function loadTyemanAssets() {
   recovery: await loadOrNull('src/tyeman/tyeman_recovery.piskel'),
   crouchpunch: await loadOrNull('src/tyeman/tyeman_crouch_punch.piskel'),
   crouchkick: await loadOrNull('src/tyeman/tyeman_crouch_kick.piskel'),
+  stapler: await loadOrNull('src/tyeman/tyeman_stapler.piskel'),//este es el personaje sosteniendo la engrampadora, que es un arma/overlay opcional que se muestra en ciertos frames del ataque de engrampadora (G,P)
+  staple: await loadOrNull('src/tyeman/tyeman_staple.piskel'),//este es el proyectil del ataque de engrampadora, que es un ataque especial registrado en registerSpecialsForChar con la secuencia G,P
   };
 }
  

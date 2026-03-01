@@ -21,6 +21,8 @@ export function registerCharData() {
             punch: { duration: 400, frameDelay: 6 },
             punch2: { duration: 400, frameDelay: 6 },
             punch3: { duration: 800, frameDelay: 5 },
+            // stapler: special quick attack (bound to P/M keys)
+            stapler: { duration: 360, frameDelay: 5 },
             // crouch variants: used when pressing punch while crouching
             crouchPunch: { duration: 380, frameDelay: 6 },
             crouchPunch2: { duration: 420, frameDelay: 6 },
