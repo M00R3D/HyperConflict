@@ -65,6 +65,13 @@ export function setState(self, newState) {
   self.state.current = newState;
   self.state.timer = 0;
 
+  // Debug: when entering spit state, report assigned frames for troubleshooting
+  try {
+    if (newState === 'spit') {
+      console.log('[animation.setState] entering spit', self.id, self.charId, 'spitLayers=', (self.spitFramesByLayer && self.spitFramesByLayer.length), 'spitProjLayers=', (self.spitProjFramesByLayer && self.spitProjFramesByLayer.length), 'currentLayers=', (self.currentFramesByLayer && self.currentFramesByLayer.length));
+    }
+  } catch (e) { /* ignore logging errors */ }
+
   // REGISTER timestamps for knocked/recovery so transitions are time-driven
   if (newState === 'knocked') {
     self.knockedStartTime = millis();
@@ -100,6 +107,7 @@ export function setState(self, newState) {
     case 'kick2':     self.currentFramesByLayer = self.kick2FramesByLayer; break;
     case 'kick3':     self.currentFramesByLayer = self.kick3FramesByLayer; break;
     case 'tats':      self.currentFramesByLayer = self.tatsFramesByLayer; break;
+    case 'spit':      self.currentFramesByLayer = self.spitFramesByLayer; break;
     case 'hit':       self.currentFramesByLayer = self.hitFramesByLayer; break;
     case 'bun':       self.currentFramesByLayer = self.shorFramesByLayer; break;
     // hit1/hit2/hit3 usan sus frames específicos si existen

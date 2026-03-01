@@ -17,6 +17,11 @@ class Fighter {
     // aplicar stats personalizados si vienen en opts
     Object.assign(this, opts);
     this.charId = charId;
+    try {
+      console.log('[Fighter ctor] creating', id, 'charId=', charId, 'assetsKeys=', Object.keys(assets || {}));
+      try { console.log('[Fighter ctor] assets.spit present=', !!assets.spit, 'len=', Array.isArray(assets.spit) ? assets.spit.length : String(assets.spit)); } catch (e) {}
+      try { console.log('[Fighter ctor] assets.spitProj present=', !!assets.spitProj, 'len=', Array.isArray(assets.spitProj) ? assets.spitProj.length : String(assets.spitProj)); } catch (e) {}
+    } catch (e) {}
     // usar assets y actions provistos
     Init.initFrames(this, {
       idleFramesByLayer: assets.idle, walkFramesByLayer: assets.walk, jumpFramesByLayer: assets.jump,
@@ -27,6 +32,9 @@ class Fighter {
       flybackFramesByLayer: assets.flyback, flyupFramesByLayer: assets.flyup,
       shootFramesByLayer: assets.shoot, projectileFramesByLayer: assets.projectile,
       tatsFramesByLayer: assets.tats, tatsProjFramesByLayer: assets.tatsProjFramesByLayer,
+      // sbluer spit overlay and spit projectile frames
+      spitFramesByLayer: assets.spit,
+      spitProjFramesByLayer: assets.spitProj,
       dashLightFramesByLayer: assets.dashLight,
       dashFramesByLayer: assets.dash,
       tauntFramesByLayer: assets.taunt, blockFramesByLayer: assets.block, crouchBlockFramesByLayer: assets.crouchBlock,

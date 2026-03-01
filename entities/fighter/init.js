@@ -145,6 +145,15 @@ export function initFrames(self, frames) {
   self.staplerFramesByLayer = frames.staplerFramesByLayer || frames.stapler || [];
   self.stapleFramesByLayer = frames.stapleProjFramesByLayer || frames.staple || null;
 
+  // sbluer spit overlay and projectile frames
+  self.spitFramesByLayer = frames.spitFramesByLayer || frames.spit || [];
+  self.spitProjFramesByLayer = frames.spitProjFramesByLayer || frames.spitProj || null;
+
+  // Debug: report whether spit frames/proj frames were received for this fighter
+  try {
+    console.log('[initFrames]', self.id, self.charId, 'spitLayers=', (self.spitFramesByLayer && self.spitFramesByLayer.length), 'spitProjLayers=', (self.spitProjFramesByLayer && self.spitProjFramesByLayer.length));
+  } catch (e) { /* ignore logging errors */ }
+
   // --- AGREGAR ESTAS LÍNEAS ---
   // ensure flyback/flyup frames are assigned (prevent falling back to generic 'hit' frames)
   self.flybackFramesByLayer = frames.flybackFramesByLayer || frames.flyback || [];
@@ -247,9 +256,9 @@ export function initComboAndInput(self) {
     o: ['kick', 'kick2', 'kick3'],
     b: ['punch', 'punch2', 'punch3'],
     n: ['kick', 'kick2', 'kick3'],
-    // p/m (gimmick neutral) mapped to stapler only for Tyeman; other chars have no action here
-    p: (self.charId === 'tyeman') ? ['stapler'] : [],
-    m: (self.charId === 'tyeman') ? ['stapler'] : []
+    // p/m (gimmick neutral): Tyeman -> stapler; Sbluer -> spit; others -> no-op
+    p: (self.charId === 'tyeman') ? ['stapler'] : (self.charId === 'sbluer') ? ['spit'] : [],
+    m: (self.charId === 'tyeman') ? ['stapler'] : (self.charId === 'sbluer') ? ['spit'] : []
   };
 
   self.comboStepByKey = {};

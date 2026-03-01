@@ -290,6 +290,34 @@ class Projectile {
           }
         }
       } else {
+        // SPIT projectile (typeId === 7): spin and fall to ground, fade as approaches
+        if (this.typeId === 7) {
+          const moveAmount = (this.speed || 2) * (dt / 16);
+          this.x += moveAmount * this.dir;
+          this.vy = (this.vy || 0) + (this.gravity || 0.35) * (dt / 16);
+          this.y += this.vy;
+          this.rotation = (this.rotation || 0) + (this.spinSpeed || 4) * (dt / 16);
+          const groundY = (typeof height === 'number') ? (height - (this.h || 16)) : 0;
+          const startY = (typeof this._startY === 'number') ? this._startY : (this._startY = this.y - 1);
+          const totalFall = Math.max(1, groundY - startY);
+          const distFromGround = Math.max(0, groundY - this.y);
+          const ratio = Math.max(0, Math.min(1, distFromGround / totalFall));
+          this.alpha = Math.round(60 + (195 * ratio));
+          if (this.y >= groundY) {
+            this.y = groundY;
+            this.toRemove = true;
+          }
+          // anim loop
+          if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+            this._frameTimer++;
+            if (this._frameTimer >= this.frameDelay) {
+              this._frameTimer = 0;
+              const n = this.framesByLayer[0].length;
+              this.frameIndex = (this.frameIndex + 1) % n;
+            }
+          }
+          return;
+        }
         // normal lineal
         this.x += this.speed * this.dir;
         // anim loop...
@@ -380,6 +408,11 @@ class Projectile {
         translate(this.x + (this.w||drawW) / 2, this.y + (this.h||drawH) / 2);
         rotate(radians(this.rotation || 0));
         translate(-(this.x + (this.w||drawW) / 2), -(this.y + (this.h||drawH) / 2));
+      } else if (this.typeId === 7) {
+        // spit: rotate visually and apply alpha fade
+        translate(this.x + (this.w||drawW) / 2, this.y + (this.h||drawH) / 2);
+        rotate(radians(this.rotation || 0));
+        translate(-(this.x + (this.w||drawW) / 2), -(this.y + (this.h||drawH) / 2));
       } else if (this.typeId === 1) {
         translate(this.x + this.w / 2, this.y + this.h / 2);
         rotate(radians(this.rotation));
@@ -403,6 +436,8 @@ class Projectile {
         const frameWidth = img.width / frameCount;
         // aplicar alpha para typeId 4
         if (this._repelled) {
+          tint(255, (typeof this.alpha === 'number') ? this.alpha : 255);
+        } else if (this.typeId === 7) {
           tint(255, (typeof this.alpha === 'number') ? this.alpha : 255);
         } else if (this.typeId === 4) {
           tint(255, this.alpha || 255);
@@ -470,6 +505,7 @@ const PROJECTILE_HITBOXES = {
   4: { offsetX: -10, offsetY: -18, w: 20, h: 36 },   // tats barrera
   5: { offsetX: 1, offsetY: 0,  w: 18, h: 6  },    // bun
   6: { offsetX: 2, offsetY: 0,  w: 18, h: 6  },    // staple (tyeman stapler)
+  7: { offsetX: 1, offsetY: 0,  w: 12, h: 8  },    // spit (sbluer spit projectile)
   // default para otros tipos
   default: { offsetX: -8, offsetY: -8, w: 16, h: 16 }
 };

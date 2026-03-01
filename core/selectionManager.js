@@ -9,6 +9,31 @@ let p2Choice = 1;
 let p1SelIndex = 0;
 let p2SelIndex = 1;
 let _fernandoAssets = null;
+// debug: log asset shapes once to diagnose selection/hud issues
+let _selectionAssetsLogged = false;
+
+function _resolveFrames(container) {
+  if (!container) return null;
+  // layers-by-layer: [ layer0Frames[], layer1Frames[], ... ]
+  if (Array.isArray(container)) {
+    if (container.length === 0) return null;
+    // if first element is an array, assume layers-by-layer
+    if (Array.isArray(container[0])) {
+      // prefer middle layer (index 1) for 3-layer chars, else prefer 1 -> 2 -> 0
+      if (container[1] && Array.isArray(container[1]) && container[1].length > 0) return container[1];
+      if (container[2] && Array.isArray(container[2]) && container[2].length > 0) return container[2];
+      if (container[0] && Array.isArray(container[0]) && container[0].length > 0) return container[0];
+      // fallback: find any non-empty layer
+      const layer = container.find(l => Array.isArray(l) && l.length > 0);
+      return layer || null;
+    }
+    // otherwise it's a flat frames array (images)
+    return container.length > 0 ? container : null;
+  }
+  // single image (unlikely), wrap as array
+  if (container && container.width && container.height) return [container];
+  return null;
+}
 export function drawCharacterSelect() {
   // If main cleared selection state (via window) prefer that authoritative value
   try {
@@ -49,6 +74,29 @@ export function drawCharacterSelect() {
   const _slotAssets = globals._slotAssets;
   const _heartFrames = globals._heartFrames;
   const _bootFrames = globals._bootFrames;
+
+  // Diagnostic log once per session to inspect shapes coming from loader/asset pipeline
+  if (!_selectionAssetsLogged) {
+    try {
+      console.log('[selectionManager] assets snapshot:', {
+        tyeman: {
+          keys: _tyemanAssets ? Object.keys(_tyemanAssets) : null,
+          idleShape: _tyemanAssets && _tyemanAssets.idle ? (Array.isArray(_tyemanAssets.idle) ? (_tyemanAssets.idle.length + ' items') : 'single') : null
+        },
+        sbluer: {
+          keys: _sbluerAssets ? Object.keys(_sbluerAssets) : null,
+          idleShape: _sbluerAssets && _sbluerAssets.idle ? (Array.isArray(_sbluerAssets.idle) ? (_sbluerAssets.idle.length + ' items') : 'single') : null
+        },
+        fernando: {
+          keys: _fernandoAssets ? Object.keys(_fernandoAssets) : null,
+          idleShape: _fernandoAssets && _fernandoAssets.idle ? (Array.isArray(_fernandoAssets.idle) ? (_fernandoAssets.idle.length + ' items') : 'single') : null
+        },
+        slotAssets: _slotAssets ? Object.keys(_slotAssets) : null,
+        bootFrames: _bootFrames ? (Array.isArray(_bootFrames) ? _bootFrames.length : 'present') : null
+      });
+    } catch (e) {}
+    _selectionAssetsLogged = true;
+  }
   const cols = 3;const rows = 2;
   const cellSize = 72;const cellGap = 12;const gridW = cols * cellSize + (cols - 1) * cellGap;
   const gridH = rows * cellSize + (rows - 1) * cellGap;const gridX = Math.round((width - gridW) / 2);const gridY = Math.round((height - gridH) / 2);
@@ -74,14 +122,89 @@ export function drawCharacterSelect() {
       if (idx < choices.length) {
         const charId = choices[idx];
         const assets = (charId === 'tyeman') ? _tyemanAssets : (charId === 'sbluer') ? _sbluerAssets : (charId === 'fernando') ? _fernandoAssets : null;
-        const idleLayer = (assets?.idle && assets.idle[1]) ? assets.idle[1] : (assets?.idle && assets.idle[0]) ? assets.idle[0] : null;
-        const frameImg = (idleLayer && idleLayer.length) ? idleLayer[0] : null; 
+        // Prefer a punch preview for certain characters to show a clearer pose
+        let previewLayer = null;
+        let frameImg = null;
+        try {
+          if (charId === 'tyeman' || charId === 'sbluer') {
+            previewLayer = _resolveFrames(assets?.punch) || _resolveFrames(assets?.punch1) || _resolveFrames(assets?.punch_1) || _resolveFrames(assets?.idle);
+            frameImg = (previewLayer && previewLayer.length) ? previewLayer[0] : null;
+          } else if (charId === 'fernando') {
+            // force a single static frame for Fernando: pick first available frame from preferred layers
+            const candidates = [assets?.punch, assets?.punch1, assets?.punch_1, assets?.idle, assets?.taunt, assets?.current];
+            for (const cand of candidates) {
+              if (!cand) continue;
+              // layers-by-layer
+              if (Array.isArray(cand) && Array.isArray(cand[0])) {
+                // prefer middle layer then first
+                const layer = (cand[1] && Array.isArray(cand[1]) && cand[1].length > 0) ? cand[1] : (cand[0] && Array.isArray(cand[0]) ? cand[0] : null);
+                if (layer && layer.length > 0) { frameImg = layer[0]; break; }
+              } else if (Array.isArray(cand) && cand.length > 0) {
+                // flat frames array: take first image
+                frameImg = cand[0]; break;
+              } else if (cand && cand.width && cand.height) {
+                // single image
+                frameImg = cand; break;
+              }
+            }
+            // ensure previewLayer remains null for fernando (we already selected explicit frameImg)
+            previewLayer = null;
+          } else {
+            previewLayer = _resolveFrames(assets?.idle) || _resolveFrames(assets?.taunt) || _resolveFrames(assets?.current);
+            frameImg = (previewLayer && previewLayer.length) ? previewLayer[0] : null;
+          }
+        } catch (e) { previewLayer = _resolveFrames(assets?.idle); frameImg = (previewLayer && previewLayer.length) ? previewLayer[0] : null; }
+        // debug: if frameImg exists and is a spritesheet, log its dimensions (helps diagnose tiny-frames issue)
+        if (frameImg && !_selectionAssetsLogged) {
+          try { console.log('[selectionManager] preview frame', charId, { frameImgW: frameImg.width, frameImgH: frameImg.height, previewLayerLen: previewLayer ? previewLayer.length : 0 }); } catch (e) {}
+        }
+        const isFernando = (charId === 'fernando');
         if (frameImg) {
           imageMode(CENTER);
-          const frameCount = (idleLayer && idleLayer.length) ? idleLayer.length : 1;const srcFrameW = Math.max(1, Math.floor(frameImg.width / frameCount));
-          const srcFrameH = frameImg.height;const maxW = cellSize - 12;const maxH = cellSize - 12;
+          // Determine logical number of frames and source frame width/height.
+          // Cases:
+          // - previewLayer is an array of separate frame images -> use each image as one frame
+          // - previewLayer is a single spritesheet image -> detect internal frames by width/height
+          let frameCount = 1;
+          let srcFrameW = frameImg.width || 1;
+          let srcFrameH = frameImg.height || srcFrameW;
+
+          if (previewLayer && Array.isArray(previewLayer) && previewLayer.length > 1) {
+            // multiple separate frame images provided
+            // For Fernando, force a single-frame preview (do not cycle through all frames)
+            frameCount = isFernando ? 1 : previewLayer.length;
+            // each frameImg is already a single-frame image, so srcFrameW is the image width
+            srcFrameW = frameImg.width || 1;
+            srcFrameH = frameImg.height || srcFrameW;
+          } else if (frameImg.width && frameImg.height) {
+            // single entry; maybe a spritesheet packed horizontally
+            const internal = Math.max(1, Math.round(frameImg.width / frameImg.height));
+            if (internal > 1) {
+              if (isFernando) {
+                // pick a single logical subframe for Fernando (first subframe)
+                frameCount = 1;
+                srcFrameW = Math.max(1, Math.floor(frameImg.width / internal));
+                srcFrameH = frameImg.height || srcFrameW;
+              } else {
+                frameCount = internal;
+                srcFrameW = Math.max(1, Math.floor(frameImg.width / frameCount));
+                srcFrameH = frameImg.height || srcFrameW;
+              }
+            } else {
+              frameCount = 1;
+              srcFrameW = frameImg.width || 1;
+              srcFrameH = frameImg.height || srcFrameW;
+            }
+          }
+          const maxW = cellSize - 12;const maxH = cellSize - 12;
           const ratio = Math.min(maxW / srcFrameW, maxH / srcFrameH, 1);const dw = Math.round(srcFrameW * ratio);const dh = Math.round(srcFrameH * ratio);
-          image(frameImg,ix + cellSize/2, iy + cellSize/2,dw, dh,0, 0,srcFrameW, srcFrameH);
+          // always draw only the FIRST logical subframe for preview (avoid tiling all frames into the cell)
+          const srcX = 0;
+          try {
+            image(frameImg, ix + cellSize/2, iy + cellSize/2, dw, dh, srcX, 0, srcFrameW, srcFrameH);
+          } catch (e) {
+            image(frameImg, ix + cellSize/2, iy + cellSize/2, dw, dh);
+          }
         } else {fill(120);noStroke();ellipse(ix + cellSize/2, iy + cellSize/2, cellSize * 0.45);}
       } else {push();noFill();stroke(80);strokeWeight(1);rect(ix + 6, iy + 6, cellSize - 12, cellSize - 12, 4);pop();}
       pop();
@@ -94,15 +217,50 @@ export function drawCharacterSelect() {
   if (p1SelectedIdx !== null) {
     const charId = choices[p1SelectedIdx];
     const assets = (charId === 'tyeman') ? _tyemanAssets : (charId === 'sbluer') ? _sbluerAssets : (charId === 'fernando') ? _fernandoAssets : null;
-    const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
-    const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
+    const tauntLayer = (assets?.taunt) ? assets.taunt : null;
+    // tauntLayer may be either: a) layers->frames array (layers[]) or b) a flat frames array
+    let tauntImg = null;
+    let tCount = 1;
+    if (tauntLayer) {
+      // prefer layer 1 then 0 if layers-by-layer format
+      if (Array.isArray(tauntLayer) && tauntLayer.length > 0 && Array.isArray(tauntLayer[0])) {
+        const layer = (tauntLayer[1] && Array.isArray(tauntLayer[1])) ? tauntLayer[1] : tauntLayer[0];
+        if (layer && layer.length > 0) { tauntImg = layer[0]; tCount = layer.length; }
+      } else if (Array.isArray(tauntLayer) && tauntLayer.length > 0) {
+        // flat frames array
+        tauntImg = tauntLayer[0]; tCount = 1;
+      }
+    }
     if (tauntImg) {
       push();
       imageMode(CORNER);
       tint(255, 240);
-      const tCount = (tauntLayer && tauntLayer.length) ? tauntLayer.length : 1;
-      const tSrcW = Math.max(1, Math.floor(tauntImg.width / tCount));
-      const tSrcH = tauntImg.height;const tRatio = Math.min(baseTauntW / tSrcW, baseTauntH / tSrcH, 1);
+      // detect if tauntImg is a spritesheet containing tCount frames horizontally
+      let tSrcW = tauntImg.width || 1;
+      const tSrcH = tauntImg.height || 1;
+      // detect internal frames in the taunt image (packed horizontally)
+      const tInternal = Math.max(1, Math.round(tauntImg.width / tauntImg.height));
+      if (tInternal > 1) {
+        // if Fernando, show only the first logical subframe; otherwise try to respect tCount
+        if (charId === 'fernando') {
+          tCount = 1;
+          tSrcW = Math.max(1, Math.floor(tauntImg.width / tInternal));
+        } else if (tCount > 1) {
+          tSrcW = Math.max(1, Math.floor(tauntImg.width / tCount));
+        } else {
+          // unknown count: divide by detected internal frames
+          tSrcW = Math.max(1, Math.floor(tauntImg.width / tInternal));
+        }
+      } else {
+        // treat as single-frame image
+        tCount = 1;
+        tSrcW = tauntImg.width;
+      }
+      // shave 3px from right edge for Fernando taunt subframe
+      if (charId === 'fernando') {
+        tSrcW = Math.max(1, tSrcW - 3);
+      }
+      const tRatio = Math.min(baseTauntW / tSrcW, baseTauntH / tSrcH, 1);
       const tDrawW = Math.round(tSrcW * tRatio);const tDrawH = Math.round(tSrcH * tRatio);
       const leftSlotX = gridX - baseTauntW - 18;const leftSlotY = gridY + Math.round((gridH - baseTauntH) / 2);
       const tauntDestX = leftSlotX + Math.round((baseTauntW - tDrawW) / 2);const tauntDestY = leftSlotY + Math.round((baseTauntH - tDrawH) / 2);
@@ -118,16 +276,39 @@ export function drawCharacterSelect() {
   if (p2SelectedIdx !== null) {
     const charId = choices[p2SelectedIdx];
     const assets = (charId === 'tyeman') ? _tyemanAssets : (charId === 'sbluer') ? _sbluerAssets : (charId === 'fernando') ? _fernandoAssets : null;
-    const tauntLayer = (assets?.taunt && assets.taunt[1]) ? assets.taunt[1] : (assets?.taunt && assets.taunt[0]) ? assets.taunt[0] : null;
-    const tauntImg = (tauntLayer && tauntLayer.length) ? tauntLayer[0] : null;
+    const tauntLayer = (assets?.taunt) ? assets.taunt : null;
+    let tauntImg = null;
+    let tCount2 = 1;
+    if (tauntLayer) {
+      if (Array.isArray(tauntLayer) && tauntLayer.length > 0 && Array.isArray(tauntLayer[0])) {
+        const layer = (tauntLayer[1] && Array.isArray(tauntLayer[1])) ? tauntLayer[1] : tauntLayer[0];
+        if (layer && layer.length > 0) { tauntImg = layer[0]; tCount2 = layer.length; }
+      } else if (Array.isArray(tauntLayer) && tauntLayer.length > 0) {
+        tauntImg = tauntLayer[0]; tCount2 = 1;
+      }
+    }
     if (tauntImg) {
       push();
       imageMode(CORNER);
       tint(255, 240);
-
-      const tCount2 = (tauntLayer && tauntLayer.length) ? tauntLayer.length : 1;
-      const tSrcW2 = Math.max(1, Math.floor(tauntImg.width / tCount2));
-      const tSrcH2 = tauntImg.height;
+      let tSrcW2 = tauntImg.width || 1;
+      const tSrcH2 = tauntImg.height || 1;
+      const tInternal2 = Math.max(1, Math.round(tauntImg.width / tauntImg.height));
+      if (tInternal2 > 1) {
+        if (charId === 'fernando') {
+          tCount2 = 1; tSrcW2 = Math.max(1, Math.floor(tauntImg.width / tInternal2));
+        } else if (tCount2 > 1) {
+          tSrcW2 = Math.max(1, Math.floor(tauntImg.width / tCount2));
+        } else {
+          tSrcW2 = Math.max(1, Math.floor(tauntImg.width / tInternal2));
+        }
+      } else {
+        tCount2 = 1; tSrcW2 = tauntImg.width;
+      }
+      // shave 3px from right edge for Fernando taunt subframe (right preview)
+      if (charId === 'fernando') {
+        tSrcW2 = Math.max(1, tSrcW2 - 3);
+      }
       const tRatio2 = Math.min(baseTauntW / tSrcW2, baseTauntH / tSrcH2, 1);
       const tDrawW2 = Math.round(tSrcW2 * tRatio2);
       const tDrawH2 = Math.round(tSrcH2 * tRatio2);

@@ -394,6 +394,27 @@ export function handleInput(self) {
     // removed direct immediate grab call - rely on buffer + specials
     // if (keysPressed['u']) self.grab && self.grab();
     if (keysUp['i'] || keysUp['o'] || keysUp['p']) { self.inputLockedByKey['i'] = false; self.inputLockedByKey['o'] = false; self.inputLockedByKey['p'] = false; }
+
+    // SPIT hold behavior for Sbluer: mantener 'spit' mientras se mantiene P (tecla 'p')
+    if (self.charId === 'sbluer') {
+      if (keysDown['p']) {
+        if (!self._spitting) {
+          self._spitting = true;
+          self._spitLastEmit = 0;
+          self._spitInterval = 40; // ms between spits
+          try { self.setState('spit'); } catch (e) {}
+          self.attacking = true;
+          self.attackType = 'spit';
+        }
+      } else if (keysUp['p']) {
+        if (self._spitting) {
+          self._spitting = false;
+          self.attacking = false;
+          self.attackType = null;
+          try { if (self.state && self.state.current === 'spit') self.setState('idle'); } catch (e) {}
+        }
+      }
+    }
   } else {
     setRunTap('left', 'arrowleft'); setRunTap('right', 'arrowright');
     if (keysDown['arrowup'] && self.onGround) { self.vy = self.jumpStrength; self.onGround = false; self.runActive = false; }
@@ -404,6 +425,27 @@ export function handleInput(self) {
     // removed direct immediate grab call - rely on buffer + specials
     // if (keysPressed['v']) self.grab && self.grab();
     if (keysUp['b'] || keysUp['n'] || keysUp['m']) { self.inputLockedByKey['b'] = false; self.inputLockedByKey['n'] = false; self.inputLockedByKey['m'] = false; }
+
+    // SPIT hold behavior for Sbluer on P2 (tecla 'm')
+    if (self.charId === 'sbluer') {
+      if (keysDown['m']) {
+        if (!self._spitting) {
+          self._spitting = true;
+          self._spitLastEmit = 0;
+          self._spitInterval = 40;
+          try { self.setState('spit'); } catch (e) {}
+          self.attacking = true;
+          self.attackType = 'spit';
+        }
+      } else if (keysUp['m']) {
+        if (self._spitting) {
+          self._spitting = false;
+          self.attacking = false;
+          self.attackType = null;
+          try { if (self.state && self.state.current === 'spit') self.setState('idle'); } catch (e) {}
+        }
+      }
+    }
   }
 }
 

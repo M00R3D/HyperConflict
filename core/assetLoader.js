@@ -41,7 +41,7 @@ function normalizePiskelLayers(layers) {
 }
 
 async function loadTyemanAssets() {
-  return {
+  const raw = {
     idle: await loadOrNull('src/tyeman/tyeman_idle.piskel'),
     walk: await loadOrNull('src/tyeman/tyeman_walk.piskel'),
     jump: await loadOrNull('src/tyeman/tyeman_jump.piskel'),
@@ -68,24 +68,30 @@ async function loadTyemanAssets() {
     shoot: await loadOrNull('src/tyeman/tyeman_shoot.piskel'),
     projectile: await loadOrNull('src/tyeman/tyeman_projectile.piskel'),
     dash: await loadOrNull('src/tyeman/tyeman_dash.piskel'),
-  dashLight: await loadOrNull('src/tyeman/tyeman_dash_light.piskel'),
-  taunt: await loadOrNull('src/tyeman/tyeman_taunt.piskel'),
-  block: await loadOrNull('src/tyeman/tyeman_block.piskel'),
-  crouchBlock: await loadOrNull('src/tyeman/tyeman_crouch_block.piskel'),
-  grab: await loadOrNull('src/tyeman/tyeman_grab.piskel'),
-  grabbed: await loadOrNull('src/tyeman/tyeman_grabbed.piskel'),
-  knocking: await loadOrNull('src/tyeman/tyeman_knocking.piskel'),
-  knocked: await loadOrNull('src/tyeman/tyeman_knocked.piskel'),
-  recovery: await loadOrNull('src/tyeman/tyeman_recovery.piskel'),
-  crouchpunch: await loadOrNull('src/tyeman/tyeman_crouch_punch.piskel'),
-  crouchkick: await loadOrNull('src/tyeman/tyeman_crouch_kick.piskel'),
-  stapler: await loadOrNull('src/tyeman/tyeman_stapler.piskel'),//este es el personaje sosteniendo la engrampadora, que es un arma/overlay opcional que se muestra en ciertos frames del ataque de engrampadora (G,P)
-  staple: await loadOrNull('src/tyeman/tyeman_staple.piskel'),//este es el proyectil del ataque de engrampadora, que es un ataque especial registrado en registerSpecialsForChar con la secuencia G,P
+    dashLight: await loadOrNull('src/tyeman/tyeman_dash_light.piskel'),
+    taunt: await loadOrNull('src/tyeman/tyeman_taunt.piskel'),
+    block: await loadOrNull('src/tyeman/tyeman_block.piskel'),
+    crouchBlock: await loadOrNull('src/tyeman/tyeman_crouch_block.piskel'),
+    grab: await loadOrNull('src/tyeman/tyeman_grab.piskel'),
+    grabbed: await loadOrNull('src/tyeman/tyeman_grabbed.piskel'),
+    knocking: await loadOrNull('src/tyeman/tyeman_knocking.piskel'),
+    knocked: await loadOrNull('src/tyeman/tyeman_knocked.piskel'),
+    recovery: await loadOrNull('src/tyeman/tyeman_recovery.piskel'),
+    crouchpunch: await loadOrNull('src/tyeman/tyeman_crouch_punch.piskel'),
+    crouchkick: await loadOrNull('src/tyeman/tyeman_crouch_kick.piskel'),
+    stapler: await loadOrNull('src/tyeman/tyeman_stapler.piskel'), // overlay
+    staple: await loadOrNull('src/tyeman/tyeman_staple.piskel'), // projectile
   };
+  const normalized = {};
+  for (const k of Object.keys(raw)) {
+    const v = raw[k];
+    normalized[k] = Array.isArray(v) ? normalizePiskelLayers(v) : v;
+  }
+  return normalized;
 }
  
 async function loadSbluerAssets() {
-  return {
+  const raw = {
     idle: await loadOrNull('src/sbluer/sbluer_idle.piskel'),
     walk: await loadOrNull('src/sbluer/sbluer_walk.piskel'),
     jump: await loadOrNull('src/sbluer/sbluer_jump.piskel'),
@@ -109,18 +115,26 @@ async function loadSbluerAssets() {
     shoot: await loadOrNull('src/sbluer/sbluer_shoot.piskel'),
     projectile: await loadOrNull('src/sbluer/sbluer_projectile.piskel'),
     dash: await loadOrNull('src/sbluer/sbluer_dash.piskel'),
-  dashLight: await loadOrNull('src/sbluer/sbluer_dash_light.piskel'),
-  taunt: await loadOrNull('src/sbluer/sbluer_taunt.piskel'),
-  block: await loadOrNull('src/sbluer/sbluer_block.piskel'),
-  crouchBlock: await loadOrNull('src/sbluer/sbluer_crouch_block.piskel'),
-  grab: await loadOrNull('src/sbluer/sbluer_grab.piskel'),
-  grabbed: await loadOrNull('src/sbluer/sbluer_grabbed.piskel'),
-  knocking: await loadOrNull('src/sbluer/sbluer_knocking.piskel'),
-  knocked: await loadOrNull('src/sbluer/sbluer_knocked.piskel'),
-  recovery: await loadOrNull('src/sbluer/sbluer_recovery.piskel'),
-  crouchpunch: await loadOrNull('src/sbluer/sbluer_crouch_punch.piskel'),
-  crouchkick: await loadOrNull('src/sbluer/sbluer_crouch_kick.piskel'),
+    dashLight: await loadOrNull('src/sbluer/sbluer_dash_light.piskel'),
+    taunt: await loadOrNull('src/sbluer/sbluer_taunt.piskel'),
+    block: await loadOrNull('src/sbluer/sbluer_block.piskel'),
+    crouchBlock: await loadOrNull('src/sbluer/sbluer_crouch_block.piskel'),
+    grab: await loadOrNull('src/sbluer/sbluer_grab.piskel'),
+    grabbed: await loadOrNull('src/sbluer/sbluer_grabbed.piskel'),
+    knocking: await loadOrNull('src/sbluer/sbluer_knocking.piskel'),
+    knocked: await loadOrNull('src/sbluer/sbluer_knocked.piskel'),
+    recovery: await loadOrNull('src/sbluer/sbluer_recovery.piskel'),
+    crouchpunch: await loadOrNull('src/sbluer/sbluer_crouch_punch.piskel'),
+    crouchkick: await loadOrNull('src/sbluer/sbluer_crouch_kick.piskel'),
+    spit: await loadOrNull('src/sbluer/sbluer_spit.piskel'), // overlay
+    spitProj: await loadOrNull('src/sbluer/sbluer_spit_proj.piskel'), // projectile
   };
+  const normalized = {};
+  for (const k of Object.keys(raw)) {
+    const v = raw[k];
+    normalized[k] = Array.isArray(v) ? normalizePiskelLayers(v) : v;
+  }
+  return normalized;
 }
 async function loadFernandoAssets() {
   const raw = {

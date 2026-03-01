@@ -40,6 +40,37 @@ export async function setup() {
 
   state._tyemanAssets = await loadTyemanAssets();
   state._sbluerAssets = await loadSbluerAssets();
+  console.log('[setup] sbluer assets loaded keys:', Object.keys(state._sbluerAssets || {}));
+  // Diagnostic dump: print brief shapes for key assets to help debug UI indexing
+  try {
+    function _shapeOf(obj) {
+      if (!obj) return 'null';
+      if (Array.isArray(obj)) {
+        if (obj.length === 0) return 'array(0)';
+        // layers-by-layer (each element may be array of frames)
+        if (Array.isArray(obj[0])) {
+          return 'layers[' + obj.map(l => (Array.isArray(l) ? l.length : (l && l.width ? 'img' : 'null'))).join(',') + ']';
+        }
+        // flat frames array
+        return 'frames[' + obj.length + ']';
+      }
+      if (obj.width && obj.height) {
+        const internal = Math.max(1, Math.round(obj.width / obj.height));
+        return `img(${obj.width}x${obj.height})[frames=${internal}]`;
+      }
+      return typeof obj;
+    }
+    console.log('[setup] ASSET SHAPES:', {
+      tyeman_idle: _shapeOf(state._tyemanAssets?.idle),
+      tyeman_taunt: _shapeOf(state._tyemanAssets?.taunt),
+      sbluer_idle: _shapeOf(state._sbluerAssets?.idle),
+      sbluer_taunt: _shapeOf(state._sbluerAssets?.taunt),
+      fernando_idle: _shapeOf(state._fernandoAssets?.idle),
+      slot_empty: _shapeOf(state._slotAssets?.empty),
+      boot_frames: _shapeOf(state._bootFrames)
+    });
+  } catch (e) { console.warn('setup: asset shape dump failed', e); }
+  try { console.log('[setup] sbluer.spit layers:', (state._sbluerAssets && state._sbluerAssets.spit) ? state._sbluerAssets.spit.length : 0); } catch (e) {}
   try { state._fernandoAssets = await loadFernandoAssets(); } catch (e) { state._fernandoAssets = null; console.warn('loadFernandoAssets failed', e); }
 
   // Mirror to core/gameState if present so lifecycle can read assets
@@ -52,6 +83,7 @@ export async function setup() {
       gameState._heartFrames = state._heartFrames;
       gameState._bootFrames = state._bootFrames;
     }
+    try { console.log('[setup] mirrored gameState._sbluerAssets.spit present?', !!(gameState._sbluerAssets && gameState._sbluerAssets.spit), 'len=', (gameState._sbluerAssets && gameState._sbluerAssets.spit) ? gameState._sbluerAssets.spit.length : 'null'); } catch (e) {}
   } catch (e) {}
 
   try { state._slotAssets = await loadSlotAssets(); } catch (e) { state._slotAssets = null; console.warn('loadSlotAssets failed', e); }
