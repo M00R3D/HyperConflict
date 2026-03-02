@@ -85,19 +85,16 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
     // helper: obtain the image object that represents LAYER 2 FRAME 0 (only)
     const getLayer2Frame0 = (layerContainer) => {
       if (!layerContainer) return null;
-      // If this is a layers-by-frames structure: [layer0Frames, layer1Frames, layer2Frames, ...]
-      if (Array.isArray(layerContainer)) {
-        // prefer explicit layer 2 -> layerContainer[2][0]
-        if (layerContainer[2] && Array.isArray(layerContainer[2]) && layerContainer[2][0]) return layerContainer[2][0];
-        // fallback to layer 1
-        if (layerContainer[1] && Array.isArray(layerContainer[1]) && layerContainer[1][0]) return layerContainer[1][0];
-        // fallback to layer 0
-        if (layerContainer[0]) {
-          // if layerContainer[0] is an array of frames, return first frame
-          if (Array.isArray(layerContainer[0]) && layerContainer[0][0]) return layerContainer[0][0];
-          // if it's already an image (flattened), return it
-          if (layerContainer[0] && layerContainer[0].width) return layerContainer[0];
-        }
+      // Case A: frames-by-layer array: layers -> frames[]
+      if (Array.isArray(layerContainer) && layerContainer.length > 2 && Array.isArray(layerContainer[2])) {
+        return layerContainer[1][0] || null;
+      }
+      // Case B: maybe the provided container is already the layer array (frames list)
+      if (Array.isArray(layerContainer) && layerContainer.length > 0) {
+        // if this appears to be a layer array where each item is an image/frame, return its first item
+        if (layerContainer[0] && layerContainer[0].width) return layerContainer[0];
+        // if it has >=3 entries, prefer the third as layer2[0]
+        if (layerContainer.length > 2 && layerContainer[2] && layerContainer[2].width) return layerContainer[2];
       }
       return null;
     };
@@ -175,22 +172,8 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
   drawLifePortraits(p1, leftPortraitX, false);
   drawLifePortraits(p2, rightPortraitX, true);
 
-  // runtime summary for diagnostics
-  const _summarize = (cont) => {
-    if (!cont) return null;
-    if (!Array.isArray(cont)) return { type: typeof cont };
-    return { layers: cont.length, perLayer: cont.map(l => (Array.isArray(l) ? l.length : (l && l.width ? 'img' : 0))) };
-  };
-  try { console.log('drawHealthBars: heartFrames summary', _summarize(heartFrames), 'bootFrames summary', _summarize(bootFrames)); } catch (e) {}
-
-  // prefer middle layer for multi-layer piskels (many characters use 3 layers)
-  let layer = null;
-  if (Array.isArray(heartFrames)) {
-    if (heartFrames.length > 2 && Array.isArray(heartFrames[1]) && heartFrames[1].length > 0) layer = heartFrames[1];
-    if (!layer) layer = heartFrames.find(l => Array.isArray(l) && l.length > 0) || (Array.isArray(heartFrames[0]) ? heartFrames[0] : null);
-  } else {
-    layer = null;
-  }
+  // pick first non-empty layer (some .piskel exports put frames in layer 1)
+  const layer = (Array.isArray(heartFrames) ? heartFrames.find(l => Array.isArray(l) && l.length > 0) : null);
   if (!layer) {
     push();
     fill(255);
@@ -350,31 +333,9 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
   drawPlayerHearts(p2, rightStart, true);
  
   // --- DRAW BOOTS (below hearts) ---
-  // prefer middle layer for multi-layer piskels
-  let bootLayer = null;
-  if (Array.isArray(bootFrames)) {
-    if (bootFrames.length > 2 && Array.isArray(bootFrames[1]) && bootFrames[1].length > 0) bootLayer = bootFrames[1];
-    if (!bootLayer) bootLayer = bootFrames.find(l => Array.isArray(l) && l.length > 0) || (Array.isArray(bootFrames[0]) ? bootFrames[0] : null);
-  }
+  const bootLayer = (Array.isArray(bootFrames) ? bootFrames.find(l => Array.isArray(l) && l.length > 0) : null);
 
   if (!bootLayer) {
-    // try fallback: derive boot visuals from player assets (some builds used character sprites as boot icons)
-    let derived = null;
-    try {
-      const cand = p1 && (p1.currentFramesByLayer || p1.idleFramesByLayer) ? (p1.currentFramesByLayer || p1.idleFramesByLayer) : (p2 && (p2.currentFramesByLayer || p2.idleFramesByLayer) ? (p2.currentFramesByLayer || p2.idleFramesByLayer) : null);
-      if (cand) {
-        if (Array.isArray(cand)) {
-          // prefer layer 1 then 0
-          if (Array.isArray(cand[1]) && cand[1].length > 0) derived = cand[1];
-          else if (Array.isArray(cand[0]) && cand[0].length > 0) derived = cand[0];
-        }
-      }
-    } catch (e) { derived = null; }
-    if (derived) {
-      bootLayer = derived;
-      // console.log('drawHealthBars: derived bootLayer from player assets');
-    }
-    // if still not found, emit a warning (non-fatal)
     console.warn('drawHealthBars: no boot frames found (bootFrames)', bootFrames);
   } else {
     if (typeof console !== 'undefined' && bootLayer.length !== undefined) {

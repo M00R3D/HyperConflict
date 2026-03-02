@@ -45,15 +45,6 @@ export function updateMovement(self) {
     // no devolvemos early: mantener otras lógicas como collision/grav etc.
   }
 
-  // Mientras esté en estado 'spit' (sbluer), desactivar movimiento horizontal
-  if (self.state && self.state.current === 'spit') {
-    self.keys.left = false;
-    self.keys.right = false;
-    self.runActive = false;
-    self.vx = 0;
-    // allow gravity/jump handling but skip horizontal movement processing
-  }
-
   // NEW: respetar cooldown después de salir de grab — bloquear física/movimiento durante ese periodo
   const grabExitStart = self._grabExitCooldownStart || 0;
   const grabExitDur = self._grabExitCooldownDuration || 220;

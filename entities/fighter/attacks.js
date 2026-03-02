@@ -3,6 +3,7 @@ import * as Anim from './animation.js';
 import { getKnockbackForAttack } from '../../core/knockback.js';
 import { Projectile } from '../../entities/projectile.js';
 import { state } from '../../core/state.js';
+import { keysDown } from '../../core/input.js';
 export function attack(self, key) {
   const now = millis();
   // Prevent starting new attacks while game is paused or during hitstop
@@ -471,48 +472,6 @@ export function hit(self, attacker = null) {
 
 export function updateAttackState(self) {
   const now = millis();
-  // continuous spit handling: spawn projectiles while holding the gimmick
-  try {
-    if (self._spitting) {
-      const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
-      if (projArr && Array.isArray(projArr)) {
-        const last = self._spitLastEmit || 0;
-        const interval = (typeof self._spitInterval === 'number') ? self._spitInterval : 40;
-        if ((now - last) >= interval) {
-          // spawn a rotating falling spit projectile (typeId 7)
-          const dir = (self.facing === -1) ? -1 : 1;
-          const sx = Math.round(self.x + (dir === 1 ? self.w : 0));
-          const sy = Math.round(self.y + (self.h / 2));
-          const p = new Projectile(sx, sy, dir, 7, self.id, {}, { speed: 1.6, w: 12, h: 8, frameDelay: 4, duration: 4000 }, (self.spitProjFramesByLayer || null));
-          p._canBeRepelled = false; // cannot be reflected by punches/kicks
-          p.charId = self.charId;
-          try { console.log('[spit.emit] owner=', self.id, 'spitProjLayers=', (self.spitProjFramesByLayer && self.spitProjFramesByLayer.length)); } catch (e) {}
-          p.spinSpeed = (Math.random() * 6) - 3;
-          p.rotation = 0;
-          p.vy = -(1 + Math.random() * 1.2);
-          p.gravity = 0.35;
-          p.persistent = false;
-          if (projArr && Array.isArray(projArr)) projArr.push(p);
-
-          // cap number of spit projectiles to 20 (destroy oldest spits)
-          let spitCount = 0;
-          for (let i = 0; i < projArr.length; i++) if (projArr[i] && projArr[i].typeId === 7) spitCount++;
-          while (spitCount > 20) {
-            for (let i = 0; i < projArr.length; i++) {
-              if (projArr[i] && projArr[i].typeId === 7) {
-                projArr.splice(i, 1);
-                spitCount--; break;
-              }
-            }
-          }
-
-          self._spitLastEmit = now;
-        }
-      }
-      // while spitting, don't let the regular attack termination logic run
-      return;
-    }
-  } catch (e) { /* ignore errors in spit logic */ }
   if (self.attacking && (now - self.attackStartTime > self.attackDuration)) {
     // Mantener el estado de ataque mientras el grab esté en holding,
     // para que el grabber permanezca en el último frame hasta soltarlo.
@@ -521,6 +480,28 @@ export function updateAttackState(self) {
     }
 
     const endedAttackType = self.attackType;
+
+    // SPECIAL: spit -> si el jugador mantiene el botón neutral de gimmick (G: 'u' para P1, 'v' para P2)
+    // congelar la animación en su último frame hasta que suelte el botón.
+    if (endedAttackType === 'spit') {
+      try {
+        // the spit action is triggered via the neutral gimmick key: 'p' for P1, 'm' for P2
+        const holdKey = (self.id === 'p1') ? 'p' : 'm';
+        if (keysDown && keysDown[holdKey]) {
+          // marcar hold y preparar la animación para el ciclo 4..6
+          self._spitHold = true;
+          // clear attacking state but keep visual state as 'spit'
+          self.attacking = false;
+          self.attackType = null;
+          try { self.setState('spit'); } catch (e) {}
+          // empezar el ciclo en el fotograma 7 para que updateAnimation lo rote 7..8
+          self.frameIndex = 7;
+          self.frameTimer = 0;
+          // do not clear _hitTargets here (optional)
+          return;
+        }
+      } catch (e) { /* ignore */ }
+    }
 
     self.attacking = false;
     self.attackType = null;

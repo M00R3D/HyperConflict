@@ -57,9 +57,7 @@ export function registerCharData() {
             kick2: { duration: 1000, frameDelay: 6 },
             kick3: { duration: 1000, frameDelay: 6 },
             grab: { duration: 500, frameDelay: 3 },
-            // Spit: hold action that continuously emits spit projectiles while held
-            // Duration is large because the input handling manages hold/release.
-            spit: { duration: 9999, frameDelay: 4 }
+            spit: { duration: 600, frameDelay: 4 } // ataque especial de escupitajo registrado en registerSpecialsForChar con la secuencia G,P
             });
 
             // ejemplo: ajustar hitboxes de tyeman

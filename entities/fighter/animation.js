@@ -65,13 +65,6 @@ export function setState(self, newState) {
   self.state.current = newState;
   self.state.timer = 0;
 
-  // Debug: when entering spit state, report assigned frames for troubleshooting
-  try {
-    if (newState === 'spit') {
-      console.log('[animation.setState] entering spit', self.id, self.charId, 'spitLayers=', (self.spitFramesByLayer && self.spitFramesByLayer.length), 'spitProjLayers=', (self.spitProjFramesByLayer && self.spitProjFramesByLayer.length), 'currentLayers=', (self.currentFramesByLayer && self.currentFramesByLayer.length));
-    }
-  } catch (e) { /* ignore logging errors */ }
-
   // REGISTER timestamps for knocked/recovery so transitions are time-driven
   if (newState === 'knocked') {
     self.knockedStartTime = millis();
@@ -107,7 +100,6 @@ export function setState(self, newState) {
     case 'kick2':     self.currentFramesByLayer = self.kick2FramesByLayer; break;
     case 'kick3':     self.currentFramesByLayer = self.kick3FramesByLayer; break;
     case 'tats':      self.currentFramesByLayer = self.tatsFramesByLayer; break;
-    case 'spit':      self.currentFramesByLayer = self.spitFramesByLayer; break;
     case 'hit':       self.currentFramesByLayer = self.hitFramesByLayer; break;
     case 'bun':       self.currentFramesByLayer = self.shorFramesByLayer; break;
     // hit1/hit2/hit3 usan sus frames específicos si existen
@@ -218,8 +210,12 @@ export function updateAnimation(self) {
     frameDelay = Math.max(8, Math.round(frameDelay * 1.4));
   }
 
+  // Si estamos en spithold, usar un delay distinto (más lento) para el ciclado
+  const isSpitHold = (self.state && self.state.current === 'spit' && self._spitHold);
+  const effectiveDelay = isSpitHold ? Math.max(frameDelay * 2, 10) : frameDelay;
+
   self.frameTimer = (self.frameTimer || 0) + 1;
-  if (self.frameTimer > frameDelay) {
+  if (self.frameTimer > effectiveDelay) {
     self.frameTimer = 0;
     // número de frames en la primera capa (asume capas homogéneas)
     const layer0 = self.currentFramesByLayer[0] || [];
@@ -238,7 +234,22 @@ export function updateAnimation(self) {
       }
     } else {
       // comportamiento normal (loop)
-      self.frameIndex = (self.frameIndex + 1) % frameCount;
+      // Si estamos en 'spit' y hay una marca _spitHold activa, quedarnos en el último frame
+      if (isSpitHold) {
+        // Mientras _spitHold esté activo, ciclar repetidamente los fotogramas 7..8
+        const HOLD_START = 7;
+        const HOLD_END = 8;
+        const holdCount = Math.max(1, HOLD_END - HOLD_START + 1);
+        const cur = (typeof self.frameIndex === 'number') ? self.frameIndex : 0;
+        if (cur < HOLD_START || cur > HOLD_END) {
+          self.frameIndex = HOLD_START;
+        } else {
+          const rel = (cur - HOLD_START + 1) % holdCount;
+          self.frameIndex = HOLD_START + rel;
+        }
+      } else {
+        self.frameIndex = (self.frameIndex + 1) % frameCount;
+      }
     }
   }
 }

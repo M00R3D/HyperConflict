@@ -516,7 +516,7 @@ function draw() {
           if (player1 && player1.attacking && player1.attackType) {
             const at = (player1.attackType || '').toString().toLowerCase();
             const canRepel = at.startsWith('punch') || at === 'punch' || at.startsWith('kick') || at === 'kick' || at.startsWith('crouchpunch') || at.startsWith('crouchkick');
-            if (canRepel && typeof player1.getAttackHitbox === 'function' && (p._canBeRepelled !== false) && p.typeId !== 7) {
+            if (canRepel && typeof player1.getAttackHitbox === 'function') {
               const aHB = player1.getAttackHitbox();
               const pHB = (typeof p.getHitbox === 'function') ? p.getHitbox() : null;
               if (aHB && pHB && aHB.x < pHB.x + pHB.w && aHB.x + aHB.w > pHB.x && aHB.y < pHB.y + pHB.h && aHB.y + aHB.h > pHB.y) {
@@ -638,7 +638,7 @@ function draw() {
           if (player2 && player2.attacking && player2.attackType) {
             const at2 = (player2.attackType || '').toString().toLowerCase();
             const canRepel2 = at2.startsWith('punch') || at2 === 'punch' || at2.startsWith('kick') || at2 === 'kick' || at2.startsWith('crouchpunch') || at2.startsWith('crouchkick');
-            if (canRepel2 && typeof player2.getAttackHitbox === 'function' && (p._canBeRepelled !== false) && p.typeId !== 7) {
+            if (canRepel2 && typeof player2.getAttackHitbox === 'function') {
               const aHB2 = player2.getAttackHitbox();
               const pHB2 = (typeof p.getHitbox === 'function') ? p.getHitbox() : null;
               if (aHB2 && pHB2 && aHB2.x < pHB2.x + pHB2.w && aHB2.x + aHB2.w > pHB2.x && aHB2.y < pHB2.y + pHB2.h && aHB2.y + aHB2.h > pHB2.y) {
@@ -811,14 +811,6 @@ function draw() {
     }
   } catch (e) { /* silent */ }
 
-  try {
-    const _summ = (cont) => {
-      if (!cont) return null;
-      if (!Array.isArray(cont)) return { type: typeof cont };
-      try { return { layers: cont.length, perLayer: cont.map(l => (Array.isArray(l) ? l.length : (l && l.width ? 'img' : 0))) }; } catch (e) { return { layers: cont.length }; }
-    };
-    console.log('[HUD call] heartFrames', _summ(_heartFrames), 'bootFrames', _summ(_bootFrames));
-  } catch (e) {}
   drawHealthBars(player1 || null, player2 || null, _heartFrames, _bootFrames);
   drawInputQueues(player1 || { inputBuffer: [], inputBufferDuration:1400 }, player2 || { inputBuffer: [], inputBufferDuration:1400 });
 

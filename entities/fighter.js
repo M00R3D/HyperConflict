@@ -7,7 +7,7 @@ import * as Attacks from './fighter/attacks.js';
 import * as Hitbox from './fighter/hitbox.js';
 import * as Anim from './fighter/animation.js';
 import * as Display from './fighter/display.js';
-import { keysPressed, keysUp } from '../core/input.js';
+import { keysPressed, keysUp, keysDown } from '../core/input.js';
 
 class Fighter {
   constructor(opts = {}) {
@@ -17,11 +17,6 @@ class Fighter {
     // aplicar stats personalizados si vienen en opts
     Object.assign(this, opts);
     this.charId = charId;
-    try {
-      console.log('[Fighter ctor] creating', id, 'charId=', charId, 'assetsKeys=', Object.keys(assets || {}));
-      try { console.log('[Fighter ctor] assets.spit present=', !!assets.spit, 'len=', Array.isArray(assets.spit) ? assets.spit.length : String(assets.spit)); } catch (e) {}
-      try { console.log('[Fighter ctor] assets.spitProj present=', !!assets.spitProj, 'len=', Array.isArray(assets.spitProj) ? assets.spitProj.length : String(assets.spitProj)); } catch (e) {}
-    } catch (e) {}
     // usar assets y actions provistos
     Init.initFrames(this, {
       idleFramesByLayer: assets.idle, walkFramesByLayer: assets.walk, jumpFramesByLayer: assets.jump,
@@ -32,9 +27,6 @@ class Fighter {
       flybackFramesByLayer: assets.flyback, flyupFramesByLayer: assets.flyup,
       shootFramesByLayer: assets.shoot, projectileFramesByLayer: assets.projectile,
       tatsFramesByLayer: assets.tats, tatsProjFramesByLayer: assets.tatsProjFramesByLayer,
-      // sbluer spit overlay and spit projectile frames
-      spitFramesByLayer: assets.spit,
-      spitProjFramesByLayer: assets.spitProj,
       dashLightFramesByLayer: assets.dashLight,
       dashFramesByLayer: assets.dash,
       tauntFramesByLayer: assets.taunt, blockFramesByLayer: assets.block, crouchBlockFramesByLayer: assets.crouchBlock,
@@ -50,6 +42,8 @@ class Fighter {
       crouchKickFramesByLayer: assets.crouchkick, // <-- AGREGADO
       staplerFramesByLayer: assets.stapler,
       stapleProjFramesByLayer: assets.staple,
+      spitFramesByLayer: assets.spit,
+      spitProjFramesByLayer: assets.spitProj
       
     });
     // Diagnostic: log presence/lengths of crouchpunch-related assets/frames
@@ -110,6 +104,7 @@ class Fighter {
       crouchkick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
       crouchKick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
       stapler: { anim: this.staplerFramesByLayer, frameDelay: 5, duration: 360 },
+      spit: { anim: this.spitFramesByLayer, frameDelay: 6, duration: 600 } // ataque especial de escupitajo registrado en registerSpecialsForChar con la secuencia G,P
     };
 
     // aplicar overrides pasados en opts.actions: fusionar por llave (no eliminar campos por defecto)
@@ -584,7 +579,40 @@ class Fighter {
     // pequeñas responsabilidades delegadas:
     Buffer.handlePendingDiagRelease(this);
     this.trimBuffer();
+    // Allow attacks module to update attack completion (may set _spitHold)
     Attacks.updateAttackState(this);
+    // Si estamos en _spitHold y la tecla se mantiene, mantener visual 'spit' y SALIR
+    try {
+        if (this._spitHold) { 
+        // spit uses the neutral gimmick key: 'p' for P1 and 'm' for P2
+        const holdKey = (this.id === 'p1') ? 'p' : 'm';
+        const held = !!(keysDown && keysDown[holdKey]);
+        if (!held) {
+          // release: limpiar hold y permitir transiciones normales (volver a idle)
+          delete this._spitHold;
+          try { this.setState('idle'); } catch (e) {}
+        } else {
+          // Si el jugador está siendo golpeado o agarrado, permitimos que hit/grab interrumpan
+          if (this.isHit || this._grabLock || (this.state && (this.state.current === 'blockStun' || this.state.current === 'crouchBlockStun'))) {
+            // dejar que el flujo normal lo maneje (no forzamos retorno)
+          } else {
+            // Mantener estado visual en 'spit' y permitir que la animación cicla 4..6
+            try { this.setState('spit'); } catch (e) {}
+            // sólo inicializar el índice de fotograma si estamos fuera del rango 7..8
+            const HOLD_START = 7;
+            const HOLD_END = 8;
+            if (typeof this.frameIndex !== 'number' || this.frameIndex < HOLD_START || this.frameIndex > HOLD_END) {
+              this.frameIndex = HOLD_START;
+              this.frameTimer = 0;
+            }
+            // Evitar que el resto del update reemplace el estado
+            Anim.updateAnimation(this);
+            if (this.state) this.state.timer = (this.state.timer || 0) + 1;
+            return;
+          }
+        }
+      }
+    } catch (e) {}
     Buffer.unlockInputsIfNeeded(this);
     Buffer.resetCombosIfExpired(this);
 
