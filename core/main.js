@@ -544,7 +544,7 @@ function draw() {
           if (!p._hitTargets) p._hitTargets = new Set();
 
           // SPECIAL: bun behavior (typeId 5) -> if hits and NOT blocked, attract opponent and start return
-          if (p.typeId === 5) {
+          if (p.typeId === 5 && (typeof p.hook === 'undefined' || p.hook)) {
             if (!p._hitTargets.has(player1.id)) {
               const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
               const attackerInFront = owner ? ((owner.x > player1.x && player1.facing === 1) || (owner.x < player1.x && player1.facing === -1)) : false;
@@ -662,7 +662,7 @@ function draw() {
         if (p.hits(player2) && p.ownerId !== player2.id) {
           if (!p._hitTargets) p._hitTargets = new Set();
 
-          if (p.typeId === 5) {
+          if (p.typeId === 5 && (typeof p.hook === 'undefined' || p.hook)) {
             if (!p._hitTargets.has(player2.id)) {
               const owner = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
               const attackerInFront = owner ? ((owner.x > player2.x && player2.facing === 1) || (owner.x < player2.x && player2.facing === -1)) : false;

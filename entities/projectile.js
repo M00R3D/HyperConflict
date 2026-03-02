@@ -49,6 +49,10 @@ class Projectile {
     this.w = 16;
     this.h = 16;
     this.frameDelay = 6;
+    // bun/hook defaults
+    this.hook = true;
+    this.maxRange = 320;
+    this.spriteScale = 1;
 
     // lifetime / age (ms)
     this.age = 0;
@@ -179,6 +183,35 @@ class Projectile {
     this.speed = opts.speed ?? this.speed;
     this.frameDelay = opts.frameDelay ?? this.frameDelay;
 
+    // Apply common configurable fields from opts (merged presets) so callers
+    // can declare behavior in PROJECTILE_TYPES or via spawn opts.
+    const _opt = opts || {};
+    const _tryNum = (v) => { const n = Number(v); return (!Number.isNaN(n)) ? n : null; };
+    const g = _tryNum(_opt.gravity); if (g !== null) this.gravity = g;
+    const d = _tryNum(_opt.duration); if (d !== null) { this.duration = d; this.lifespan = d; }
+    const ls = _tryNum(_opt.lifespan); if (ls !== null) this.lifespan = ls;
+    const mr = _tryNum(_opt.maxRange); if (mr !== null) this.maxRange = mr;
+    const ss = _tryNum(_opt.spriteScale); if (ss !== null) this.spriteScale = ss;
+    const us = _tryNum(_opt.upSpeed); if (us !== null) this.upSpeed = us;
+    const ts = _tryNum(_opt.targetScale); if (ts !== null) this.targetScale = ts;
+    const sd = _tryNum(_opt.spawnDelay); if (sd !== null) this.spawnDelay = sd;
+    if (typeof _opt.persistent === 'boolean') this.persistent = _opt.persistent;
+    // hook (bool) — e.g. bun/hook behaviour
+    if (typeof _opt.hook === 'boolean') this.hook = _opt.hook;
+
+    // string options: allow nesting under `stringOptions` or top-level keys for compatibility
+    const so = (_opt.stringOptions && typeof _opt.stringOptions === 'object') ? _opt.stringOptions : _opt;
+    const sW = _tryNum(so.stringW); if (sW !== null) this.stringW = sW;
+    const sH = _tryNum(so.stringH); if (sH !== null) this.stringH = sH;
+    const sFD = _tryNum(so.stringFrameDelay); if (sFD !== null) this.stringFrameDelay = sFD;
+
+    // hitbox id override (useful to change the hitbox shape used by this projectile)
+    if (typeof _opt.hitboxId !== 'undefined' && _opt.hitboxId !== null) this._hitboxId = _opt.hitboxId;
+
+    // owner anchor offsets
+    if (typeof _opt.offsetX === 'number') this.ownerOffsetX = _opt.offsetX;
+    if (typeof _opt.offsetY === 'number') this.ownerOffsetY = _opt.offsetY;
+
     // expose attack/damage metadata from opts so main collision logic can apply damage
     this.attackType = (opts && typeof opts.attackType === 'string') ? opts.attackType : ((opts && opts.name && typeof opts.name === 'string') ? opts.name : null);
     this.damageQuarters = (opts && typeof opts.damageQuarters === 'number') ? opts.damageQuarters : ((opts && typeof opts.damage === 'number') ? opts.damage : null);
@@ -194,6 +227,59 @@ class Projectile {
     this._hitTargets = new Set();
 
     // animación
+    // Ensure some numeric fields are concrete numbers and keep legacy behavior compatible
+    const _num = (v, fallback) => (typeof v === 'number' && !Number.isNaN(v)) ? Number(v) : fallback;
+
+    // map duration -> lifespan (legacy code checks `lifespan`) and prefer explicit lifespan
+    if (typeof _opt.duration === 'number') {
+      this.duration = Number(_opt.duration);
+      this.lifespan = Number(_opt.duration);
+    }
+    if (typeof _opt.lifespan === 'number') this.lifespan = Number(_opt.lifespan);
+
+    // numeric enforced overrides
+    if (typeof _opt.maxRange === 'number') this.maxRange = Number(_opt.maxRange);
+    if (typeof _opt.spriteScale === 'number') this.spriteScale = Number(_opt.spriteScale);
+
+    // ensure w/h/speed are numeric (some callers may pass strings)
+    this.w = _num(this.w, 0);
+    this.h = _num(this.h, 0);
+    this.speed = _num(this.speed, 0);
+
+    // If caller passed w/h explicitly but didn't provide a hitbox object, create a hitbox override
+    if (!this._hitboxOverride && ((opts && typeof opts.w !== 'undefined') || (opts && typeof opts.h !== 'undefined'))) {
+      const def = PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
+      this._hitboxOverride = {
+        offsetX: (typeof def.offsetX === 'number') ? def.offsetX : 0,
+        offsetY: (typeof def.offsetY === 'number') ? def.offsetY : 0,
+        w: this.w,
+        h: this.h
+      };
+    }
+
+    // optional lightweight debug when enabled globally
+    if (typeof window !== 'undefined' && window.DEBUG_PROJECTILES) {
+      try { console.log('[Projectile ctor]', { typeId: this.typeId, w: this.w, h: this.h, speed: this.speed, duration: this.duration, lifespan: this.lifespan, maxRange: this.maxRange, spriteScale: this.spriteScale }); } catch (e) {}
+    }
+
+    // extra debug for bun specifically (unconditional logging helpful while debugging)
+    if (this.typeId === 5) {
+      try {
+        console.log('[Projectile ctor BUN]', {
+          opts: opts,
+          merged_w: this.w,
+          merged_h: this.h,
+          speed: this.speed,
+          gravity: this.gravity,
+          duration: this.duration,
+          lifespan: this.lifespan,
+          maxRange: this.maxRange,
+          spriteScale: this.spriteScale,
+          hitboxOverride: this._hitboxOverride
+        });
+      } catch (e) {}
+    }
+
     this.frameIndex = 0;
     this._frameTimer = 0;
     this._finishedAnimation = false;
@@ -325,6 +411,11 @@ class Projectile {
                 this.dir = -this.dir;
               }
             }
+            // apply vertical physics if configured
+            if (typeof this.gravity === 'number' && this.gravity !== 0) {
+              this.vy = (this.vy || 0) + (this.gravity) * (dt / 16);
+              this.y += this.vy * (dt / 16);
+            }
         } else {
           // regreso hacia ownerRef si existe
           if (this._ownerRef && !this._ownerRef.toRemove) {
@@ -338,6 +429,11 @@ class Projectile {
           } else {
             // fallback: mover por dir como antes y eliminar si offscreen
             this.x += moveAmount * this.dir;
+          }
+          // apply vertical physics during return as well
+          if (typeof this.gravity === 'number' && this.gravity !== 0) {
+            this.vy = (this.vy || 0) + (this.gravity) * (dt / 16);
+            this.y += this.vy * (dt / 16);
           }
         }
 
@@ -643,14 +739,14 @@ const PROJECTILE_TYPES = {
     name: 'bun',
     // hook-like projectile: goes out then returns to owner
     hook: true,
-    speed: 18,
+    speed: 10,
     gravity: 0.0,
     w: 7,
     h: 4,
-    duration: 2000,
-    maxRange: 320,
-    spriteScale: 1,
-    stringOptions: { stringW: 6, stringH: 8, stringFrameDelay: 6 },
+    duration: 12000,
+    maxRange: 120,
+    spriteScale: 1.5,
+    stringOptions: { stringW: 4, stringH: 2, stringFrameDelay: 6 },
     framesKey: 'bun',
     hitboxId: 5
   },
@@ -659,7 +755,7 @@ const PROJECTILE_TYPES = {
     name: 'staple',
     // fast bullet-like projectile
     linear: true,
-    speed: 14,
+    speed: 1,
     gravity: 0,
     w: 18,
     h: 6,

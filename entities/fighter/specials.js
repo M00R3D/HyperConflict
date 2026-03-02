@@ -224,19 +224,15 @@ export function doSpecial(self, moveName) {
     const defaultOffsetX = dir === 1 ? (self.w + 6) : -6;
     const defaultOffsetY = Math.round(self.h / 2 - 6);
 
-    // opts: alcance maximo antes de dar vuelta, velocidad, etc.
+    // opts: keep minimal overrides so PROJECTILE_TYPES defaults win.
+    // We only pass persistence and spawn offsets here; visual/physics
+    // params (speed, size, lifespan, spriteScale, etc.) should come
+    // from the central `PROJECTILE_TYPES` preset unless explicitly
+    // required to change per-call.
     const opts = {
-      speed: 8,
-      maxRange: 380,
       persistent: false,
-      w: 18, h: 6,
-      frameDelay: 6,
-      spriteScale: 1.0,
-      stringW: 6,
-      stringH: 2,
-      stringFrameDelay: 6,
-      offsetX: defaultOffsetX +(-14*self.facing),
-      offsetY: defaultOffsetY+6
+      offsetX: defaultOffsetX + (-14 * self.facing),
+      offsetY: defaultOffsetY + 6
     };
 
     const px = Math.round(self.x + (opts.offsetX || 0));
