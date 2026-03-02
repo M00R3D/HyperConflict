@@ -1,7 +1,7 @@
 // entities/fighter/attacks.js
 import * as Anim from './animation.js';
 import { getKnockbackForAttack } from '../../core/knockback.js';
-import { Projectile } from '../../entities/projectile.js';
+import { Projectile, spawnProjectileFromType } from '../../entities/projectile.js';
 import { state } from '../../core/state.js';
 import { keysDown } from '../../core/input.js';
 export function attack(self, key) {
@@ -98,7 +98,7 @@ export function attack(self, key) {
       // Staple should NOT behave like the bun (no attraction/return).
       // Use a non-bun typeId (0 = default) but draw at bun-sized dimensions.
       // use a dedicated typeId 6 for the staple so its hitbox can be configured centrally
-      const p = new Projectile(sx, sy, dir, 6, self.id, {}, { speed: 14, w: 18, h: 6, frameDelay: 4, spriteScale: 1, duration: 2000 }, (self.stapleFramesByLayer || null));
+      const p = spawnProjectileFromType(6, sx, sy, dir, self.id, {}, { speed: 14, w: 18, h: 6, frameDelay: 4, spriteScale: 1, duration: 2000 }, (self.stapleFramesByLayer || null));
       p.attackType = 'stapler';
       p.damageQuarters = 1;
       p.ownerRef = self;
@@ -224,7 +224,7 @@ export function shoot(self) {
   const dir = self.keys.right ? 1 : (self.keys.left ? -1 : (self.id === 'p1' ? 1 : -1));
   const sx = Math.round(self.x + self.w / 2);
   const sy = Math.round(self.y + self.h / 2);
-  const p = new Projectile(sx, sy, dir, 0, self.id, {}, { speed: 8, w: 16, h: 16 }, (self.projectileFramesByLayer || null));
+  const p = spawnProjectileFromType(0, sx, sy, dir, self.id, {}, { speed: 8, w: 16, h: 16 }, (self.projectileFramesByLayer || null));
   const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
   if (projArr && Array.isArray(projArr)) projArr.push(p);
 }

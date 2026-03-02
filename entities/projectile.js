@@ -1,5 +1,41 @@
 // entities/projectile.js
 
+import { loadPiskel } from '../core/loader.js';
+
+// Map from short framesKey -> .piskel path. Call `registerProjectileFrameKey`
+// to override or add entries at runtime. Loader caches promises.
+const FRAMEKEY_MAP = {
+  projectile: 'src/tyeman/tyeman_projectile.piskel',
+  fireball: 'src/tyeman/tyeman_projectile.piskel',
+  shuriken: 'src/sbluer/sbluer_projectile.piskel',
+  tats: 'src/tyeman/tyeman_tats_proj.piskel',
+  bun: 'src/tyeman/tyeman_bun.piskel',
+  staple: 'src/tyeman/tyeman_staple.piskel'
+};
+
+const _frameKeyPromises = Object.create(null);
+
+export function registerProjectileFrameKey(key, piskelPath) {
+  if (!key || typeof key !== 'string') return;
+  FRAMEKEY_MAP[key] = piskelPath;
+  // clear cache so next load will re-read
+  if (_frameKeyPromises[key]) delete _frameKeyPromises[key];
+}
+
+export async function loadProjectileFramesKey(key) {
+  if (!key || typeof key !== 'string') return null;
+  if (_frameKeyPromises[key]) return _frameKeyPromises[key];
+  const path = FRAMEKEY_MAP[key];
+  if (!path) return null;
+  const p = loadPiskel(path).catch((err) => {
+    console.warn('[loadProjectileFramesKey] failed to load', key, path, err);
+    return null;
+  });
+  // cache the promise
+  _frameKeyPromises[key] = p;
+  return p;
+}
+
 class Projectile {
   constructor(x, y, dir, typeId = 0, ownerId = null, resources = {}, opts = {}, framesByLayer = null) {
     this.x = x;
@@ -14,52 +50,76 @@ class Projectile {
     this.h = 16;
     this.frameDelay = 6;
 
+    // lifetime / age (ms)
+    this.age = 0;
+    this.lifespan = (typeof opts?.lifespan === 'number') ? opts.lifespan : ((typeof opts?.duration === 'number') ? opts.duration : null);
+
     // resources may include string frames for bun
     this._resources = resources || {};
     this.stringFramesByLayer = this._resources.string || null;
 
     // Si framesByLayer es Promise
     this._framesPromise = null;
+    this._loadingFrames = false;
     if (framesByLayer && typeof framesByLayer.then === 'function') {
       this._framesPromise = framesByLayer;
-      this.framesByLayer = [];
-      this._framesPromise.then(res => { this.framesByLayer = res; })
-                         .catch(err => { console.error('Error framesByLayer:', err); });
+      this._loadingFrames = true;
+      this.framesByLayer = null;
+      this._framesPromise.then(res => { this.framesByLayer = res; this._loadingFrames = false; })
+                         .catch(err => { console.error('Error framesByLayer:', err); this._loadingFrames = false; });
     } else {
       this.framesByLayer = framesByLayer ?? null;
+    }
+
+    // If frames not provided and we don't already have an async frames Promise,
+    // allow framesKey in opts/preset to resolve frames from provided resources
+    if (!this.framesByLayer && !this._framesPromise && opts && typeof opts.framesKey === 'string') {
+      const fk = opts.framesKey;
+      // prefer explicit resources first
+      let candidate = (resources && resources[fk]) || null;
+      // fallback to common global asset holders if available on window
+      if (!candidate && typeof window !== 'undefined') {
+        candidate = (window._tyemanAssets && window._tyemanAssets[fk]) || (window._sbluerAssets && window._sbluerAssets[fk]) || (window._fernandoAssets && window._fernandoAssets[fk]) || null;
+      }
+      if (candidate) { this.framesByLayer = candidate; this._loadingFrames = false; }
     }
 
     // Config por ID
     switch (this.typeId) {
       case 1: // parabólico hadouken
-        this.framesByLayer = this.framesByLayer ?? resources.projectile ?? null;
+        // prefer an explicit framesKey from opts (merged from presets), fallback to resources.projectile
+        const _fk = (opts && (opts.framesKey || opts.framesKey === null)) ? opts.framesKey : 'projectile';
+        if (!this._framesPromise) this.framesByLayer = this.framesByLayer ?? ((resources && resources[_fk]) || resources.projectile) ?? null;
+        // allow preset to override which hitbox id to use for this projectile
+        this._hitboxId = (typeof opts.hitboxId !== 'undefined' && opts.hitboxId !== null) ? opts.hitboxId : this.typeId;
         this.x = this.x-33;
         this.y = this.y+10;
         this.w = 48;
         this.h = 32;
-        this.speed = 3;
-        this.vy = -5;      // impulso inicial hacia arriba
-        this.gravity = 0.3; // gravedad
-        this.rotation = 0;  // ángulo de rotación
-        this.rotationSpeed = 15; // grados por frame
+        // allow presets / opts to control these values
+        this.speed = (typeof opts.speed === 'number') ? opts.speed : 3;
+        this.vy = (typeof opts.initVy === 'number') ? opts.initVy : ((typeof opts.vy === 'number') ? opts.vy : -5);
+        this.gravity = (typeof opts.gravity === 'number') ? opts.gravity : 0.3;
+        this.rotation = (typeof opts.rotation === 'number') ? opts.rotation : 0;
+        this.rotationSpeed = (typeof opts.rotationSpeed === 'number') ? opts.rotationSpeed : 15; // grados por frame
         break;
 
       case 2: // fireball
-        this.framesByLayer = this.framesByLayer ?? resources.fireball ?? null;
+        if (!this._framesPromise) this.framesByLayer = this.framesByLayer ?? resources.fireball ?? null;
         this.w = 32;
         this.h = 32;
         this.speed = 10;
         break;
 
       case 3: // shuriken
-        this.framesByLayer = this.framesByLayer ?? resources.shuriken ?? null;
+        if (!this._framesPromise) this.framesByLayer = this.framesByLayer ?? resources.shuriken ?? null;
         this.w = 24;
         this.h = 24;
         this.speed = 12;
         break;
 
       case 4: // "tats" special: crece hacia arriba y se desvanece (no se desplaza horizontal fuerte)
-        this.framesByLayer = this.framesByLayer ?? resources.tats ?? framesByLayer ?? null;
+        if (!this._framesPromise) this.framesByLayer = this.framesByLayer ?? resources.tats ?? framesByLayer ?? null;
         this.w = opts.w ?? 20;
         this.h = opts.h ?? 28;
         this.duration = opts.duration ?? 1200; // ms (más largo por defecto)
@@ -78,7 +138,7 @@ class Projectile {
         break;
 
       case 5: // BUN: va hacia fuera, al chocar o alcanzar rango regresa al owner; tiene string
-        this.framesByLayer = this.framesByLayer ?? this._resources.bun ?? this.framesByLayer ?? null;
+        if (!this._framesPromise) this.framesByLayer = this.framesByLayer ?? this._resources.bun ?? this.framesByLayer ?? null;
         // logical bun size (collision/position)
         this.w = opts.w ?? 7;
         this.h = opts.h ?? 4;
@@ -119,6 +179,12 @@ class Projectile {
     this.speed = opts.speed ?? this.speed;
     this.frameDelay = opts.frameDelay ?? this.frameDelay;
 
+    // expose attack/damage metadata from opts so main collision logic can apply damage
+    this.attackType = (opts && typeof opts.attackType === 'string') ? opts.attackType : ((opts && opts.name && typeof opts.name === 'string') ? opts.name : null);
+    this.damageQuarters = (opts && typeof opts.damageQuarters === 'number') ? opts.damageQuarters : ((opts && typeof opts.damage === 'number') ? opts.damage : null);
+    // optionally carry charId for knockback/lookup tables
+    this.charId = opts && opts.charId ? opts.charId : (this.charId || null);
+
     // allow per-projectile hitbox override via opts.hitbox = { offsetX, offsetY, w, h }
     this._hitboxOverride = (opts && typeof opts.hitbox === 'object') ? Object.assign({}, opts.hitbox) : null;
 
@@ -144,6 +210,11 @@ class Projectile {
     const now = millis();
     const dt = Math.max(0, (this._lastUpdate ? (now - this._lastUpdate) : 16));
     this._lastUpdate = now;
+
+    // advance age only when visible (respect spawnDelay semantics)
+    if (this._visible !== false) {
+      this.age = (this.age || 0) + dt;
+    }
 
     // repelled behaviour: spin and fall to ground
     if (this._repelled) {
@@ -303,6 +374,10 @@ class Projectile {
         }
       }
     }
+    // lifespan-based removal (unless persistent)
+    if (this.lifespan && (this.age >= this.lifespan) && !this.persistent) {
+      this.toRemove = true;
+    }
   }
 
   display() {
@@ -417,6 +492,9 @@ class Projectile {
         );
       }
       pop();
+    } else if (this._loadingFrames) {
+      // frames are loading asynchronously: draw nothing (avoid default placeholder)
+      return;
     } else {
       // fallback círculo
       push();
@@ -428,7 +506,8 @@ class Projectile {
   }
 
   getHitbox() {
-    const def = this._hitboxOverride || PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
+    const hitboxIdToUse = (typeof this._hitboxId !== 'undefined' && this._hitboxId !== null) ? this._hitboxId : this.typeId;
+    const def = this._hitboxOverride || PROJECTILE_HITBOXES[hitboxIdToUse] || PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
     return {
       x: this.x + (def.offsetX || 0),
       y: this.y + (def.offsetY || 0),
@@ -493,5 +572,172 @@ export function registerProjectileHitboxes(map = {}) {
     PROJECTILE_HITBOXES[k] = Object.assign({}, PROJECTILE_HITBOXES[k] || {}, map[k]);
   }
 }
+
+// --- NEW: easy-to-use projectile type registry ---
+// Central place to register reusable projectile parameter presets. Each preset
+// should include both visual/size defaults and behavior flags so the factory
+// can produce coherent projectiles without scattering hardcoded values.
+const PROJECTILE_TYPES = {
+  1: {
+    id: 1,
+    name: 'hadouken',
+    // behavior: parabolic projectile
+    parabolic: true,
+    speed: 3,
+    initVy: -5,
+    gravity: 0.2,
+    rotationSpeed: 25,
+    w: 48,
+    h: 32,
+    frameDelay: 6,
+    framesKey: 'projectile',
+    hitboxId: 1,
+    damageQuarters: 10,
+    lifespan: 930
+  },
+  2: {
+    id: 2,
+    name: 'fireball',
+    // straight linear projectile
+    linear: true,
+    speed: 10,
+    gravity: 0,
+    w: 32,
+    h: 32,
+    frameDelay: 6,
+    framesKey: 'fireball',
+    hitboxId: 2,
+    lifespan: 5000
+  },
+  3: {
+    id: 3,
+    name: 'shuriken',
+    linear: true,
+    speed: 12,
+    gravity: 0,
+    w: 24,
+    h: 24,
+    frameDelay: 4,
+    framesKey: 'shuriken',
+    hitboxId: 3,
+    lifespan: 3000
+  },
+  4: {
+    id: 4,
+    name: 'tats',
+    // barrier that grows upward then disappears
+    upward: true,
+    speed: 0,
+    gravity: 0,
+    w: 20,
+    h: 28,
+    duration: 1200,
+    upSpeed: 20.9,
+    targetScale: 2.4,
+    spawnDelay: 0,
+    framesKey: 'tats',
+    hitboxId: 4
+  },
+  5: {
+    id: 5,
+    name: 'bun',
+    // hook-like projectile: goes out then returns to owner
+    hook: true,
+    speed: 18,
+    gravity: 0.0,
+    w: 7,
+    h: 4,
+    duration: 2000,
+    maxRange: 320,
+    spriteScale: 1,
+    stringOptions: { stringW: 6, stringH: 8, stringFrameDelay: 6 },
+    framesKey: 'bun',
+    hitboxId: 5
+  },
+  6: {
+    id: 6,
+    name: 'staple',
+    // fast bullet-like projectile
+    linear: true,
+    speed: 14,
+    gravity: 0,
+    w: 18,
+    h: 6,
+    frameDelay: 4,
+    framesKey: 'staple',
+    hitboxId: 6,
+    lifespan: 4000
+  },
+  default: {
+    id: 'default',
+    name: 'default',
+    speed: 6,
+    gravity: 0,
+    w: 16,
+    h: 16,
+    frameDelay: 6,
+    framesKey: null,
+    hitboxId: 'default',
+    lifespan: 5000
+  }
+};
+
+export function registerProjectileType(id, def = {}) {
+  if (typeof id === 'undefined' || id === null) return;
+  PROJECTILE_TYPES[id] = Object.assign({}, PROJECTILE_TYPES[id] || {}, def);
+}
+
+function _findTypeId(typeIdOrName) {
+  if (typeof typeIdOrName === 'number') return typeIdOrName;
+  if (typeof typeIdOrName === 'string') {
+    // try numeric string first
+    const asNum = Number(typeIdOrName);
+    if (!Number.isNaN(asNum) && PROJECTILE_TYPES[asNum]) return asNum;
+    // search by name
+    for (const k in PROJECTILE_TYPES) {
+      if (!Object.prototype.hasOwnProperty.call(PROJECTILE_TYPES, k)) continue;
+      const v = PROJECTILE_TYPES[k];
+      if (v && v.name === typeIdOrName) return v.id || (Number(k) || k);
+    }
+  }
+  return null;
+}
+
+export function getProjectileType(idOrName) {
+  if (typeof idOrName === 'undefined' || idOrName === null) return Object.assign({}, PROJECTILE_TYPES.default);
+  const id = _findTypeId(idOrName) ?? idOrName;
+  const v = PROJECTILE_TYPES[id] || PROJECTILE_TYPES[String(id)] || PROJECTILE_TYPES.default;
+  return Object.assign({}, v);
+}
+
+// Convenience factory: create a Projectile using a registered type (id or name)
+export function spawnProjectileFromType(typeIdOrName, x, y, dir, ownerId = null, resources = {}, opts = {}, framesByLayer = null) {
+  const typeId = _findTypeId(typeIdOrName) || typeIdOrName;
+  const type = getProjectileType(typeId);
+  // merge type defaults with opts (opts wins)
+  const mergedOpts = Object.assign({}, type, opts);
+  // pass numeric id to constructor when possible to preserve existing per-type switch behaviour
+  const numericTypeId = (typeof typeId === 'number') ? typeId : (type.id || type.name || 0);
+  // Resolve frames source for the projectile. Priority rules:
+  // 1) If mergedOpts.framesKey maps to a registered FRAMEKEY_MAP entry, use that (overrides character assets)
+  // 2) Otherwise, prefer explicit framesByLayer argument
+  // 3) Otherwise, try resources[framesKey]
+  // 4) Fallback: null
+  let fb = null;
+  const fk = (mergedOpts && typeof mergedOpts.framesKey === 'string') ? mergedOpts.framesKey : null;
+  if (fk && FRAMEKEY_MAP[fk]) {
+    // explicit mapping exists: load that piskel (returns Promise)
+    try { fb = loadProjectileFramesKey(fk); } catch (e) { fb = null; }
+  }
+  // if no explicit mapping chosen, prefer provided framesByLayer (call-site assets)
+  if (!fb) fb = framesByLayer || null;
+  // if still no frames and a framesKey exists, try resources lookup
+  if (!fb && fk) fb = (resources && resources[fk]) || null;
+
+  const p = new Projectile(x, y, dir, numericTypeId, ownerId, resources, mergedOpts, fb);
+  return p;
+}
+
+export { PROJECTILE_TYPES };
 
 export { Projectile, PROJECTILE_HITBOXES };

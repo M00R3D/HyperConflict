@@ -1,5 +1,5 @@
 // entities/fighter/specials.js
-import { Projectile } from '../../entities/projectile.js';
+import { Projectile, spawnProjectileFromType } from '../../entities/projectile.js';
 import { projectiles } from '../../core/main.js';
 import * as Hitbox from './hitbox.js';
 import * as Buffer from './buffer.js';
@@ -112,7 +112,7 @@ export function doSpecial(self, moveName) {
     const dir = self.facing === 1 ? 1 : -1;
     const px = Math.round(self.x + (dir === 1 ? self.w + 4 : -4));
     const py = Math.round(self.y + self.h / 2 - 6);
-    const p = new Projectile(px, py, dir, 1, self.id, self.id, {}, self.projectileFramesByLayer);
+    const p = spawnProjectileFromType(1, px, py, dir, self.id, {}, {}, self.projectileFramesByLayer);
     projectiles.push(p);
   } else if (moveName === 'shoryuken') {
     self.setState('punch3'); self.attackType = 'punch3'; self.attacking = true;
@@ -186,7 +186,7 @@ export function doSpecial(self, moveName) {
       const py = Math.round(self.y + self.h / 2 - 6);
       const opts = Object.assign({}, baseOpts, { spawnDelay: k * gap });
       const tatsProj = (self.tatsProjFramesByLayer && self.tatsProjFramesByLayer.length) ? self.tatsProjFramesByLayer : null;
-      const p = new Projectile(px, py, dir, 4, self.id, {}, opts, tatsProj);
+      const p = spawnProjectileFromType(4, px, py, dir, self.id, {}, opts, tatsProj);
       p._barrierIndex = k;
       projectiles.push(p);
     }
@@ -244,7 +244,7 @@ export function doSpecial(self, moveName) {
 
     const bunFrames = (self.bunProjFramesByLayer && self.bunProjFramesByLayer.length) ? self.bunProjFramesByLayer : null;
     const stringFrames = (self.bunStringFramesByLayer && self.bunStringFramesByLayer.length) ? self.bunStringFramesByLayer : null;
-    const p = new Projectile(px, py, dir, 5, self.id, { string: stringFrames }, opts, bunFrames);
+    const p = spawnProjectileFromType(5, px, py, dir, self.id, { string: stringFrames }, opts, bunFrames);
     p._ownerRef = self;
     projectiles.push(p);
     return;
