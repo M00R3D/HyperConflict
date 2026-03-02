@@ -98,7 +98,9 @@ export function attack(self, key) {
       // Staple should NOT behave like the bun (no attraction/return).
       // Use a non-bun typeId (0 = default) but draw at bun-sized dimensions.
       // use a dedicated typeId 6 for the staple so its hitbox can be configured centrally
-      const p = spawnProjectileFromType(6, sx, sy, dir, self.id, {}, { speed: 14, w: 18, h: 6, frameDelay: 4, spriteScale: 1, duration: 2000 }, (self.stapleFramesByLayer || null));
+      // Don't pass visual/physics defaults here — use central PROJECTILE_TYPES[6].
+      // Keep resources empty and rely on preset; pass frames if available.
+      const p = spawnProjectileFromType(6, sx, sy, dir, self.id, {}, {}, (self.stapleFramesByLayer || null));
       p.attackType = 'stapler';
       p.damageQuarters = 1;
       p.ownerRef = self;

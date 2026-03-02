@@ -755,7 +755,7 @@ const PROJECTILE_TYPES = {
     name: 'staple',
     // fast bullet-like projectile
     linear: true,
-    speed: 1,
+    speed: 24,
     gravity: 0,
     w: 18,
     h: 6,
