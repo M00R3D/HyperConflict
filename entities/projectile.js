@@ -674,7 +674,7 @@ export function registerProjectileHitboxes(map = {}) {
 // should include both visual/size defaults and behavior flags so the factory
 // can produce coherent projectiles without scattering hardcoded values.
 const PROJECTILE_TYPES = {
-  1: {
+  1: {//TESTEADO
     id: 1,
     name: 'hadouken',
     // behavior: parabolic projectile
@@ -732,7 +732,7 @@ const PROJECTILE_TYPES = {
     targetScale: 2.4,
     spawnDelay: 0,
     framesKey: 'tats',
-    hitboxId: 4
+    hitboxId: 4,
   },
   5: {
     id: 5,
@@ -750,7 +750,7 @@ const PROJECTILE_TYPES = {
     framesKey: 'bun',
     hitboxId: 5
   },
-  6: {
+  6: {//TESTEADO
     id: 6,
     name: 'staple',
     // fast bullet-like projectile
@@ -762,7 +762,8 @@ const PROJECTILE_TYPES = {
     frameDelay: 4,
     framesKey: 'staple',
     hitboxId: 6,
-    lifespan: 4000
+    lifespan: 4000,
+    damageQuarters: 2
   },
   default: {
     id: 'default',

@@ -110,7 +110,8 @@ export function attack(self, key) {
       // Keep resources empty and rely on preset; pass frames if available.
       const p = spawnProjectileFromType(6, sx, sy, dir, self.id, {}, {}, (self.stapleFramesByLayer || null));
       p.attackType = 'stapler';
-      p.damageQuarters = 1;
+      // Respect any damageQuarters coming from the projectile type/preset; default to 1 if absent
+      p.damageQuarters = (typeof p.damageQuarters === 'number') ? p.damageQuarters : 1;
       p.ownerRef = self;
       p._ownerRef = self;
       p.ownerId = self.id;
