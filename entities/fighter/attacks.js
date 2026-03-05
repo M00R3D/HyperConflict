@@ -47,9 +47,17 @@ export function attack(self, key) {
   if (self.attacking) {
     try {
       const currentAtk = (self.attackType || '').toString();
-      const idx = (currentAtk && Array.isArray(chain)) ? chain.indexOf(currentAtk) : -1;
-      const nextIdx = (idx >= 0) ? (idx + 1) : -1;
-      const nextName = (nextIdx >= 0 && chain[nextIdx]) ? chain[nextIdx] : null;
+      // Determine the *expected* next combo index. Prefer the stored
+      // `comboStepByKey` (which is updated at attack start) because
+      // `chain.indexOf()` returns the first matching index and breaks
+      // when the chain contains duplicate attack names.
+      let nextName = null;
+      if (Array.isArray(chain)) {
+        const expectedNextIdx = (typeof self.comboStepByKey[key] === 'number')
+          ? self.comboStepByKey[key]
+          : (currentAtk && chain.indexOf(currentAtk) >= 0 ? chain.indexOf(currentAtk) + 1 : -1);
+        nextName = (expectedNextIdx >= 0 && chain[expectedNextIdx]) ? chain[expectedNextIdx] : null;
+      }
       // allow only when the requested attack matches the next combo element
       if (!(nextName && nextName === attackName)) {
         return;
