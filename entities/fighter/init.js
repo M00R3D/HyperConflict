@@ -146,6 +146,8 @@ export function initFrames(self, frames) {
   self.stapleFramesByLayer = frames.stapleProjFramesByLayer || frames.staple || null;
   self.spitFramesByLayer = frames.spitFramesByLayer || frames.spit || [];
   self.spitProjFramesByLayer = frames.spitProjFramesByLayer || frames.spitProj || [];
+  // thin_laser: overlay animation for Fernando (similar to Tyeman's stapler)
+  self.thinLaserFramesByLayer = frames.thin_laserFramesByLayer || frames.thin_laser || [];
   // --- AGREGAR ESTAS LÍNEAS ---
   // ensure flyback/flyup frames are assigned (prevent falling back to generic 'hit' frames)
   self.flybackFramesByLayer = frames.flybackFramesByLayer || frames.flyback || [];
@@ -249,8 +251,8 @@ export function initComboAndInput(self) {
     b: ['punch', 'punch2','punch', 'punch3'],
     n: ['kick', 'kick2', 'kick3'],
     // p/m (gimmick neutral) mapped to stapler only for Tyeman; other chars have no action here
-    p: self.charId === 'tyeman' ? ['stapler'] : self.charId === 'sbluer' ? ['spit'] : [],
-    m: self.charId === 'tyeman' ? ['stapler'] : self.charId === 'sbluer' ? ['spit'] : []
+    p: self.charId === 'tyeman' ? ['stapler'] : self.charId === 'sbluer' ? ['spit'] : self.charId === 'fernando' ? ['thin_laser'] : [],
+    m: self.charId === 'tyeman' ? ['stapler'] : self.charId === 'sbluer' ? ['spit'] : self.charId === 'fernando' ? ['thin_laser'] : []
   };
 
   self.comboStepByKey = {};

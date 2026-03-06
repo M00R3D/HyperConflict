@@ -157,6 +157,9 @@ async function loadFernandoAssets() {
     crouchpunch: await loadOrNull('src/fernando/fernando_crouch_punch.piskel'),
     crouchkick: await loadOrNull('src/fernando/fernando_crouch_kick.piskel'),
     taunt: await loadOrNull('src/fernando/fernando_taunt.piskel')
+    ,
+    // thin laser overlay animation for Fernando (optional special/state)
+    thin_laser: await loadOrNull('src/fernando/fernando_thin_laser.piskel')
   };
   // arma colgante/overlay (opcional)
   raw.weapon = await loadOrNull('src/fernando/fernando_weapon.piskel');

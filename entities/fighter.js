@@ -44,6 +44,7 @@ class Fighter {
       crouchKickFramesByLayer: assets.crouchkick, // <-- AGREGADO
       staplerFramesByLayer: assets.stapler,
       stapleProjFramesByLayer: assets.staple,
+      thin_laserFramesByLayer: assets.thin_laser,
       spitFramesByLayer: assets.spit,
       spitProjFramesByLayer: assets.spitProj
       
@@ -106,6 +107,8 @@ class Fighter {
       crouchkick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
       crouchKick: { anim: this.crouchKickFramesByLayer, frameDelay: 6, duration: 500 },
       stapler: { anim: this.staplerFramesByLayer, frameDelay: 5, duration: 360 },
+      // Fernando thin laser state (overlay animation)
+      thin_laser: { anim: this.thinLaserFramesByLayer, frameDelay: 5, duration: 360 },
       spit: { anim: this.spitFramesByLayer, frameDelay: 6, duration: 600 } // ataque especial de escupitajo registrado en registerSpecialsForChar con la secuencia G,P
     };
 
