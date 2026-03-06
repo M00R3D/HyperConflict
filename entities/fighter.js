@@ -8,6 +8,8 @@ import * as Hitbox from './fighter/hitbox.js';
 import * as Anim from './fighter/animation.js';
 import * as Display from './fighter/display.js';
 import { keysPressed, keysUp, keysDown } from '../core/input.js';
+import { spawnProjectileFromType, PROJECTILE_TYPES } from './projectile.js';
+import { projectiles } from '../core/main.js';
 
 class Fighter {
   constructor(opts = {}) {
@@ -605,6 +607,52 @@ class Fighter {
               this.frameIndex = HOLD_START;
               this.frameTimer = 0;
             }
+            // Spawn spit projectile periodically while holding the spit key
+            try {
+              const now = millis();
+              const SPIT_INTERVAL_MS = 220; // ms between projectiles
+              this._lastSpitAt = this._lastSpitAt || 0;
+              if ((now - this._lastSpitAt) >= SPIT_INTERVAL_MS) {
+                try {
+                  const dir = (this.facing === -1) ? -1 : 1;
+                  const defaultOffsetX = (dir === 1) ? (this.w + 4) : -4;
+                  const defaultOffsetY = Math.round(this.h / 2 - 6);
+                  const opts = { persistent: false, offsetX: defaultOffsetX, offsetY: defaultOffsetY };
+                  const px = Math.round(this.x + (opts.offsetX || 0));
+                  const py = Math.round(this.y + (opts.offsetY || 0));
+                  const frames = (this.spitProjFramesByLayer && this.spitProjFramesByLayer.length) ? this.spitProjFramesByLayer : null;
+                  // enforce per-fighter limit for spit_proj using the type's maxRange field
+                  try {
+                    const typeDef = (PROJECTILE_TYPES && PROJECTILE_TYPES[7]) ? PROJECTILE_TYPES[7] : null;
+                    const maxPerFighter = (typeDef && typeof typeDef.maxRange === 'number') ? Math.max(0, Math.floor(typeDef.maxRange)) : 3;
+                    // count existing spit_proj owned by this fighter accounting for stacked/merged projectiles
+                    let existing = 0;
+                    if (Array.isArray(projectiles)) {
+                      for (const pr of projectiles) {
+                        try {
+                          if (!pr || pr.typeId !== 7 || pr.ownerId !== this.id || pr._animatingRemoval) continue;
+                          existing += (typeof pr._stackCount === 'number') ? pr._stackCount : 1;
+                        } catch (e) {}
+                      }
+                    }
+                    if (existing < maxPerFighter) {
+                      const p = spawnProjectileFromType(7, px, py, dir, this.id, {}, opts, frames);
+                      p._ownerRef = this;
+                      p.ownerId = this.id;
+                      p.charId = this.charId;
+                      // setup spawn-grow animation for spit proj
+                      if (p && typeof p === 'object') {
+                        p._scale = 0.0;
+                        p._scaleTarget = 1.0;
+                        p._scaleAnimSpeed = (typeof p._scaleAnimSpeed === 'number') ? p._scaleAnimSpeed : 0.12;
+                      }
+                      if (Array.isArray(projectiles)) projectiles.push(p);
+                    }
+                  } catch (err) { /* ignore spawn limit errors */ }
+                  this._lastSpitAt = now;
+                } catch (err) { /* ignore spawn errors */ }
+              }
+            } catch (err) {}
             // Evitar que el resto del update reemplace el estado
             Anim.updateAnimation(this);
             if (this.state) this.state.timer = (this.state.timer || 0) + 1;

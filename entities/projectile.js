@@ -10,7 +10,8 @@ const FRAMEKEY_MAP = {
   shuriken: 'src/sbluer/sbluer_projectile.piskel',
   tats: 'src/tyeman/tyeman_tats_proj.piskel',
   bun: 'src/tyeman/tyeman_bun.piskel',
-  staple: 'src/tyeman/tyeman_staple.piskel'
+  staple: 'src/tyeman/tyeman_staple.piskel',
+  spit_proj: 'src/sbluer/sbluer_spit_proj.piskel'
 };
 
 const _frameKeyPromises = Object.create(null);
@@ -61,7 +62,7 @@ class Projectile {
     // resources may include string frames for bun
     this._resources = resources || {};
     this.stringFramesByLayer = this._resources.string || null;
-
+    this.lifespan = (typeof opts?.lifespan === 'number') ? opts.lifespan : ((typeof opts?.duration === 'number') ? opts.duration : null);
     // Si framesByLayer es Promise
     this._framesPromise = null;
     this._loadingFrames = false;
@@ -85,7 +86,7 @@ class Projectile {
       if (!candidate && typeof window !== 'undefined') {
         candidate = (window._tyemanAssets && window._tyemanAssets[fk]) || (window._sbluerAssets && window._sbluerAssets[fk]) || (window._fernandoAssets && window._fernandoAssets[fk]) || null;
       }
-      if (candidate) { this.framesByLayer = candidate; this._loadingFrames = false; }
+      if (candidate) this.framesByLayer = candidate;
     }
 
     // Config por ID
@@ -170,6 +171,57 @@ class Projectile {
         this.ownerOffsetY = (typeof opts.offsetY === 'number') ? opts.offsetY : null;
         break;
 
+      case 7: // SPIT_PROJ: small parabolic spit that lands at fighter-feet level then rolls
+        if (!this._framesPromise) this.framesByLayer = this.framesByLayer ?? resources.spit_proj ?? null;
+        this.w = opts.w ?? 6;
+        this.h = opts.h ?? 6;
+        this.speed = (typeof opts.speed === 'number') ? opts.speed : 4;
+        this.vy = (typeof opts.initVy === 'number') ? opts.initVy : -3;
+        this.gravity = (typeof opts.gravity === 'number') ? opts.gravity : 0.15;
+        this.rotationSpeed = (typeof opts.rotationSpeed === 'number') ? opts.rotationSpeed : 15;
+        this.lifespan = (typeof opts.lifespan === 'number') ? opts.lifespan : 10000;
+        this._rollSpeed = (typeof opts.rollSpeed === 'number') ? opts.rollSpeed : 1.6;
+        this._rolling = false;
+        // align spit ground to fighter feet level (fighters use y = height - 72, feet = +h)
+        this._spitGroundY = (typeof height === 'number') ? (height - 72 + 32) : null;
+        // visual scale animation (grow on spawn, shrink on removal)
+        this._scale = (typeof opts._scale === 'number') ? opts._scale : 1.0;
+        this._scaleTarget = 1.0;
+        this._scaleAnimSpeed = (typeof opts.scaleAnimSpeed === 'number') ? opts.scaleAnimSpeed : 0.12;
+        this._animatingRemoval = false;
+        this._readyToRemove = false;
+        // floor brake: deceleration applied while rolling (units per 16ms frame)
+        this._floorBrake = (typeof opts.floorBrake === 'number') ? opts.floorBrake : ((typeof opts.floorBrake === 'number') ? opts.floorBrake : 0.03);
+        // per-instance hitbox scaling and touch state (default: no touch)
+        this._hitboxScale = 1;
+        this._touched = false;
+        // how many original spit projectiles this instance represents (fusion count)
+        this._stackCount = 1;
+        // touch behaviour parameters (can be provided in opts or fallback to type defaults)
+        this._touchScale = (typeof opts.touchScale === 'number') ? opts.touchScale : (opts.touchScale ?? 1.6);
+        this._touchHitboxScale = (typeof opts.touchHitboxScale === 'number') ? opts.touchHitboxScale : (opts.touchHitboxScale ?? this._touchScale);
+        this._touchSlowFactor = (typeof opts.touchSlowFactor === 'number') ? opts.touchSlowFactor : (opts.touchSlowFactor ?? 0.5);
+        // determine spawn index for this owner's spit projectiles and apply spawn speed factor
+        try {
+          const pool = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : [];
+          let existingCount = 0;
+          if (this.ownerId !== null) {
+            for (const pp of pool) {
+              try {
+                if (pp && pp.typeId === 7 && pp.ownerId === this.ownerId) {
+                  existingCount += (typeof pp._stackCount === 'number' ? pp._stackCount : 1);
+                }
+              } catch (e) {}
+            }
+          }
+          this._spawnIndex = existingCount + 1; // 1-based (counts stacked projectiles as their stack size)
+          const factors = (Array.isArray(opts.spawnSpeedFactors) ? opts.spawnSpeedFactors : (Array.isArray((PROJECTILE_TYPES && PROJECTILE_TYPES[7] && PROJECTILE_TYPES[7].spawnSpeedFactors) ? PROJECTILE_TYPES[7].spawnSpeedFactors : null) ? PROJECTILE_TYPES[7].spawnSpeedFactors : [1,0.9,0.8]));
+          const idx = Math.max(0, Math.min(factors.length - 1, this._spawnIndex - 1));
+          const factor = (typeof factors[idx] === 'number') ? Number(factors[idx]) : 1;
+          this._rollSpeed = (typeof this._rollSpeed === 'number' ? this._rollSpeed : 1.6) * factor;
+        } catch (e) { this._spawnIndex = 1; }
+        break;
+
       default:
         this.framesByLayer = this.framesByLayer ?? null;
         this.w = 16;
@@ -188,6 +240,12 @@ class Projectile {
     const _opt = opts || {};
     const _tryNum = (v) => { const n = Number(v); return (!Number.isNaN(n)) ? n : null; };
     const g = _tryNum(_opt.gravity); if (g !== null) this.gravity = g;
+    // allow initVy for parabolic projectiles
+    const iv = _tryNum(_opt.initVy); if (iv !== null) this.vy = iv;
+    // allow rotationSpeed override
+    const rs = _tryNum(_opt.rotationSpeed); if (rs !== null) this.rotationSpeed = rs;
+    // support a generic parabolic flag so types other than 1 can be parabolic
+    this._parabolic = !!(_opt.parabolic);
     const d = _tryNum(_opt.duration); if (d !== null) { this.duration = d; this.lifespan = d; }
     const ls = _tryNum(_opt.lifespan); if (ls !== null) this.lifespan = ls;
     const mr = _tryNum(_opt.maxRange); if (mr !== null) this.maxRange = mr;
@@ -302,6 +360,47 @@ class Projectile {
       this.age = (this.age || 0) + dt;
     }
 
+    // Scale animation: grow on spawn, shrink when animating removal
+    if (typeof this._scale === 'number') {
+      const sSpeed = (typeof this._scaleAnimSpeed === 'number') ? this._scaleAnimSpeed : 0.12;
+      const step = sSpeed * (dt / 16);
+      if (this._animatingRemoval) {
+        this._scale = Math.max(0, this._scale - step);
+        if (this._scale <= 0 && !this._readyToRemove) {
+          this._readyToRemove = true;
+        }
+      } else {
+        this._scale = Math.min((typeof this._scaleTarget === 'number' ? this._scaleTarget : 1), this._scale + step);
+      }
+    }
+
+    // If we're in removal animation mode for spit_proj, force-play all sprite frames
+    // once and freeze movement/rolling until the sequence finishes. This ensures the
+    // projectile visibly animates through the full piskel when it dies by lifespan.
+    if (this._animatingRemoval && this.typeId === 7 && this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+      if (!this._removalStarted) {
+        this._removalStarted = true;
+        this.frameIndex = 0;
+        this._frameTimer = 0;
+      }
+      this._frameTimer++;
+      if (this._frameTimer >= this.frameDelay) {
+        this._frameTimer = 0;
+        const n = this.framesByLayer[0].length;
+        if (this.frameIndex < n - 1) {
+          this.frameIndex++;
+        } else {
+          // reached last frame of death animation; mark ready for removal
+          this._readyToRemove = true;
+        }
+      }
+      // while animating removal, ensure it doesn't move/roll
+      this._currentRollSpeed = 0;
+      this._rolling = false;
+      // allow scale shrink processing above to continue, but skip further movement/physics
+      return;
+    }
+
     // repelled behaviour: spin and fall to ground
     if (this._repelled) {
       const moveAmount = (this.speed || 6) * (dt / 16);
@@ -333,8 +432,8 @@ class Projectile {
       return;
     }
 
-    // hadouken parabólico
-    if (this.typeId === 1) {
+    // parabólico (hadouken and any projectile with _parabolic flag)
+    if (this._parabolic) {
       // parabólico
       this.x += this.speed * this.dir;
       this.y += this.vy;
@@ -343,15 +442,36 @@ class Projectile {
       // rotación
       this.rotation += this.rotationSpeed;
 
-      // animación que se detiene en último frame
-      if (this.framesByLayer && this.framesByLayer[0]?.length > 0 && !this._finishedAnimation) {
+      // special handling for spit_proj: land at fighter-feet level and start rolling
+      if (this.typeId === 7 && !this._rolling) {
+        const groundY = (this._spitGroundY !== null && typeof this._spitGroundY !== 'undefined') ? this._spitGroundY : ((typeof height === 'number') ? (height - (this.h || 6)) : (height - (this.h || 6)));
+        if ((this.y + this.h) >= groundY) {
+          this.y = groundY - this.h;
+          this._rolling = true;
+          this.vy = 0;
+          this.gravity = 0;
+          this._currentRollSpeed = (typeof this._rollSpeed === 'number') ? this._rollSpeed : Math.max(1, (this.speed || 4) * 0.4);
+          // reduce rotation to rolling speed
+          this.rotationSpeed = Math.max(4, Math.abs(this.rotationSpeed || 8));
+        }
+      }
+      // Advance animation frames for parabolic projectiles.
+      // For spit_proj (typeId 7) we want a looping animation so each projectile
+      // shows all frames; for other parabolic types (e.g., hadouken) preserve
+      // the previous behaviour of stopping on the last frame.
+      if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
         this._frameTimer++;
         if (this._frameTimer >= this.frameDelay) {
           this._frameTimer = 0;
-          this.frameIndex++;
-          if (this.frameIndex >= this.framesByLayer[0].length - 1) {
-            this.frameIndex = this.framesByLayer[0].length - 1; // último frame fijo
-            this._finishedAnimation = true;
+          const n = this.framesByLayer[0].length;
+          if (this.typeId === 7) {
+            this.frameIndex = (this.frameIndex + 1) % n;
+          } else if (!this._finishedAnimation) {
+            this.frameIndex++;
+            if (this.frameIndex >= n - 1) {
+              this.frameIndex = n - 1; // último frame fijo
+              this._finishedAnimation = true;
+            }
           }
         }
       }
@@ -470,6 +590,82 @@ class Projectile {
         }
       }
     }
+    // Rolling behaviour for spit_proj (grounded small ball)
+    if (this._rolling) {
+      // While rolling, animate frames (loop) so spit_proj appears animated while rolling.
+      if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+        this._frameTimer++;
+        if (this._frameTimer >= this.frameDelay) {
+          this._frameTimer = 0;
+          const n = this.framesByLayer[0].length;
+          this.frameIndex = (this.frameIndex + 1) % n;
+        }
+      }
+      const curRollSpeed = (typeof this._currentRollSpeed === 'number') ? this._currentRollSpeed : ((typeof this._rollSpeed === 'number') ? this._rollSpeed : (this.speed || 1));
+      const moveAmount = curRollSpeed * (dt / 16);
+      if (curRollSpeed > 0) {
+        this.x += moveAmount * this.dir;
+        this.rotation += this.rotationSpeed * (dt / 16);
+      }
+      // bounce at screen edges
+      const margin = 4;
+      const leftEdge = 0 + margin;
+      const rightEdge = (typeof width === 'number') ? (width - margin) : 800 - margin;
+      if ((this.dir === 1 && this.x >= rightEdge) || (this.dir === -1 && this.x <= leftEdge)) {
+        this.dir = -this.dir;
+      }
+      // apply floor brake (deceleration) to current roll speed
+      if (typeof this._floorBrake === 'number' && this._floorBrake > 0) {
+        const dec = this._floorBrake * (dt / 16);
+        const prev = (typeof this._currentRollSpeed === 'number') ? this._currentRollSpeed : curRollSpeed;
+        this._currentRollSpeed = Math.max(0, prev - dec);
+      }
+      // touch/merge detection: when two spit_proj overlap they fuse into one
+      if (this.typeId === 7 && !this._touched) {
+        try {
+          const pool = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : [];
+          const a = this.getHitbox();
+          for (const o of pool) {
+            if (!o || o === this) continue;
+            // only fuse spit_proj with same owner
+            if (o.typeId !== 7 || o.ownerId !== this.ownerId) continue;
+            if (o._animatingRemoval || o.toRemove) continue;
+            const b = (typeof o.getHitbox === 'function') ? o.getHitbox() : null;
+            if (!b) continue;
+            if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) {
+              // choose survivor: prefer older projectile (larger age). If equal, prefer this.
+              const survivor = ((this.age || 0) >= (o.age || 0)) ? this : o;
+              const victim = (survivor === this) ? o : this;
+              try {
+                // mark victim for removal (will trigger animating removal via main loop)
+                // transfer stack count to survivor so it represents merged projectiles
+                const victimCount = (typeof victim._stackCount === 'number') ? victim._stackCount : 1;
+                survivor._stackCount = (typeof survivor._stackCount === 'number') ? survivor._stackCount : 1;
+                survivor._stackCount += victimCount;
+                victim.toRemove = true;
+                victim._currentRollSpeed = 0;
+                victim._rolling = false;
+                // enhance survivor: grow visually and enlarge hitbox
+                const touchScale = survivor._touchScale || 1.6;
+                const hitboxScale = survivor._touchHitboxScale || survivor._touchScale || 1.6;
+                const slowFactor = survivor._touchSlowFactor || 0.5;
+                survivor._scaleTarget = (survivor._scaleTarget || 1) * touchScale;
+                survivor._hitboxScale = (survivor._hitboxScale || 1) * hitboxScale;
+                // slow survivor's rolling speed
+                if (typeof survivor._currentRollSpeed === 'number') survivor._currentRollSpeed = survivor._currentRollSpeed * slowFactor;
+                if (typeof survivor._rollSpeed === 'number') survivor._rollSpeed = survivor._rollSpeed * slowFactor;
+                survivor._touched = true;
+              } catch (e) {}
+              break; // only handle one fusion per update for this projectile
+            }
+          }
+        } catch (e) {}
+      }
+      // ensure that when speed is zero the projectile no longer moves or rotates
+      if (typeof this._currentRollSpeed === 'number' && this._currentRollSpeed <= 0) {
+        this._currentRollSpeed = 0;
+      }
+    }
     // lifespan-based removal (unless persistent)
     if (this.lifespan && (this.age >= this.lifespan) && !this.persistent) {
       this.toRemove = true;
@@ -485,6 +681,9 @@ class Projectile {
       const isBun = (this.typeId === 5);
       const drawW = isBun ? (this.w * (this.spriteScale || 1)) : this.w;
       const drawH = isBun ? (this.h * (this.spriteScale || 1)) : this.h;
+      const _visualScale = (typeof this._scale === 'number') ? this._scale : 1;
+      const drawWScaled = Math.max(0.5, drawW * _visualScale);
+      const drawHScaled = Math.max(0.5, drawH * _visualScale);
 
       // draw string for bun (between owner and projectile) — skip if repelido
       if (this.typeId === 5 && !this._repelled && this._ownerRef && this.stringFramesByLayer && this.stringFramesByLayer.length > 0) {
@@ -582,7 +781,7 @@ class Projectile {
         image(
           img,
           this.x, this.y,
-          drawW, drawH,
+          drawWScaled, drawHScaled,
           frameWidth * this.frameIndex, 0,
           frameWidth, img.height
         );
@@ -604,11 +803,22 @@ class Projectile {
   getHitbox() {
     const hitboxIdToUse = (typeof this._hitboxId !== 'undefined' && this._hitboxId !== null) ? this._hitboxId : this.typeId;
     const def = this._hitboxOverride || PROJECTILE_HITBOXES[hitboxIdToUse] || PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
+    // allow per-instance hitbox scaling (used when spit_proj touch each other)
+    const scale = (typeof this._hitboxScale === 'number') ? this._hitboxScale : 1;
+    const baseW = (def.w || 0);
+    const baseH = (def.h || 0);
+    const scaledW = Math.max(0, Math.round(baseW * scale));
+    const scaledH = Math.max(0, Math.round(baseH * scale));
+    // keep hitbox roughly centered by adjusting offsets for the increased size
+    const extraW = scaledW - baseW;
+    const extraH = scaledH - baseH;
+    const offsetX = (def.offsetX || 0) - Math.round(extraW / 2);
+    const offsetY = (def.offsetY || 0) - Math.round(extraH / 2);
     return {
-      x: this.x + (def.offsetX || 0),
-      y: this.y + (def.offsetY || 0),
-      w: (def.w || 0),
-      h: (def.h || 0)
+      x: this.x + offsetX,
+      y: this.y + offsetY,
+      w: scaledW,
+      h: scaledH
     };
   }
 
@@ -645,6 +855,7 @@ const PROJECTILE_HITBOXES = {
   4: { offsetX: -10, offsetY: -18, w: 20, h: 36 },   // tats barrera
   5: { offsetX: 1, offsetY: 0,  w: 18, h: 6  },    // bun
   6: { offsetX: 2, offsetY: 0,  w: 18, h: 6  },    // staple (tyeman stapler)
+  7: { offsetX: 3, offsetY: 3, w: 6, h: 6 },    // spit_proj
   // default para otros tipos
   default: { offsetX: -8, offsetY: -8, w: 16, h: 16 }
 };
@@ -748,7 +959,8 @@ const PROJECTILE_TYPES = {
     spriteScale: 1.5,
     stringOptions: { stringW: 4, stringH: 2, stringFrameDelay: 6 },
     framesKey: 'bun',
-    hitboxId: 5
+    hitboxId: 5,
+    damageQuarters: 1
   },
   6: {//TESTEADO
     id: 6,
@@ -764,6 +976,36 @@ const PROJECTILE_TYPES = {
     hitboxId: 6,
     lifespan: 4000,
     damageQuarters: 2
+  },
+  7: {
+    id: 7,
+    name: 'spit_proj',
+    parabolic: true,
+    speed: 1.4,
+    initVy: -3,
+    gravity: 0.45,
+    rotationSpeed: 15,
+    // speed used once the spit projectile lands and begins rolling
+    rollSpeed: 2.6,
+    // per-spawn multipliers/factors applied to rollSpeed for 1st/2nd/3rd spit
+    // Example: [1, 0.9, 0.8] -> 1st = base, 2nd slightly slower, 3rd slower
+    spawnSpeedFactors: [0.1, 0.5, 0.9],
+    // deceleration applied to roll speed while on the ground (units per 16ms frame)
+    floorBrake: 0,
+    w: 6,
+    h: 6,
+    frameDelay: 6,
+    framesKey: 'spit_proj',
+    hitboxId: 3,
+    damageQuarters: 3,
+    lifespan: 5000,
+    maxRange: 3,
+    collisionWithSelf: true // allow this projectile to hit the owner (for self-damaging attacks)
+    ,
+    // touch behaviour defaults: when two spit_proj overlap they grow/shrink and slow
+    touchScale: 1.6,
+    touchHitboxScale: 1.6,
+    touchSlowFactor: 0.5
   },
   default: {
     id: 'default',

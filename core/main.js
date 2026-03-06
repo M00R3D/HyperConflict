@@ -560,19 +560,33 @@ function draw() {
                 player1.vx = 0;
                 if (!p.persistent) p.toRemove = true;
               } else {
-                // bun behavior: attract opponent towards owner and trigger return (no damage)
-                try { applyHitstop(160); } catch (e) {}
-                if (owner) {
-                  const dx = (owner.x + owner.w/2) - (player1.x + player1.w/2);
-                  const pullStrength = 0.12; // fuerza de atracción
-                  player1.vx = constrain(dx * pullStrength, -12, 12);
-                  player1.vy = Math.min(player1.vy, -2.2);
+                // bun behavior: either apply configured damage or, if no damage declared,
+                // attract opponent towards owner and trigger return (legacy behavior).
+                if (p.damageQuarters) {
+                  try { applyHitstop(80); } catch (e) {}
+                  const dmg = p.damageQuarters || 1;
+                  player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg);
+                  if (owner) {
+                    const awaySign = (player1.x >= (owner.x || 0)) ? 1 : -1;
+                    const push = 1.8;
+                    player1.vx = awaySign * push;
+                    player1.vy = Math.min(player1.vy, -1.2);
+                  }
+                  if (!p.persistent) p.toRemove = true;
+                } else {
+                  try { applyHitstop(160); } catch (e) {}
+                  if (owner) {
+                    const dx = (owner.x + owner.w/2) - (player1.x + player1.w/2);
+                    const pullStrength = 0.12; // fuerza de atracción
+                    player1.vx = constrain(dx * pullStrength, -12, 12);
+                    player1.vy = Math.min(player1.vy, -2.2);
+                  }
+                  // mark projectile to return
+                  p.returning = true;
+                  p.dir = -p.dir;
+                  p._hitTargets.add(player1.id);
+                  // keep projectile to return (don't remove)
                 }
-                // mark projectile to return
-                p.returning = true;
-                p.dir = -p.dir;
-                p._hitTargets.add(player1.id);
-                // keep projectile to return (don't remove)
               }
             }
           } else {
@@ -677,18 +691,32 @@ function draw() {
                 player2.vx = 0;
                 if (!p.persistent) p.toRemove = true;
               } else {
-                // bun behavior: attract opponent towards owner and trigger return (no damage)
-                try { applyHitstop(160); } catch (e) {}
-                const ownerRef = (p.ownerId === player1.id) ? player1 : (p.ownerId === player2.id ? player2 : null);
-                if (ownerRef) {
-                  const dx = (ownerRef.x + ownerRef.w/2) - (player2.x + player2.w/2);
-                  const pullStrength = 0.12;
-                  player2.vx = constrain(dx * pullStrength, -12, 12);
-                  player2.vy = Math.min(player2.vy, -2.2);
+                // bun behavior: either apply configured damage or, if no damage declared,
+                // attract opponent towards owner and trigger return (legacy behavior).
+                if (p.damageQuarters) {
+                  try { applyHitstop(80); } catch (e) {}
+                  const dmg = p.damageQuarters || 1;
+                  player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg);
+                  if (owner) {
+                    const awaySign = (player2.x >= (owner.x || 0)) ? 1 : -1;
+                    const push = 1.8;
+                    player2.vx = awaySign * push;
+                    player2.vy = Math.min(player2.vy, -1.2);
+                  }
+                  if (!p.persistent) p.toRemove = true;
+                } else {
+                  try { applyHitstop(160); } catch (e) {}
+                  // reuse `owner` resolved above
+                  if (owner) {
+                    const dx = (owner.x + owner.w/2) - (player2.x + player2.w/2);
+                    const pullStrength = 0.12;
+                    player2.vx = constrain(dx * pullStrength, -12, 12);
+                    player2.vy = Math.min(player2.vy, -2.2);
+                  }
+                  p.returning = true;
+                  p.dir = -p.dir;
+                  p._hitTargets.add(player2.id);
                 }
-                p.returning = true;
-                p.dir = -p.dir;
-                p._hitTargets.add(player2.id);
               }
             }
           } else {
@@ -748,7 +776,26 @@ function draw() {
         }
       }
 
-      if (p && (p.toRemove || (typeof p.offscreen === 'function' && p.offscreen()))) {
+      // If projectile requested removal, attempt to start its shrink animation
+      if (p && p.toRemove) {
+        try {
+          // If projectile supports animated removal, kick that off and clear toRemove
+          if (typeof p._animatingRemoval === 'boolean' || typeof p._scale === 'number') {
+            p._animatingRemoval = true;
+            p._scale = (typeof p._scale === 'number') ? p._scale : 1;
+            p._scaleTarget = 0;
+            p._readyToRemove = false;
+            // clear the external removal flag so main won't immediately splice it
+            p.toRemove = false;
+          } else {
+            // fallback: no animation support, remove immediately
+            projectiles.splice(i, 1);
+            continue;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      if (p && ((p._readyToRemove) || (typeof p.offscreen === 'function' && p.offscreen()))) {
         projectiles.splice(i, 1);
       }
     }
