@@ -456,7 +456,7 @@ class Fighter {
         }
         this.lastTapTime.left = now;
         // cambiar facing en el evento de pulsación (solo al iniciar la pulsación)
-        this.facing = -1;
+        if (!this._spitHold) this.facing = -1;
       }
       if (keysUp['a']) {
         this.lastReleaseTime.left = now;
@@ -475,7 +475,7 @@ class Fighter {
         }
         this.lastTapTime.right = now;
         // cambiar facing en el evento de pulsación (solo al iniciar la pulsación)
-        this.facing = 1;
+        if (!this._spitHold) this.facing = 1;
       }
       if (keysUp['d']) {
         this.lastReleaseTime.right = now;
@@ -492,7 +492,7 @@ class Fighter {
           this.dash(-1);
         }
         this.lastTapTime.left = now;
-        this.facing = -1;
+        if (!this._spitHold) this.facing = -1;
       }
       if (keysUp['arrowleft']) {
         this.lastReleaseTime.left = now;
@@ -507,7 +507,7 @@ class Fighter {
           this.dash(1);
         }
         this.lastTapTime.right = now;
-        this.facing = 1;
+        if (!this._spitHold) this.facing = 1;
       }
       if (keysUp['arrowright']) {
         this.lastReleaseTime.right = now;
@@ -660,6 +660,14 @@ class Fighter {
               }
             } catch (err) {}
             // Evitar que el resto del update reemplace el estado
+            // pero sí ejecutar la física para que el personaje siga cayendo
+            // y bloquear inputs de dirección mientras se mantiene el hold.
+            try {
+              // block horizontal input while holding spit so facing can't change
+              this.keys = this.keys || { left: false, right: false, up: false };
+              this.keys.left = false; this.keys.right = false; this.runActive = false;
+              Movement.updateMovement(this);
+            } catch (e) {}
             Anim.updateAnimation(this);
             if (this.state) this.state.timer = (this.state.timer || 0) + 1;
             return;
@@ -716,7 +724,7 @@ class Fighter {
       }
       // actualizar animación durante el dash para que avance frames y se muestre dashFramesByLayer
       Anim.updateAnimation(this);
-      if (this.opponent) Movement.autoFace(this, this.opponent);
+      if (this.opponent && !this._spitHold) Movement.autoFace(this, this.opponent);
       this.state.timer++;
       Anim.exitHitIfElapsed(this);
       return; // Salta el resto de la prioridad de estados
@@ -999,7 +1007,7 @@ class Fighter {
 
     Anim.updateAnimation(this);
 
-    if (this.opponent) Movement.autoFace(this, this.opponent);
+    if (this.opponent && !this._spitHold) Movement.autoFace(this, this.opponent);
 
     this.state.timer++;
     Anim.exitHitIfElapsed(this);
