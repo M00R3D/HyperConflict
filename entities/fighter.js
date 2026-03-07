@@ -275,10 +275,11 @@ class Fighter {
     this.hitStartTime = millis();
     this.hitLevel = resolvedHitLevel || 1;
 
+    // Prefer centralized per-character hit-level durations if available
     const levelDurMap = {
-      1: (this.actions?.hit1?.duration || 500),
-      2: (this.actions?.hit2?.duration || 700),
-      3: (this.actions?.hit3?.duration || 1000)
+      1: (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') ? window.getHitLevelDuration(this.charId || 'default', 1) : (this.actions?.hit1?.duration || 500),
+      2: (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') ? window.getHitLevelDuration(this.charId || 'default', 2) : (this.actions?.hit2?.duration || 700),
+      3: (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') ? window.getHitLevelDuration(this.charId || 'default', 3) : (this.actions?.hit3?.duration || 1000)
     };
     this.hitDuration = levelDurMap[this.hitLevel] || (this.hitDuration || 260);
 

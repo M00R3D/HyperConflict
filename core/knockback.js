@@ -55,6 +55,43 @@ _damageByChar['default'] = {
   kick3: 3
 };
 
+// --- Hit-level duration registry (per-character)
+// Specifies how long each hit level (1..3) should last before transitioning
+// to the next state. Values are milliseconds. Accepts arrays [d1,d2,d3]
+// or objects {1: d1, 2: d2, 3: d3} when registering.
+const _hitLevelDurationsByChar = Object.create(null);
+_hitLevelDurationsByChar['default'] = { 1: 500, 2: 700, 3: 1000 };
+_hitLevelDurationsByChar['tyeman'] = { 1: 450, 2: 650, 3: 1200 };
+_hitLevelDurationsByChar['sbluer'] = { 1: 400, 2: 600, 3: 1100 };
+_hitLevelDurationsByChar['fernando'] = { 1: 100, 2: 600, 3: 1100 };
+export function registerHitLevelDurationsForChar(charId, table = {}) {
+  if (!charId) return;
+  let normalized = {};
+  if (Array.isArray(table)) {
+    normalized[1] = Number(table[0]) || _hitLevelDurationsByChar['default'][1];
+    normalized[2] = Number(table[1]) || _hitLevelDurationsByChar['default'][2];
+    normalized[3] = Number(table[2]) || _hitLevelDurationsByChar['default'][3];
+  } else if (table && typeof table === 'object') {
+    normalized[1] = Number(table[1] ?? table['1']) || _hitLevelDurationsByChar['default'][1];
+    normalized[2] = Number(table[2] ?? table['2']) || _hitLevelDurationsByChar['default'][2];
+    normalized[3] = Number(table[3] ?? table['3']) || _hitLevelDurationsByChar['default'][3];
+  } else return;
+  _hitLevelDurationsByChar[charId] = Object.assign({}, _hitLevelDurationsByChar[charId] || {}, normalized);
+}
+
+export function getHitLevelDuration(charId, level) {
+  const cid = charId || 'default';
+  const table = _hitLevelDurationsByChar[cid] || _hitLevelDurationsByChar['default'];
+  const lvl = Math.max(1, Math.min(3, Number(level || 1)));
+  return Number(table[lvl]) || Number(_hitLevelDurationsByChar['default'][lvl]);
+}
+
+// expose helpers globally for modules that avoid importing to prevent cycles
+if (typeof window !== 'undefined') {
+  window.registerHitLevelDurationsForChar = registerHitLevelDurationsForChar;
+  window.getHitLevelDuration = getHitLevelDuration;
+}
+
 export function registerDamageForChar(charId, table = {}) {
   if (!charId || typeof table !== 'object') return;
   _damageByChar[charId] = Object.assign({}, _damageByChar[charId] || {}, table);
