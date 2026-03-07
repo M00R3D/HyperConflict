@@ -1,5 +1,48 @@
 # Hyper Conflict
 
+## Últimas Actualizaciones (Mar 1 – Mar 7, 2026)
+
+A continuación se resume todo lo actualizado desde el primer commit compartido (`d74d0ab`, 1 Mar 2026) hasta el día de hoy:
+
+### Proyectiles
+
+- **Constructor de proyectil Hadouken parabólico** (`d74d0ab`): implementación del constructor para el proyectil tipo Hadouken (id 1) con trayectoria parabólica, integrando la lógica en `projectile.js`, `attacks.js` y `specials.js`.
+- **Array de configuración del proyectil Bun** (`4dcbc76`): configuración del proyectil Bun mediante un array centralizado en `projectile.js` y `specials.js`.
+- **Array de configuración del proyectil Staple** (`63c6a97`): configuración del proyectil Staple mediante un array centralizado en `projectile.js` y `attacks.js`.
+- **`damageQuarters` para el preset de proyectil Staple** (`248b8d0`): soporte para cuartos de daño (`damageQuarters`) en el preset del proyectil Staple.
+- **Actualización del proyectil Spit de Sbluer** (`66888cd`): revisión mayor del proyectil de escupitajo de Sbluer, refactorización de `main.js` y extensión de la clase `fighter.js`.
+- **Modularización del sistema de proyectiles** (`5e722e8`): `projectile.js` dividido en tres módulos independientes: `projectiles/actions.js` (lógica de actualización), `projectiles/hitboxes.js` (detección de colisión), `projectiles/types.js` (definición de tipos de proyectil).
+- **Nuevo proyectil Thin Laser de Fernando** (`a31d357`, `b54a9d4`, `8fdfabb`):
+  - Nuevos assets piskel para el thin laser y su proyectil (`fernando_thin_laser.piskel`, `fernando_thin_laser_proj.piskel`).
+  - Estado y lógica completa del proyectil thin laser añadidos en `projectile.js`, `projectiles/actions.js`, `projectiles/hitboxes.js` y `projectiles/types.js`.
+  - Corrección de la declaración de hitbox del proyectil thin laser.
+
+### Sistema de Combate y Combos
+
+- **Fix para modificación de combos** (`26a84f2`): corrección de bug en la lógica de `modifyCombos` en `attacks.js` e `init.js`.
+- **Modularización de `attacks.js`** (`1e03230`):
+  - `attacks.js` refactorizado y dividido en submódulos: `attacks/hit.js` (procesamiento de impactos) y `attacks/spawn.js` (spawning de proyectiles y efectos).
+  - Nueva clase `combos.js` con la lógica de cadenas de combos extraída.
+  - Nuevo módulo `registerCharData.js` para el registro de datos de personaje.
+  - **Bloqueo de avance en combo**: la cadena de combo sólo avanza al siguiente golpe si el ataque anterior conecta con el oponente.
+- **Cooldown por ataque en combos** (`9c4228f`):
+  - Sistema de cooldown por nombre de ataque para evitar spam: 320 ms para puñetazos/patadas, 420 ms para especiales (o valor explícito en `action.cooldown`).
+  - Gimmick simple añadido para la cadena de combo.
+
+### Hitstop
+
+- **Hitstop reducido significativamente** (`8f7f42b`): `HITSTOP_MS_PER_FRAME` bajado de 1 ms a 0.1 ms; nuevo tope máximo `HITSTOP_MS_MAX = 60 ms` para evitar pausas largas en golpes de mucho daño.
+
+### HUD / UI
+
+- **Fix del indicador de vida de Fernando** (`7e6bda6`): corrección del tamaño de dibujo del sprite del indicador de vida de Fernando en `hud.js`.
+
+### README
+
+- **README inicial** (`c8315a6`): se creó el archivo `README.md` con el resumen completo de características y sistemas del juego.
+
+---
+
 ## Resumen de Características y Sistemas Desarrollados
 
 Hyper Conflict es un videojuego de pelea 2D construido con P5.js y arquitectura modular. A continuación se listan todos los sistemas y requerimientos desarrollados:
