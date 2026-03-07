@@ -1,5 +1,5 @@
 // entities/fighter/hitbox.js
-import { getAttackHitboxForChar, getBodyHitboxForChar } from '../../core/hitboxConfig.js';
+import { getAttackHitboxForChar, getBodyHitboxForChar, getAttackHitboxMotionForChar } from '../../core/hitboxConfig.js';
 
 export function getCurrentHitbox(self) {
   // 1) intentar override por personaje para el estado actual
@@ -41,12 +41,54 @@ export function getAttackHitbox(self) {
     if (reg && typeof reg === 'object' && reg.w !== undefined) {
       try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando reg found', { attackType: self.attackType, reg }); } catch(e) {}
       // permitir defs compactos: { offsetX, offsetY, w, h }
-      const box = {
+      // compute normal attack box (target/extended position)
+      const normalBox = {
         x: self.facing === 1 ? self.x + reg.offsetX : self.x + self.w - (reg.offsetX || 0) - reg.w,
         y: self.y + (reg.offsetY || 0),
         w: reg.w,
         h: reg.h
       };
+      // allow per-attack/per-character temporal motion configs
+      try {
+        const atkName = String(self.attackType || '').toLowerCase();
+        const motion = getAttackHitboxMotionForChar(self.charId, self.attackType);
+        const shouldDefaultMotion = (!motion && (atkName.startsWith('punch') || atkName.startsWith('kick')));
+        const cfg = motion || (shouldDefaultMotion ? { insideEnd: 0.1, outEnd: 0.6 } : null);
+        if (cfg && typeof self.attackStartTime === 'number' && typeof self.attackDuration === 'number') {
+          const now = millis();
+          const elapsed = Math.max(0, now - (self.attackStartTime || 0));
+          const t = Math.min(1, elapsed / Math.max(1, self.attackDuration));
+
+          // compute a starting X inside the owner's body centered horizontally
+          let insidePos = normalBox.x;
+          try {
+            const ownerBox = getCurrentHitbox(self);
+            insidePos = ownerBox.x + Math.max(0, (ownerBox.w - reg.w) / 2);
+          } catch (e) { /* keep normalBox.x */ }
+
+          const insideEnd = Number(cfg.insideEnd ?? 0.1);
+          const outEnd = Number(cfg.outEnd ?? 0.6);
+          const holdEnd = Number(cfg.holdEnd ?? outEnd);
+          if (t < insideEnd) {
+            return { x: insidePos, y: normalBox.y, w: normalBox.w, h: normalBox.h };
+          } else if (t < outEnd) {
+            const p = (t - insideEnd) / Math.max(0.0001, (outEnd - insideEnd));
+            const x = insidePos + (normalBox.x - insidePos) * p;
+            return { x, y: normalBox.y, w: normalBox.w, h: normalBox.h };
+          } else if (t < holdEnd) {
+            // hold at max distance
+            return { x: normalBox.x, y: normalBox.y, w: normalBox.w, h: normalBox.h };
+          } else {
+            const p2 = Math.min(1, (t - holdEnd) / Math.max(0.0001, (1 - holdEnd)));
+            const x = normalBox.x + (insidePos - normalBox.x) * p2;
+            return { x, y: normalBox.y, w: normalBox.w, h: normalBox.h };
+          }
+        }
+      } catch (e) {
+        // fall back to normalBox on error
+      }
+
+      const box = normalBox;
       try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando computed atkHB', JSON.stringify({ attackType: self.attackType, box, selfX: self.x, selfW: self.w, facing: self.facing })); } catch(e) {}
       return box;
     }

@@ -1,15 +1,13 @@
 import { registerStatsForChar, registerActionsForChar } from './charConfig.js';
-import { registerAttackHitboxesForChar, registerBodyHitboxesForChar } from './hitboxConfig.js';
+import { registerAttackHitboxesForChar, registerBodyHitboxesForChar, applyHitboxMotionPresets } from './hitboxConfig.js';
 import { setKnockbackForAttack } from './knockback.js';
 import { registerSpecialsForChar } from '../entities/fighter/specials.js';
 import { registerComboChainsForChar } from '../entities/fighter/combos.js';
 export function registerCharData() {
-            registerActionsForChar('fernando', {
-            // punch: { duration: 500, frameDelay: 6 },
-            // kick: { duration: 500, frameDelay: 6 },
-            // grab: { duration: 500, frameDelay: 4 }
-            kick3: { duration: 1000, frameDelay: 3 },
-            });
+            // NOTE: fernando actions are registered later inside registerSpecials()
+            // to ensure a single authoritative registration point. Avoid partial
+            // registrations here which can leave missing durations during player
+            // construction (causing hitbox timing to misbehave).
             registerStatsForChar('tyeman', {
             maxSpeed: 3,
             runMaxSpeed: 6,
@@ -77,13 +75,22 @@ export function registerCharData() {
 
             // ejemplo: sbluer tweaks
             registerAttackHitboxesForChar('sbluer', {
-            punch: { offsetX: 14, offsetY: 6, w: 18, h: 18 },
+            // increase reach by +5 px for sbluer attacks (requested)
+            punch: { offsetX: 19, offsetY: 6, w: 18, h: 18 },
             // crouch punch: lower and larger
-            crouchPunch: { offsetX: 10, offsetY: 14, w: 26, h: 20 },
+            crouchPunch: { offsetX: 15, offsetY: 14, w: 26, h: 20 },
             // crouch kick for sbluer
-            crouchKick: { offsetX: 8, offsetY: 12, w: 34, h: 22 },
-            kick3:  { offsetX: 24, offsetY: 4, w: 30, h: 26 }
+            crouchKick: { offsetX: 13, offsetY: 12, w: 12, h: 22 },
+            // ensure kick widths are tighter to avoid overly large reach
+            kick:   { offsetX: 27, offsetY: 16, w: 10, h: 14 },
+            kick2:  { offsetX: 27, offsetY: 14, w: 12, h: 16 },
+            kick3:  { offsetX: 29, offsetY: 4, w: 10, h: 26 }
             });
+
+            // Apply global presets (centralized in core/hitboxConfig.js)
+            try {
+              applyHitboxMotionPresets();
+            } catch (e) { /* ignore if not available */ }
 
             registerBodyHitboxesForChar('tyeman', {
             idle:  { offsetX: 6, offsetY: 0, w: 22, h: 32 },
@@ -131,17 +138,30 @@ export function registerSpecials(){
   });
 
   registerActionsForChar('fernando', {
-    punch: { duration: 500, frameDelay: 6 },
-    kick: { duration: 500, frameDelay: 6 },
-    // crouch variants
     crouchPunch: { duration: 500, frameDelay: 6 },
-    // crouch kick (single)
     crouchKick: { duration: 700, frameDelay: 6 },
-    grab: { duration: 500, frameDelay: 4 }
+    grab: { duration: 500, frameDelay: 4 },
+    punch: { duration: 400, frameDelay: 6 },
+    punch2: { duration: 400, frameDelay: 6 },
+    punch3: { duration: 800, frameDelay: 5 },
+    crouchPunch: { duration: 380, frameDelay: 6 },        crouchKick: { duration: 520, frameDelay: 6 },
+    kick: { duration: 400, frameDelay: 6 },
+    kick2: { duration: 700, frameDelay: 6 },
+    kick3: { duration: 1000, frameDelay: 6 },
   });
 
   registerAttackHitboxesForChar('fernando', {
+    idle: { offsetX: 6, offsetY: 0, w: 22, h: 32 },
+    punch: { offsetX: 16, offsetY: 6, w: 20, h: 20 },
+    punch2: { offsetX: 18, offsetY: 6, w: 22, h: 20 },
+    punch3: { offsetX: 20, offsetY: 4, w: 28, h: 24 },
+    // crouch punch: lower and wider than standing punch
     crouchPunch: { offsetX: 12, offsetY: 14, w: 28, h: 20 },
+    kick: { offsetX: 27, offsetY: 16, w: 11, h: 13 },
+    kick2: { offsetX: 23, offsetY: 16, w: 15, h: 13 },
+    kick3: { offsetX: 20, offsetY: 4, w: 17, h: 15 },
+    // new crouch kick for fernando
+    grab: { offsetX: 10, offsetY: 12, w: 34, h: 22 },
     crouchKick: { offsetX: 12, offsetY: 12, w: 34, h: 22 }
   });
   registerBodyHitboxesForChar('fernando', {});
