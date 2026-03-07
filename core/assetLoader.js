@@ -181,11 +181,13 @@ export async function loadSlotAssets() {return {
 
 export async function loadHeartFrames() {return await loadOrNull('src/hearth/hearth_red.piskel');}
 export async function loadBootFrames() {return await loadOrNull('src/hearth/boot_green.piskel');}
+export async function loadLifebarFrames() {return await loadOrNull('src/hearth/lifebar_red.piskel');}
 
 if (typeof window !== 'undefined') {
   if (typeof window.loadTyemanAssets === 'undefined') window.loadTyemanAssets = loadTyemanAssets;
   if (typeof window.loadSbluerAssets === 'undefined') window.loadSbluerAssets = loadSbluerAssets;
   if (typeof window.loadHeartFrames === 'undefined') window.loadHeartFrames = loadHeartFrames;
   if (typeof window.loadBootFrames === 'undefined') window.loadBootFrames = loadBootFrames;
+  if (typeof window.loadLifebarFrames === 'undefined') window.loadLifebarFrames = loadLifebarFrames;
   if (typeof window.loadSlotAssets === 'undefined') window.loadSlotAssets = loadSlotAssets;
 }

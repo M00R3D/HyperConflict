@@ -73,6 +73,8 @@ function _maybeAdvanceComboOnHit(self) {
 
 
 
+import { applyDamage } from '../../../core/health.js';
+
 export function hit(self, attacker = null) {
   if (!attacker) return;
   const prevHitLevel = (typeof self.hitLevel === 'number') ? self.hitLevel : 0;
@@ -101,7 +103,7 @@ export function hit(self, attacker = null) {
   else { this._consecutiveHits = (this._consecutiveHits || 0) + 1; if (this._consecutiveHits > 3) this._consecutiveHits = 3; this._consecutiveHitAt = now; resolvedHitLevel = this._consecutiveHits; }
   try { if (this.state && (this.state.current === 'crouchpunch' || this.state.current === 'crouchPunch')) { resolvedHitLevel = 3; this._receivedHitWhileCrouchPunch = true; } } catch (e) {}
   if (prevHitLevel === 3) { try { Anim.forceSetState(self, 'knocked'); } catch (e) { console.warn('[Attacks.hit] failed to force knocked', self.id, e); self._forceKnocked = true; } self.attacking = false; self.attackType = null; self._hitTargets = null; self.vx = 0; self.vy = 0; return; }
-  if (hpBefore !== null && typeof this.hp === 'number' && this.hp === hpBefore) { const damageQuarters = (typeof attacker.damageQuarters === 'number') ? attacker.damageQuarters : 1; this.hp = Math.max(0, this.hp - damageQuarters); }
+  if (hpBefore !== null && typeof this.hp === 'number' && this.hp === hpBefore) { const damageQuarters = (typeof attacker.damageQuarters === 'number') ? attacker.damageQuarters : 1; try { applyDamage(this, damageQuarters, 2, 4); } catch (e) { this.hp = Math.max(0, this.hp - damageQuarters); } }
 
   // marcar hit state y tiempos
   this.isHit = true; this.hitStartTime = millis(); this.hitLevel = resolvedHitLevel || 1;
@@ -169,7 +171,10 @@ export function hit(self, attacker = null) {
   } catch (e) { console.warn('[KB FORCE] failed to set persistent knockback', e); }
 
   if (this.hp <= 0) {
-    this.hp = 0; this.alive = false; this.blocking = false; this.blockStunStartTime = 0; this.attacking = false; this.isHit = false; this._consecutiveHits = 0; this._consecutiveHitAt = 0; try { this.setState('knocked'); } catch (e) {} return;
+    this.hp = 0;
+    this.hearts = 0;
+    this.lifebar = 0;
+    this.alive = false; this.blocking = false; this.blockStunStartTime = 0; this.attacking = false; this.isHit = false; this._consecutiveHits = 0; this._consecutiveHitAt = 0; try { this.setState('knocked'); } catch (e) {} return;
   }
 
   try {

@@ -134,6 +134,8 @@ export function shoot(self) {
   return shootSpawn(self);
 }
 
+import { applyDamage } from '../../core/health.js';
+
 export function hit(self, attacker = null) {
   return hitImpl(self, attacker);
   // try { console.log(`[Attacks.hit] ${self.id || '?'} hit by ${attacker.id || '?'} attack=${attacker.attackType}`); } catch(e){}
@@ -246,7 +248,7 @@ export function hit(self, attacker = null) {
   // Si no se aplicó daño (hpBefore === this.hp), aplicamos daño básico desde attacker.damageQuarters o fallback 1.
   if (hpBefore !== null && typeof this.hp === 'number' && this.hp === hpBefore) {
     const damageQuarters = (typeof attacker.damageQuarters === 'number') ? attacker.damageQuarters : 1;
-    this.hp = Math.max(0, this.hp - damageQuarters);
+    try { applyDamage(this, damageQuarters, 2, 4); } catch (e) { this.hp = Math.max(0, this.hp - damageQuarters); }
   }
 
   // Stamina system removed: do not modify stamina on hit.
@@ -344,6 +346,8 @@ export function hit(self, attacker = null) {
   // Si HP llega a 0 forzar knockdown y limpiar estados que podrían bloquear transiciones
   if (this.hp <= 0) {
     this.hp = 0;
+    this.hearts = 0;
+    this.lifebar = 0;
     this.alive = false;
     this.blocking = false;
     this.blockStunStartTime = 0;

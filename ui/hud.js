@@ -64,10 +64,10 @@ function drawInputQueues(p1, p2) {
   drawBuffer(p2Buf, centerX + 140, p2BufDur);
 }
 
-function drawHealthBars(p1, p2, heartFrames, bootFrames) {
-   const heartsCount = 6;
-   const quartersPerHeart = 4;
-   const totalQuartersMax = heartsCount * quartersPerHeart; // 24
+function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
+  const heartsCount = 2; // draw 2 hearts per player
+  const quartersPerHeart = 4;
+  const totalQuartersMax = heartsCount * quartersPerHeart; // 8
   // boots/stamina visual constants (defined to avoid ReferenceError)
   const quartersPerBoot = 4;
   const bootW = 20;
@@ -180,8 +180,10 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
   drawLifePortraits(p1, leftPortraitX, false);
   drawLifePortraits(p2, rightPortraitX, true);
 
-  // pick first non-empty layer (some .piskel exports put frames in layer 1)
+  // pick first non-empty layer for hearts
   const layer = (Array.isArray(heartFrames) ? heartFrames.find(l => Array.isArray(l) && l.length > 0) : null);
+  // pick first non-empty layer for lifebar (separate sprite)
+  const lifebarLayer = (Array.isArray(lifebarFrames) ? lifebarFrames.find(l => Array.isArray(l) && l.length > 0) : null);
   if (!layer) {
     push();
     fill(255);
@@ -193,6 +195,12 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
     pop();
     return;
   }
+
+  // determine available frame count for heart/lifebar sprites and an animation index
+  const frameCount = (Array.isArray(layer) ? layer.length : 0) || 1;
+  const animIdx = Math.floor(millis() / 120) % frameCount;
+  const lifebarFrameCount = (Array.isArray(lifebarLayer) ? lifebarLayer.length : 0) || 1;
+  const lifebarAnimIdx = Math.floor(millis() / 120) % lifebarFrameCount;
 
   // adjust hearts drawing Y to be below portraits
   const heartYOffset = 44;
@@ -279,7 +287,11 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
 
   // helper to draw a player's hearts (with shake detection)
   const drawPlayerHearts = (player, xStart, alignRight = false) => {
-    const hp = Math.max(0, Math.min(totalQuartersMax, player?.hp ?? 0));
+    // heartsHp: portion of HP that belongs to visible hearts (prefer explicit `player.hearts` if present)
+    const heartsQuartersTotal = heartsCount * quartersPerHeart;
+    const heartsHp = (typeof player?.hearts === 'number')
+      ? Math.max(0, Math.min(heartsQuartersTotal, player.hearts))
+      : Math.max(0, Math.min(heartsQuartersTotal, player?.hp ?? 0));
     const state = _getHeartState(player, heartsCount);
 
     for (let i = 0; i < heartsCount; i++) {
@@ -289,7 +301,7 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
       // heart to the highest logical index and ensure quarters are removed from the right.
       const logicalIndex = alignRight ? (heartsCount - 1 - i) : i;
       // remaining quarters for this logical heart (0..4)
-      const remaining = Math.max(0, Math.min(quartersPerHeart, hp - logicalIndex * quartersPerHeart));
+      const remaining = Math.max(0, Math.min(quartersPerHeart, heartsHp - logicalIndex * quartersPerHeart));
 
       // desired frame index: 0 = full (4 quarters), last = empty (0 quarters)
       const frameIndex = Math.max(0, Math.min(quartersPerHeart, (quartersPerHeart - remaining)));
@@ -340,6 +352,71 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
   drawPlayerHearts(p1, leftX, false);
   drawPlayerHearts(p2, rightStart, true);
  
+  // --- DRAW LIFEBARS (below hearts) ---
+  // Lifebar config
+  const lifebarBlocks = 10;
+  const lifebarBlockSize = 20;
+  const lifebarGap = 6;
+
+  const drawLifebarFor = (player, rightAligned = false) => {
+    // lifebar represents additional quarters beyond the displayed hearts
+    const heartsQuarters = heartsCount * quartersPerHeart;
+    const totalUnits = Math.max(0, (player?.hpMax ?? heartsQuarters) - heartsQuarters);
+    const currentUnits = (typeof player?.lifebar === 'number')
+      ? Math.max(0, Math.min(totalUnits, player.lifebar))
+      : Math.max(0, Math.min(totalUnits, (player?.hp ?? 0) - heartsQuarters));
+
+    const totalW = lifebarBlocks * (lifebarBlockSize + lifebarGap) - lifebarGap;
+    const baseX = rightAligned ? (width - 12 - totalW) : 12;
+    const lifey = heartYOffset + heartH + 8;
+
+    // background slightly larger
+    const pad = 6;
+    push();
+    noStroke();
+    fill(0, 220);
+    rect(baseX - pad, lifey - pad, totalW + pad * 2, lifebarBlockSize + pad * 2, 6);
+
+    // draw blocks
+    for (let i = 0; i < lifebarBlocks; i++) {
+      const bx = baseX + i * (lifebarBlockSize + lifebarGap);
+      const unitForBlock = (totalUnits > 0) ? (totalUnits / lifebarBlocks) : 1;
+      const filled = (currentUnits >= ((i + 1) * unitForBlock));
+      const partially = (!filled && currentUnits > (i * unitForBlock));
+      if (lifebarLayer && lifebarLayer[0]) {
+        // choose an appropriate lifebar frame (full/partial/empty). Prefer full-frame for filled blocks.
+        let img = null;
+        if (filled) {
+          img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
+        } else if (partially) {
+          img = lifebarLayer[Math.floor(lifebarFrameCount / 2)] || lifebarLayer[0];
+        } else {
+          img = lifebarLayer[0];
+        }
+        try { image(img, bx, lifey, lifebarBlockSize, lifebarBlockSize); } catch (e) { fill(filled ? 220 : 80); rect(bx, lifey, lifebarBlockSize, lifebarBlockSize); }
+      } else {
+        // fallback: colored rectangles
+        fill(filled ? color(220, 30, 30) : color(60, 60, 60));
+        rect(bx, lifey, lifebarBlockSize, lifebarBlockSize, 6);
+        if (partially) {
+          fill(220, 120, 120, 160);
+          const ratio = (currentUnits - (i * unitForBlock)) / unitForBlock;
+          rect(bx, lifey + lifebarBlockSize * (1 - ratio), lifebarBlockSize, lifebarBlockSize * ratio, 6);
+        }
+      }
+    }
+
+    // draw numeric label centered under lifebar
+    fill(255);
+    textSize(12);
+    textAlign(CENTER, TOP);
+    text(`${currentUnits}/${totalUnits}`, baseX + totalW / 2, lifey + lifebarBlockSize + 6);
+    pop();
+  };
+
+  drawLifebarFor(p1, false);
+  drawLifebarFor(p2, true);
+
   // --- DRAW BOOTS (below hearts) ---
   const bootLayer = (Array.isArray(bootFrames) ? bootFrames.find(l => Array.isArray(l) && l.length > 0) : null);
 

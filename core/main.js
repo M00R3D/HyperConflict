@@ -27,6 +27,7 @@ registerCharData();
 import { state as gameState, assignFrom as assignGameState } from './gameState.js';
 
 import { handleHUDAndMatch, resetToSelection as _resetToSelection } from './hudAndMatch.js';
+import { applyDamage } from './health.js';
 import { tryCreatePlayers, clearMatchOverState } from './lifecycle.js';
 import renderScene from './render.js';
 
@@ -60,7 +61,7 @@ let _prevBlockstun = { p1: false, p2: false };
 let _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, playerId: null };
 
 
-let _tyemanAssets = null;let _sbluerAssets = null;let _heartFrames = null;let _slotAssets = null;let _bootFrames = null;let selectionActive = false;
+let _tyemanAssets = null;let _sbluerAssets = null;let _heartFrames = null;let _lifebarFrames = null;let _slotAssets = null;let _bootFrames = null;let selectionActive = false;
 const choices = ['tyeman', 'sbluer'];let p1Choice = 0;
 let p2Choice = 1;let p1Confirmed = false;let p2Confirmed = false;let p1SelIndex = 0;let p2SelIndex = 1;
 
@@ -73,6 +74,7 @@ try {
     MAX_HP_QUARTERS, _hitEffect, _prevHp,
     _hsPrevActive, _hsStartedAt, _prevBlockstun, _blockstunZoom,
     _tyemanAssets, _sbluerAssets, _heartFrames, _slotAssets, _bootFrames,
+    _lifebarFrames,
     selectionActive, choices, p1Choice, p2Choice, p1Confirmed, p2Confirmed, p1SelIndex, p2SelIndex
   });
 } catch (e) { /* defensive: allow older runtimes during edit */ }
@@ -118,6 +120,14 @@ async function setup() {
     }
   } catch (e) {
     _bootFrames = null;console.error('loadBootFrames failed', e);
+  }
+  try {
+    _lifebarFrames = await loadLifebarFrames();
+    if (Array.isArray(_lifebarFrames)) {
+      _lifebarFrames.forEach((layer, idx) => {});
+    }
+  } catch (e) {
+    _lifebarFrames = null;console.error('loadLifebarFrames failed', e);
   }
   selectionActive = true;
   playersReady = false;
@@ -214,6 +224,14 @@ function compensatePauseTimers(dt) {
 function _respawnPlayer(player) {
   if (!player) return;
   player.hp = player.hpMax || 24;
+  // initialize hearts/lifebar pools so HUD and damage logic align
+  try {
+    const heartsCountDefault = 2;
+    const quartersPerHeart = 4;
+    const heartsQuarters = heartsCountDefault * quartersPerHeart;
+    player.hearts = Math.min(heartsQuarters, player.hp);
+    player.lifebar = Math.max(0, (player.hp || 0) - heartsQuarters);
+  } catch (e) {}
   // stamina system removed: ensure no stamina fields on respawn
   try { delete player.stamina; delete player.staminaMax; } catch (e) {}
   player.alive = true;
@@ -565,7 +583,7 @@ function draw() {
                 if (p.damageQuarters) {
                   try { applyHitstop(80); } catch (e) {}
                   const dmg = p.damageQuarters || 1;
-                  player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg);
+                  try { applyDamage(player1, dmg, 2, 4); } catch (e) { player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player1.x >= (owner.x || 0)) ? 1 : -1;
                     const push = 1.8;
@@ -630,7 +648,7 @@ function draw() {
                 } else if (p.damageQuarters) {
                   try { applyHitstop(80); } catch (e) {}
                   const dmg = p.damageQuarters || 1;
-                  player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg);
+                  try { applyDamage(player1, dmg, 2, 4); } catch (e) { player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player1.x >= (owner.x || 0)) ? 1 : -1;
                     const push = 1.8;
@@ -696,7 +714,7 @@ function draw() {
                 if (p.damageQuarters) {
                   try { applyHitstop(80); } catch (e) {}
                   const dmg = p.damageQuarters || 1;
-                  player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg);
+                  try { applyDamage(player2, dmg, 2, 4); } catch (e) { player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player2.x >= (owner.x || 0)) ? 1 : -1;
                     const push = 1.8;
@@ -757,7 +775,7 @@ function draw() {
                 } else if (p.damageQuarters) {
                   try { applyHitstop(80); } catch (e) {}
                   const dmg = p.damageQuarters || 1;
-                  player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg);
+                  try { applyDamage(player2, dmg, 2, 4); } catch (e) { player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player2.x >= (owner.x || 0)) ? 1 : -1;
                     const push = 1.8;
@@ -858,7 +876,7 @@ function draw() {
     }
   } catch (e) { /* silent */ }
 
-  drawHealthBars(player1 || null, player2 || null, _heartFrames, _bootFrames);
+  drawHealthBars(player1 || null, player2 || null, _heartFrames, _bootFrames, _lifebarFrames);
   drawInputQueues(player1 || { inputBuffer: [], inputBufferDuration:1400 }, player2 || { inputBuffer: [], inputBufferDuration:1400 });
 
   // draw stage editor overlay if active (screen & world aware) - ensure it's called after camera/pop

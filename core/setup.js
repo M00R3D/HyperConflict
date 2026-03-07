@@ -57,6 +57,7 @@ export async function setup() {
   try { state._slotAssets = await loadSlotAssets(); } catch (e) { state._slotAssets = null; console.warn('loadSlotAssets failed', e); }
   try { state._heartFrames = await loadHeartFrames(); } catch (e) { state._heartFrames = null; console.error('loadHeartFrames failed', e); }
   try { state._bootFrames = await loadBootFrames(); } catch (e) { state._bootFrames = null; console.error('loadBootFrames failed', e); }
+  try { state._lifebarFrames = await loadLifebarFrames(); } catch (e) { state._lifebarFrames = null; console.error('loadLifebarFrames failed', e); }
 
   state.selectionActive = true;
   state.playersReady = false;
@@ -104,6 +105,7 @@ export async function setup() {
   window._slotAssets = state._slotAssets;
   window._heartFrames = state._heartFrames;
   window._bootFrames = state._bootFrames;
+  window._lifebarFrames = state._lifebarFrames;
 
   window.selectionActive = state.selectionActive;
   window.playersReady = state.playersReady;

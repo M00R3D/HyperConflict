@@ -19,7 +19,7 @@ export const state = {
     debounceMs: 220,
     active: false
   },
-  MAX_HP_QUARTERS: 24,
+  MAX_HP_QUARTERS: 40,
   _hitEffect: { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null },
   _prevHp: { p1: null, p2: null },
   _hsPrevActive: false,
@@ -29,6 +29,7 @@ export const state = {
   _tyemanAssets: null,
   _sbluerAssets: null,
   _heartFrames: null,
+  _lifebarFrames: null,
   _slotAssets: null,
   _bootFrames: null,
   selectionActive: false,
@@ -58,6 +59,7 @@ export function applyToWindow() {
   window._tyemanAssets = state._tyemanAssets;
   window._sbluerAssets = state._sbluerAssets;
   window._heartFrames = state._heartFrames;
+  window._lifebarFrames = state._lifebarFrames;
   window._bootFrames = state._bootFrames;
 }
 

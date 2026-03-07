@@ -10,6 +10,7 @@ import * as Display from './fighter/display.js';
 import { keysPressed, keysUp, keysDown } from '../core/input.js';
 import { spawnProjectileFromType, PROJECTILE_TYPES } from './projectile.js';
 import { projectiles } from '../core/main.js';
+import { applyDamage } from '../core/health.js';
 
 class Fighter {
   constructor(opts = {}) {
@@ -265,7 +266,7 @@ class Fighter {
     // Si no se aplicó daño (hpBefore === this.hp), aplicamos daño básico desde attacker.damageQuarters o fallback 1.
     if (hpBefore !== null && typeof this.hp === 'number' && this.hp === hpBefore) {
       const damageQuarters = (typeof attacker.damageQuarters === 'number') ? attacker.damageQuarters : 1;
-      this.hp = Math.max(0, this.hp - damageQuarters);
+      try { applyDamage(this, damageQuarters, 2, 4); } catch (e) { this.hp = Math.max(0, this.hp - damageQuarters); }
     }
 
     // Stamina system removed: do not modify stamina when hit.
@@ -350,6 +351,8 @@ class Fighter {
     // Si HP llega a 0 forzar knockdown y limpiar estados que podrían bloquear transiciones
     if (this.hp <= 0) {
       this.hp = 0;
+      this.hearts = 0;
+      this.lifebar = 0;
       this.alive = false;
       this.blocking = false;
       this.blockStunStartTime = 0;

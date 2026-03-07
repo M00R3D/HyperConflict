@@ -8,8 +8,15 @@ export function initBase(self, x, col, id) {
   self.h = 32;
   self.col = col;
   // now store health as quarters: 6 hearts * 4 = 24 quarters total
-  self.hp = 24;
-  self.hpMax = 24; // <-- max HP stored
+  // Default to a larger pool of quarters so we can represent 2 visible hearts
+  // plus an extended lifebar. Default chosen 40 quarters (configurable later).
+  self.hp = 40;
+  self.hpMax = 40; // <-- max HP stored
+  // Visible hearts count (2 hearts x 4 quarters) and extended lifebar pool
+  const heartsCountDefault = 2;
+  const quartersPerHeart = 4;
+  self.hearts = heartsCountDefault * quartersPerHeart;
+  self.lifebar = Math.max(0, self.hpMax - self.hearts);
   self.id = id;
 
   // store spawn/origin X to allow respawn
@@ -19,7 +26,7 @@ export function initBase(self, x, col, id) {
   self.alive = true;
 
   // LIVES: default 2 vidas por personaje (configurable por instancia)
-  self.livesMax = 2;
+  self.livesMax = 1;
   self.lives = (typeof self.lives === 'number') ? self.lives : self.livesMax;
   self.vx = 0;
   self.vy = 0;
