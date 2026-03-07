@@ -383,17 +383,80 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
       const unitForBlock = (totalUnits > 0) ? (totalUnits / lifebarBlocks) : 1;
       const filled = (currentUnits >= ((i + 1) * unitForBlock));
       const partially = (!filled && currentUnits > (i * unitForBlock));
-      if (lifebarLayer && lifebarLayer[0]) {
-        // choose an appropriate lifebar frame (full/partial/empty). Prefer full-frame for filled blocks.
-        let img = null;
-        if (filled) {
-          img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
-        } else if (partially) {
-          img = lifebarLayer[Math.floor(lifebarFrameCount / 2)] || lifebarLayer[0];
-        } else {
-          img = lifebarLayer[0];
-        }
-        try { image(img, bx, lifey, lifebarBlockSize, lifebarBlockSize); } catch (e) { fill(filled ? 220 : 80); rect(bx, lifey, lifebarBlockSize, lifebarBlockSize); }
+      if (lifebarLayer && lifebarLayer.length > 0) {
+        // Draw only filled blocks and partial image portions. Empty blocks are left transparent
+        // so the black background shows through.
+          // rotate blocks 90deg clockwise (right) for consistent orientation
+          const rotateAngle = HALF_PI;
+          if (filled) {
+            const img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
+            try {
+              push();
+              imageMode(CENTER);
+              translate(bx + lifebarBlockSize / 2, lifey + lifebarBlockSize / 2);
+              rotate(rotateAngle);
+              image(img, 0, 0, lifebarBlockSize, lifebarBlockSize);
+              pop();
+            } catch (e) {
+              fill(220); rect(bx, lifey, lifebarBlockSize, lifebarBlockSize, 6);
+            }
+          } else if (partially) {
+            // Create a rotated block buffer first, then crop horizontally from the rotated
+            // buffer so the visible portion shrinks left/right in screen-space. This ensures
+            // P1 reduces right->left and P2 reduces left->right.
+            const ratio = (currentUnits - (i * unitForBlock)) / unitForBlock;
+            const img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
+            try {
+              if (img && img.width && img.height) {
+                // prepare full-square buffer (one block)
+                const g = createGraphics(lifebarBlockSize, lifebarBlockSize);
+                g.noSmooth();
+                try {
+                  g.image(img, 0, 0, lifebarBlockSize, lifebarBlockSize);
+                } catch (ge) {
+                  g.push(); g.noStroke(); g.fill(220, 120, 120, 160); g.rect(0, 0, lifebarBlockSize, lifebarBlockSize, 6); g.pop();
+                }
+
+                // create a second buffer containing the rotated block
+                const g2 = createGraphics(lifebarBlockSize, lifebarBlockSize);
+                g2.noSmooth();
+                g2.push();
+                g2.imageMode(CENTER);
+                g2.translate(lifebarBlockSize / 2, lifebarBlockSize / 2);
+                g2.rotate(rotateAngle);
+                g2.image(g, 0, 0, lifebarBlockSize, lifebarBlockSize);
+                g2.pop();
+
+                const destW = Math.max(1, Math.round(lifebarBlockSize * ratio));
+                const destH = lifebarBlockSize;
+
+                // When drawing from the rotated buffer we can crop horizontally in screen-space:
+                // - For P1 (rightAligned=false) we want the visible piece anchored to the right
+                //   inner edge, so take the rightmost src slice.
+                // - For P2 (rightAligned=true) anchor to the left edge (take leftmost src slice).
+                const srcX = rightAligned ? 0 : (lifebarBlockSize - destW);
+                const srcW = destW;
+
+                const drawX = bx + (rightAligned ? 0 : (lifebarBlockSize - destW));
+
+                // finally draw the cropped portion from the rotated buffer into screen-space
+                imageMode(CORNER);
+                image(g2, drawX, lifey, destW, destH, srcX, 0, srcW, lifebarBlockSize);
+              } else {
+                fill(220, 120, 120, 160);
+                rect(bx, lifey + lifebarBlockSize * (1 - ratio), lifebarBlockSize, lifebarBlockSize * ratio, 6);
+              }
+            } catch (e) {
+              fill(220, 120, 120, 160);
+              rect(bx, lifey + lifebarBlockSize * (1 - ratio), lifebarBlockSize, lifebarBlockSize * ratio, 6);
+            }
+          } else {
+            push();
+            noFill();
+            stroke(40, 40);
+            rect(bx, lifey, lifebarBlockSize, lifebarBlockSize, 6);
+            pop();
+          }
       } else {
         // fallback: colored rectangles
         fill(filled ? color(220, 30, 30) : color(60, 60, 60));
