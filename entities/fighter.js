@@ -855,8 +855,7 @@ class Fighter {
             const computedVy = -(typeof flyupV === 'number' ? Math.abs(flyupV) : 10);
             victim.vx = computedVx;
             victim.vy = computedVy;
-            // debug log to verify per-character throw forces used
-            try { console.log('[THROW] flyup', { throwerChar: this.charId, victimChar: victim.charId, tf, computedVx, computedVy }); } catch (e) {}
+            // debug log removed for flyup to reduce console spam
             // Force persistent knockback matching the throw velocities
             try {
               const kb = { vx: computedVx, vy: computedVy, decay: 1, frames: 101, sourceId: this.id };
@@ -890,7 +889,7 @@ class Fighter {
             victim.vx = computedVx;
             // loft también mucho mayor para efecto dramático
             victim.vy = computedVy;
-            try { console.log('[THROW] flyback', { throwerChar: this.charId, victimChar: victim.charId, tf, dir, computedVx, computedVy }); } catch (e) {}
+            // debug log removed for flyback to reduce console spam
             // marcar lanzamiento para que update() priorice flyback animation y dure más
             victim._launched = 'flyback';
             victim._launchedStart = millis();

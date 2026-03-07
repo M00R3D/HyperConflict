@@ -162,9 +162,10 @@ export function updateMovement(self) {
         self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch' ||
         self.state.current === 'crouchkick' || self.state.current === 'crouchKick'
       ) {
-        // lock movement fully for crouch punch: zero velocities and clear directional inputs
+        // lock movement for crouch attacks: stop horizontal movement on ground
         self.vx = 0;
-        self.vy = 0;
+        // only zero vertical velocity if grounded; if in air, allow gravity to act normally
+        if (self.onGround) self.vy = 0;
         self.keys.left = false; self.keys.right = false; self.keys.up = false;
         self.runActive = false;
       } else {
