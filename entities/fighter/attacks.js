@@ -1,9 +1,10 @@
 // entities/fighter/attacks.js
 import * as Anim from './animation.js';
 import { getKnockbackForAttack } from '../../core/knockback.js';
-import { Projectile, spawnProjectileFromType } from '../../entities/projectile.js';
 import { state } from '../../core/state.js';
 import { keysDown } from '../../core/input.js';
+import { handleStaplerSpawn, handleThinLaserSpawn, shoot as shootSpawn } from './attacks/spawn.js';
+import { attackHits as attackHitsImpl, hit as hitImpl, updateAttackState as updateAttackStateImpl } from './attacks/hit.js';
 export function attack(self, key) {
   const now = millis();
   // Prevent starting new attacks while game is paused or during hitstop
@@ -79,16 +80,14 @@ export function attack(self, key) {
   self._hitTargets = new Set();
   self.lastAttackTimeByKey[key] = now;
   self.inputLockedByKey[key] = true;
-  // If we used a crouch-specific single attack, avoid escalating the combo
-  if (
+  // Defer combo advancement until the attack actually hits.
+  // Store the key that initiated this attack and whether it should reset on hit (crouch variants).
+  self._comboKeyForCurrentAttack = key;
+  self._comboAdvancedThisAttack = false;
+  self._comboAdvanceResetIfCrouch = (
     attackName === 'crouchpunch' || attackName === 'crouchPunch' ||
     attackName === 'crouchkick' || attackName === 'crouchKick'
-  ) {
-    self.comboStepByKey[key] = 0;
-  } else {
-    self.comboStepByKey[key] = (step + 1);
-    if (self.comboStepByKey[key] >= chain.length) self.comboStepByKey[key] = 0;
-  }
+  );
   // Diagnostic: log start for Fernando to help debug timing/hitbox issues
   try {
     if (self && self.charId === 'fernando') {
@@ -97,193 +96,21 @@ export function attack(self, key) {
   } catch (e) {}
 
   // --- Special: spawn staple projectile for Tyeman's stapler attack ---
-  try {
-    if (attackName === 'stapler') {
-      const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
-      const dir = (self.facing === -1) ? -1 : 1;
-      const sx = Math.round(self.x + (dir === 1 ? self.w : 0));
-      const sy = Math.round(self.y + self.h / 2);
-      // Staple should NOT behave like the bun (no attraction/return).
-      // Use a non-bun typeId (0 = default) but draw at bun-sized dimensions.
-      // use a dedicated typeId 6 for the staple so its hitbox can be configured centrally
-      // Don't pass visual/physics defaults here — use central PROJECTILE_TYPES[6].
-      // Keep resources empty and rely on preset; pass frames if available.
-      const p = spawnProjectileFromType(6, sx, sy, dir, self.id, {}, {}, (self.stapleFramesByLayer || null));
-      p.attackType = 'stapler';
-      // Respect any damageQuarters coming from the projectile type/preset; default to 1 if absent
-      p.damageQuarters = (typeof p.damageQuarters === 'number') ? p.damageQuarters : 1;
-      p.ownerRef = self;
-      p._ownerRef = self;
-      p.ownerId = self.id;
-      p.charId = self.charId;
-      if (projArr && Array.isArray(projArr)) projArr.push(p);
-    }
-  } catch (e) { try { console.warn('[Attacks.attack] failed to spawn stapler projectile', e); } catch (ee) {} }
+  try { handleStaplerSpawn(self, attackName); } catch (e) { try { console.warn('[Attacks.attack] stapler spawn failed', e); } catch (ee) {} }
   // --- Special: spawn or renew thin_laser projectile for Fernando ---
-  try {
-    if (attackName === 'thin_laser') {
-      const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
-      const dir = (self.facing === -1) ? -1 : 1;
-      const sx = Math.round(self.x + (dir === 1 ? self.w : 0));
-      const sy = Math.round(self.y + self.h / 2);
-
-      // Try to find existing thin_laser by this owner and renew it instead of creating duplicates
-      let existing = null;
-      if (projArr && Array.isArray(projArr)) {
-        for (let i = projArr.length - 1; i >= 0; i--) {
-          const q = projArr[i];
-          if (!q) continue;
-          if (q.ownerId === self.id && q.typeId === 8) { existing = q; break; }
-        }
-      }
-
-      if (existing) {
-        existing.age = 0;
-        existing.lifespan = existing.lifespan || 4000;
-        existing.toRemove = false;
-        existing._visible = true;
-        existing._originX = sx;
-        existing._originY = sy;
-        // reset beam visual length so it restarts at base size
-        try { existing._beamLength = existing.w || 6; existing._beamTargetLength = existing.w || 6; } catch (e) {}
-        existing.frameIndex = 0;
-        existing._frameTimer = millis();
-      } else {
-        const p = spawnProjectileFromType(8, sx, sy, dir, self.id, {}, {}, (self.thinLaserProjFramesByLayer || null));
-        p.attackType = 'thin_laser';
-        p.damageQuarters = (typeof p.damageQuarters === 'number') ? p.damageQuarters : 4;
-        p.ownerRef = self; p._ownerRef = self; p.ownerId = self.id; p.charId = self.charId;
-        if (projArr && Array.isArray(projArr)) projArr.push(p);
-      }
-
-      // suppress fighter overlay if thin_laser will be handled by projectile drawing
-      self._suppressThinLaserOverlay = true;
-    }
-  } catch (e) { try { console.warn('[Attacks.attack] failed to spawn thin_laser projectile', e); } catch (ee) {} }
+  try { handleThinLaserSpawn(self, attackName); } catch (e) { try { console.warn('[Attacks.attack] thin_laser spawn failed', e); } catch (ee) {} }
 }
 
 export function attackHits(self, opponent) {
-  if (!self.attacking) return false;
-  if (!self._hitTargets) self._hitTargets = new Set();
-  if (opponent && opponent.id && self._hitTargets.has(opponent.id)) return false;
-
-  // --- GRAB: solo en el último frame (mejorado para sincronía temporal) ---
-  if (self.attackType === 'grab') {
-    const action = self.actions.grab || {};
-    const totalFrames = (self.grabFramesByLayer && self.grabFramesByLayer[0]?.length) || 1;
-
-    // calcular frame aproximado a partir del tiempo transcurrido para cubrir el caso
-    // en que el main loop pregunta por colisiones antes de que anim.update haya incrementado frameIndex.
-    const elapsed = millis() - (self.attackStartTime || 0);
-    let approxFrameIndex = 0;
-    if (totalFrames > 1 && action.duration) {
-      approxFrameIndex = Math.floor((elapsed / Math.max(1, action.duration)) * totalFrames);
-      approxFrameIndex = Math.max(0, Math.min(totalFrames - 1, approxFrameIndex));
-    }
-
-    const effectiveFrameIndex = Math.max((self.frameIndex || 0), approxFrameIndex);
-
-    // sólo activo cuando alcanzamos el último frame efectivo
-    if ((effectiveFrameIndex + 1) < totalFrames) return false;
-
-    const atkHB = self.getAttackHitbox();
-    if (!atkHB) return false;
-    const oppHB = opponent.getCurrentHitbox();
-    const collided = (
-      atkHB.x < oppHB.x + oppHB.w &&
-      atkHB.x + atkHB.w > oppHB.x &&
-      atkHB.y < oppHB.y + oppHB.h &&
-      atkHB.y + atkHB.h > oppHB.y
-    );
-    // Solo si el oponente NO está bloqueando ni en crouchBlock
-    if (
-      collided &&
-      !opponent.blocking &&
-      (!opponent.state || (opponent.state.current !== 'block' && opponent.state.current !== 'crouchBlock'))
-    ) {
-      // Marcar como agarrado (evita multi-hit)
-      if (opponent && opponent.id) self._hitTargets.add(opponent.id);
-
-      // LIMPIAR flags previos del oponente para evitar caer en hit
-      opponent.attacking = false;
-      opponent.attackType = null;
-      opponent.attackStartTime = 0;
-      opponent._hitTargets = null;
-      // liberar locks de inputs previas del oponente
-      if (opponent.inputLockedByKey) {
-        for (const k in opponent.inputLockedByKey) opponent.inputLockedByKey[k] = false;
-      }
-      opponent.isHit = false; opponent.hitLevel = 0;
-
-      // Posicionar al rival junto al agarrador (visual de levantar)
-      const offsetX = (self.facing === 1) ? (self.w - 6) : (-opponent.w + 6);
-      opponent.x = self.x + offsetX;
-      opponent.y = self.y;
-      opponent.vx = 0;
-      opponent.vy = 0;
-
-      // forzar timer / frame para que la animación grabbed empiece consistente
-      if (opponent.state) opponent.state.timer = 0;
-      opponent.frameIndex = 0;
-
-      // Cambiar estado del oponente a grabbed y bloquearlo
-      opponent.setState('grabbed');
-      opponent.grabbedBy = self;
-      opponent._grabLock = true;
-
-      // además guardar referencia clara para que el grabber pueda mantener la posición
-      self._grabHolding = true;
-      self._grabVictimOffsetX = offsetX;
-
-      // El que agarra queda en el último frame y en holding
-      self._grabHolding = true;
-      self.vx = 0;
-      self.vy = 0;
-      // prevenir que el grabber pierda su attacking flag hasta que suelte
-      self.attacking = true;
-      self.attackType = 'grab';
-      return true;
-    }
-    return false;
-  }
-
-  const atkHB = self.getAttackHitbox();
-  if (!atkHB) return false;
-  const oppHB = opponent.getCurrentHitbox();
-  const collided = (
-    atkHB.x < oppHB.x + oppHB.w &&
-    atkHB.x + atkHB.w > oppHB.x &&
-    atkHB.y < oppHB.y + oppHB.h &&
-    atkHB.y + atkHB.h > oppHB.y
-  );
-  try {
-    if (self && self.charId === 'fernando') {
-      const now = millis();
-      const elapsed = now - (self.attackStartTime || 0);
-      console.log('[attackHits] fernando check', JSON.stringify({ attackType: self.attackType, elapsed, attackDuration: self.attackDuration, frameIndex: self.frameIndex, atkHB, oppId: opponent && opponent.id, oppHB, collided }));
-    }
-  } catch(e) {}
-
-  if (collided) {
-    // marcar como golpeado por esta activación para evitar múltiples hits
-    if (opponent && opponent.id) self._hitTargets.add(opponent.id);
-    return true;
-  }
-  return false;
+  return attackHitsImpl(self, opponent);
 }
 
 export function shoot(self) {
-  const dir = self.keys.right ? 1 : (self.keys.left ? -1 : (self.id === 'p1' ? 1 : -1));
-  const sx = Math.round(self.x + self.w / 2);
-  const sy = Math.round(self.y + self.h / 2);
-  const p = spawnProjectileFromType(0, sx, sy, dir, self.id, {}, { speed: 8, w: 16, h: 16 }, (self.projectileFramesByLayer || null));
-  const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
-  if (projArr && Array.isArray(projArr)) projArr.push(p);
+  return shootSpawn(self);
 }
 
 export function hit(self, attacker = null) {
-  // seguridad: nada que procesar
-  if (!attacker) return;
+  return hitImpl(self, attacker);
   // try { console.log(`[Attacks.hit] ${self.id || '?'} hit by ${attacker.id || '?'} attack=${attacker.attackType}`); } catch(e){}
 
   // (Se eliminó el bloqueo que forzaba un knockback por defecto aquí)
@@ -523,57 +350,5 @@ export function hit(self, attacker = null) {
 }
 
 export function updateAttackState(self) {
-  const now = millis();
-  if (self.attacking && (now - self.attackStartTime > self.attackDuration)) {
-    // Mantener el estado de ataque mientras el grab esté en holding,
-    // para que el grabber permanezca en el último frame hasta soltarlo.
-    if (self.attackType === 'grab' && self._grabHolding) {
-      return;
-    }
-
-    const endedAttackType = self.attackType;
-
-    // SPECIAL: spit -> si el jugador mantiene el botón neutral de gimmick (G: 'u' para P1, 'v' para P2)
-    // congelar la animación en su último frame hasta que suelte el botón.
-    if (endedAttackType === 'spit') {
-      try {
-        // the spit action is triggered via the neutral gimmick key: 'p' for P1, 'm' for P2
-        const holdKey = (self.id === 'p1') ? 'p' : 'm';
-        if (keysDown && keysDown[holdKey]) {
-          // marcar hold y preparar la animación para el ciclo 4..6
-          self._spitHold = true;
-          // clear attacking state but keep visual state as 'spit'
-          self.attacking = false;
-          self.attackType = null;
-          try { self.setState('spit'); } catch (e) {}
-          // empezar el ciclo en el fotograma 7 para que updateAnimation lo rote 7..8
-          self.frameIndex = 7;
-          self.frameTimer = 0;
-          // do not clear _hitTargets here (optional)
-          return;
-        }
-      } catch (e) { /* ignore */ }
-    }
-
-    self.attacking = false;
-    self.attackType = null;
-    // limpiar lista de objetivos al terminar la activación
-    if (self._hitTargets) { self._hitTargets.clear(); self._hitTargets = null; }
-
-    // Si el ataque terminado era un taunt y el fighter sigue en ese estado visual,
-    // forzamos la vuelta a 'idle' para que la entropía del loop no deje al fighter bloqueado.
-    // (Solo aplicamos esto para 'taunt' porque otros ataques pueden manejar su propia recovery)
-    try {
-      if (endedAttackType === 'taunt' && self.state && self.state.current === 'taunt') {
-        self.setState('idle');
-      }
-      // Si terminamos un crouchpunch o crouchkick, volver a idle automáticamente
-      if (
-        (endedAttackType === 'crouchpunch' || endedAttackType === 'crouchPunch' || endedAttackType === 'crouchkick' || endedAttackType === 'crouchKick')
-        && self.state && (self.state.current === 'crouchpunch' || self.state.current === 'crouchPunch' || self.state.current === 'crouchkick' || self.state.current === 'crouchKick')
-      ) {
-        self.setState('idle');
-      }
-    } catch (e) { /* silent */ }
-  }
+  return updateAttackStateImpl(self);
 }

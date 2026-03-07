@@ -1,4 +1,6 @@
 // entities/fighter/init.js
+import { initCombos } from './combos.js';
+
 export function initBase(self, x, col, id) {
   self.x = x;
   self.y = height - 72;
@@ -244,26 +246,8 @@ export function initComboAndInput(self) {
   self.inputBuffer = self.inputBuffer || [];
   self.inputBufferDuration = (typeof self.inputBufferDuration === 'number') ? self.inputBufferDuration : 1400;
   self.inputBufferMax = (typeof self.inputBufferMax === 'number') ? self.inputBufferMax : 20;
-
-  self.comboChainsByKey = {
-    i: ['punch', 'punch2','punch', 'punch3'],
-    o: ['kick', 'kick2', 'kick3'],
-    b: ['punch', 'punch2','punch', 'punch3'],
-    n: ['kick', 'kick2', 'kick3'],
-    // p/m (gimmick neutral) mapped to stapler only for Tyeman; other chars have no action here
-    p: self.charId === 'tyeman' ? ['stapler'] : self.charId === 'sbluer' ? ['spit'] : self.charId === 'fernando' ? ['thin_laser'] : [],
-    m: self.charId === 'tyeman' ? ['stapler'] : self.charId === 'sbluer' ? ['spit'] : self.charId === 'fernando' ? ['thin_laser'] : []
-  };
-
-  self.comboStepByKey = {};
-  self.lastAttackTimeByKey = {};
-  self.inputLockedByKey = {};
-  for (const k in self.comboChainsByKey) {
-    self.comboStepByKey[k] = 0;
-    self.lastAttackTimeByKey[k] = 0;
-    self.inputLockedByKey[k] = false;
-  }
-  self.comboWindow = 250;
+  // centralizar inicialización de combos en module dedicado
+  try { initCombos(self); } catch (e) { /* silent fallback */ }
 
   // Timing para combinación de direcciones/acciones (ms)
   self.dirIgnoreMaxMs = (typeof self.dirIgnoreMaxMs === 'number') ? self.dirIgnoreMaxMs : 20;

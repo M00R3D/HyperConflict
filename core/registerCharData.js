@@ -2,6 +2,7 @@ import { registerStatsForChar, registerActionsForChar } from './charConfig.js';
 import { registerAttackHitboxesForChar, registerBodyHitboxesForChar } from './hitboxConfig.js';
 import { setKnockbackForAttack } from './knockback.js';
 import { registerSpecialsForChar } from '../entities/fighter/specials.js';
+import { registerComboChainsForChar } from '../entities/fighter/combos.js';
 export function registerCharData() {
             registerActionsForChar('fernando', {
             // punch: { duration: 500, frameDelay: 6 },
@@ -157,4 +158,34 @@ export function registerSpecials(){
     grab: { seq: ['G'], direction: 'any' },
     supersalto: { seq: ['↓','↑'], direction: 'any' }
   });
+
+  // Register combo chains per character so the combos module has authoritative data.
+  try {
+    registerComboChainsForChar('tyeman', {
+      i: ['punch','punch2','punch','punch3'],
+      o: ['kick','kick2','kick3'],
+      b: ['punch','punch2','punch','punch3'],
+      n: ['kick','kick2','kick3'],
+      p: ['stapler'],
+      m: ['stapler']
+    });
+
+    registerComboChainsForChar('sbluer', {
+      i: ['punch','punch2','punch','punch3'],
+      o: ['kick','kick2','kick3'],
+      b: ['punch','punch2','punch','punch3'],
+      n: ['kick','kick2','kick3'],
+      p: ['spit'],
+      m: ['spit']
+    });
+
+    registerComboChainsForChar('fernando', {
+      i: ['punch','punch2','punch','punch3'],
+      o: ['kick','kick2','kick3'],
+      b: ['punch','punch2','punch','punch3'],
+      n: ['kick','kick2','kick3'],
+      p: ['thin_laser'],
+      m: ['thin_laser']
+    });
+  } catch (e) { /* ignore if combos module not available */ }
 }
