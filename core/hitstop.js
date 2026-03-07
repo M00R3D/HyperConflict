@@ -16,7 +16,11 @@ let _pendingRequest = false; // indica que hay una solicitud pendiente de freeze
 
 // --- NEW: controlar duración del hitstop con una sola variable (ms por "frame" de freeze) ---
 // Si HITSTOP_MS_PER_FRAME === 0 => hitstop queda desactivado (siempre 0ms)
-export let HITSTOP_MS_PER_FRAME = 1; // ajustar a 0 para desactivar totalmente el hitstop
+// Reducido para ser más sutil por defecto: 10% del valor original (1ms -> 0.1ms)
+export let HITSTOP_MS_PER_FRAME = 0.1; // ms por "frame" de freeze (ajustable)
+
+// Tope máximo de hitstop en ms para evitar pausas largas por golpes grandes
+export const HITSTOP_MS_MAX = 60; // never allow more than 30ms of hitstop
 
 
 
@@ -54,7 +58,9 @@ export function applyHitstop(ms = 0) {
     if (typeof window !== 'undefined') window.HITSTOP_REMAINING_MS = 0;
     return;
   }
-  _end = millis() + Math.max(0, ms);
+  // clamp directo a tope global para evitar duraciones largas
+  const msClamped = Math.min(Math.max(0, Number(ms) || 0), HITSTOP_MS_MAX);
+  _end = millis() + msClamped;
 }
 // activa hitstop basado en tiempo: fija _end a millis()+ms (80ms por defecto)
 
@@ -92,7 +98,10 @@ export function capturePendingHitstopSnapshot() {
   _frameFreezeRemaining = Math.max(_frameFreezeRemaining, Math.floor(totalFrames)); // actualiza el contador de frames restantes
 
   // --- USAR la variable única HITSTOP_MS_PER_FRAME para calcular el tiempo total ---
-  _end = millis() + Math.max(0, Math.round(_frameFreezeRemaining * HITSTOP_MS_PER_FRAME));
+  // calcular ms estimados por frames y aplicar tope máximo
+  const estimatedMs = Math.max(0, Math.round(_frameFreezeRemaining * HITSTOP_MS_PER_FRAME));
+  const msToApply = Math.min(estimatedMs, HITSTOP_MS_MAX);
+  _end = millis() + msToApply;
 
   _pendingFrames = 0; // limpia las solicitudes pendientes
   _pendingRequest = false; // marca que ya no hay petición pendiente
