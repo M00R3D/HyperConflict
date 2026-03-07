@@ -6,14 +6,63 @@ export function updateMovement(self) {
   if (self._knockback) {
     try {
       // aplicar la velocidad del knockback (vx se gestiona por kb, vy por gravedad salvo el impulso inicial)
-      self.vx = typeof self._knockback.vx === 'number' ? self._knockback.vx : (self.vx || 0);
-      if (typeof self._knockback.vy === 'number' && !self.onGround) {
-        // aplicar vy sólo como impulso inicial; gravedad continuará después
-        self.vy = self._knockback.vy;
+      // ensure we have an initial snapshot for time-based decay
+      if (typeof self._knockback._initialVx === 'undefined') {
+        self._knockback._initialVx = (typeof self._knockback.vx === 'number') ? self._knockback.vx : (self.vx || 0);
+        self._knockback._startedAt = (typeof millis === 'function') ? millis() : Date.now();
       }
 
-      // decay horizontal para simular pérdida gradual (mantener feel de push)
-      self._knockback.vx *= (typeof self._knockback.decay === 'number' ? self._knockback.decay : 0.92);
+      if (typeof self._knockback.vy === 'number' && !self.onGround) {
+        // aplicar vy sólo como impulso inicial; evitar reaplicarlo cada frame
+        if (!self._knockback._vyApplied) {
+          self.vy = self._knockback.vy;
+          self._knockback._vyApplied = true;
+          try { console.log('[KNOCKBACK-VY-APPLIED]', { char: self.charId || self.id, vy: self.vy, startedAt: self._knockback._startedAt }); } catch (e) {}
+        }
+      }
+
+      // decay horizontal: preferimos un modo basado en tiempo para throws (hitLevel 4)
+      let appliedVx = self._knockback._initialVx;
+      try {
+        if (typeof window !== 'undefined' && typeof window.getThrowDecayForChar === 'function' && self.hitLevel === 4 && typeof self._launched === 'string') {
+          const tdTable = window.getThrowDecayForChar(self.charId || 'default');
+          const kind = (self._launched === 'flyback') ? 'flyback' : (self._launched === 'flyup' ? 'flyup' : 'normal');
+          const cfg = (tdTable && typeof tdTable[kind] !== 'undefined') ? tdTable[kind] : null;
+
+          // If cfg is an object with durationMs, perform a time-based lerp from initial->0
+          if (cfg && typeof cfg === 'object' && typeof cfg.durationMs === 'number') {
+            const now = (typeof millis === 'function') ? millis() : Date.now();
+            const elapsed = Math.max(0, now - (self._knockback._startedAt || now));
+            const prog = Math.min(1, elapsed / cfg.durationMs);
+            appliedVx = lerp(self._knockback._initialVx, 0, prog);
+          } else if (typeof cfg === 'number') {
+            // numeric multiplier fallback (per-frame)
+            appliedVx = (typeof self._knockback.vx === 'number') ? (self._knockback.vx * cfg) : (appliedVx * cfg);
+          } else {
+            // global default multiplier
+            appliedVx = (typeof self._knockback.vx === 'number') ? (self._knockback.vx * 0.92) : (appliedVx * 0.92);
+          }
+        } else {
+          // non-throw knockback: keep numeric decay or frames-based behavior
+          const decay = (typeof self._knockback.decay === 'number') ? self._knockback.decay : 0.92;
+          appliedVx = (typeof self._knockback.vx === 'number') ? (self._knockback.vx * decay) : (appliedVx * decay);
+        }
+      } catch (e) {
+        appliedVx = (typeof self._knockback.vx === 'number') ? self._knockback.vx : appliedVx;
+      }
+
+      // Small extra brake specifically for flyback launches (tasteful, not brutal)
+      try {
+        if (self._launched === 'flyback') {
+          appliedVx = lerp(appliedVx, 0, 0.015);
+        }
+      } catch (e) {}
+
+      // commit applied vx back into knockback record and to fighter vx
+      self._knockback.vx = appliedVx;
+      self.vx = appliedVx;
+
+      // frames bookkeeping (legacy support)
       self._knockback.frames = (typeof self._knockback.frames === 'number') ? (self._knockback.frames - 1) : Infinity;
 
       // limpiar cuando ya casi no tiene velocidad o se acabaron frames
@@ -272,11 +321,65 @@ export function updateMovement(self) {
   }
 
   // gravedad y salto
-  if(self.state.current === "flyback" || self.state.current === "flyup") { self.vy += (self.gravity/4*3); }
-  else{ self.vy += self.gravity; }
+  const isLaunchState = (self.state.current === "flyback" || self.state.current === "flyup" || self._launched === 'flyback' || self._launched === 'flyup');
+  const gravityMult = isLaunchState ? 2.5 : 1; // aumento de gravedad en lanzamientos (ajustado)
+  self.vy += self.gravity * gravityMult;
   self.y += self.vy;
-  if (self.y >= height - 72) { self.y = height - 72; self.vy = 0; self.onGround = true; }
-  else self.onGround = false;
+
+  // Ground handling: support a small "bounce" when landing from flyup/flyback (pelota)
+  const groundY = height - 72;
+  if (self.y >= groundY) {
+    const landingVy = self.vy;
+    if (isLaunchState && landingVy > 2) {
+      // perform a controlled bounce
+      self._launchedBounceCount = (self._launchedBounceCount || 0) + 1;
+      const bounceFactor = 0.45; // how bouncy the launch feels (tuneable)
+      self.vy = -landingVy * bounceFactor;
+      // damp horizontal velocity on bounce
+      self.vx *= 0.2;
+
+      if (self._launchedBounceCount >= 2) {
+        // settle after a couple of bounces
+        self.y = groundY;
+        self.vy = 0;
+        self.onGround = true;
+        delete self._launched;
+        // reduce knockback so movement doesn't continue too long
+        if (self._knockback) self._knockback.vx *= 0.4;
+        self._launchedBounceCount = 0;
+      } else {
+        // keep slightly above ground so the bounce is visible
+        self.y = groundY - 1;
+        self.onGround = false;
+      }
+    } else {
+      // normal landing
+      self.y = groundY;
+      self.vy = 0;
+      self.onGround = true;
+      self._launchedBounceCount = 0;
+    }
+  } else {
+    self.onGround = false;
+  }
+
+  // DEBUG: log coordinates/velocity while in flyup/flyback so we can tune decay/forces
+  try {
+    const stateIsFly = (self.state && (self.state.current === 'flyup' || self.state.current === 'flyback'));
+    const launchedIsFly = (typeof self._launched === 'string' && (self._launched === 'flyup' || self._launched === 'flyback'));
+    if (stateIsFly || launchedIsFly) {
+      const opp = self.opponent || (typeof window !== 'undefined' ? ((window.player1 && window.player1.id === self.id) ? window.player2 : window.player1) : null);
+      const snap = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n);
+      console.log('[LAUNCH-TRACE]', {
+        t: millis(),
+        char: self.charId || self.id,
+        state: self.state?.current || null,
+        launched: self._launched || null,
+        x: snap(self.x), y: snap(self.y), vx: snap(self.vx), vy: snap(self.vy), onGround: !!self.onGround,
+        opponent: opp ? { char: opp.charId || opp.id, x: snap(opp.x), y: snap(opp.y), vx: snap(opp.vx), vy: snap(opp.vy) } : null
+      });
+    }
+  } catch (e) {}
 
   self.x = constrain(self.x, 0, width - self.w);
 

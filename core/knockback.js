@@ -56,14 +56,14 @@ _damageByChar['default'] = {
 };
 
 // --- Hit-level duration registry (per-character)
-// Specifies how long each hit level (1..3) should last before transitioning
-// to the next state. Values are milliseconds. Accepts arrays [d1,d2,d3]
-// or objects {1: d1, 2: d2, 3: d3} when registering.
+// Specifies how long each hit level (1..4) should last before transitioning
+// to the next state. Values are milliseconds. Accepts arrays [d1,d2,d3,d4]
+// or objects {1: d1, 2: d2, 3: d3, 4: d4} when registering.
 const _hitLevelDurationsByChar = Object.create(null);
-_hitLevelDurationsByChar['default'] = { 1: 500, 2: 700, 3: 1000 };
-_hitLevelDurationsByChar['tyeman'] = { 1: 450, 2: 650, 3: 1200 };
-_hitLevelDurationsByChar['sbluer'] = { 1: 400, 2: 600, 3: 1100 };
-_hitLevelDurationsByChar['fernando'] = { 1: 100, 2: 600, 3: 1100 };
+_hitLevelDurationsByChar['default'] = { 1: 500, 2: 700, 3: 800, 4: 800 };
+_hitLevelDurationsByChar['tyeman'] = { 1: 450, 2: 650, 3: 900, 4: 1200 };
+_hitLevelDurationsByChar['sbluer'] = { 1: 400, 2: 600, 3: 900, 4: 1200 };
+_hitLevelDurationsByChar['fernando'] = { 1: 100, 2: 600, 3: 900, 4: 1200 };
 export function registerHitLevelDurationsForChar(charId, table = {}) {
   if (!charId) return;
   let normalized = {};
@@ -71,10 +71,12 @@ export function registerHitLevelDurationsForChar(charId, table = {}) {
     normalized[1] = Number(table[0]) || _hitLevelDurationsByChar['default'][1];
     normalized[2] = Number(table[1]) || _hitLevelDurationsByChar['default'][2];
     normalized[3] = Number(table[2]) || _hitLevelDurationsByChar['default'][3];
+    normalized[4] = Number(table[3]) || _hitLevelDurationsByChar['default'][4];
   } else if (table && typeof table === 'object') {
     normalized[1] = Number(table[1] ?? table['1']) || _hitLevelDurationsByChar['default'][1];
     normalized[2] = Number(table[2] ?? table['2']) || _hitLevelDurationsByChar['default'][2];
     normalized[3] = Number(table[3] ?? table['3']) || _hitLevelDurationsByChar['default'][3];
+    normalized[4] = Number(table[4] ?? table['4']) || _hitLevelDurationsByChar['default'][4];
   } else return;
   _hitLevelDurationsByChar[charId] = Object.assign({}, _hitLevelDurationsByChar[charId] || {}, normalized);
 }
@@ -82,8 +84,50 @@ export function registerHitLevelDurationsForChar(charId, table = {}) {
 export function getHitLevelDuration(charId, level) {
   const cid = charId || 'default';
   const table = _hitLevelDurationsByChar[cid] || _hitLevelDurationsByChar['default'];
-  const lvl = Math.max(1, Math.min(3, Number(level || 1)));
+  const lvl = Math.max(1, Math.min(4, Number(level || 1)));
   return Number(table[lvl]) || Number(_hitLevelDurationsByChar['default'][lvl]);
+}
+
+// --- Throw forces registry (per-character)
+// Defines the horizontal (h) and vertical (v) force applied when a character
+// performs a throw. Two kinds: `flyback` (horizontal launch) and `flyup` (vertical).
+// Values are in px for vx/vy magnitudes.
+const _throwForcesByChar = Object.create(null);
+_throwForcesByChar['default'] = {
+  flyback: { h: 28, v: 0 },
+  flyup:   { h: 0,  v: 12 }
+};
+_throwForcesByChar['tyeman'] = { flyback: { h: 92, v: 9 }, flyup: { h: 0, v: 14 } };
+_throwForcesByChar['sbluer'] = { flyback: { h: 96, v: 9 }, flyup: { h: 0, v: 12 } };
+_throwForcesByChar['fernando'] = { flyback: { h: 94, v: 9 }, flyup: { h: 0, v: 16 } };
+
+// --- Throw decay registry (per-character)
+// Controls how quickly horizontal velocity decays while in a throw launch.
+// Values are multipliers applied each frame: closer to 1 => less slowdown.
+const _throwDecayByChar = Object.create(null);
+_throwDecayByChar['default'] = { flyback: 0.985, flyup: 0.96, normal: 0.92 };
+_throwDecayByChar['tyeman'] = { flyback: 0.886, flyup: 0.96, normal: 0.92 };
+_throwDecayByChar['sbluer'] = { flyback: 0.882, flyup: 0.96, normal: 0.92 };
+_throwDecayByChar['fernando'] = { flyback: 0.888, flyup: 0.96, normal: 0.92 };
+
+export function registerThrowForcesForChar(charId, table = {}) {
+  if (!charId || typeof table !== 'object') return;
+  _throwForcesByChar[charId] = Object.assign({}, _throwForcesByChar[charId] || {}, table);
+}
+
+export function getThrowForcesForChar(charId) {
+  const cid = charId || 'default';
+  return _throwForcesByChar[cid] || _throwForcesByChar['default'];
+}
+
+export function registerThrowDecayForChar(charId, table = {}) {
+  if (!charId || typeof table !== 'object') return;
+  _throwDecayByChar[charId] = Object.assign({}, _throwDecayByChar[charId] || {}, table);
+}
+
+export function getThrowDecayForChar(charId) {
+  const cid = charId || 'default';
+  return _throwDecayByChar[cid] || _throwDecayByChar['default'];
 }
 
 // expose helpers globally for modules that avoid importing to prevent cycles
@@ -143,6 +187,14 @@ if (typeof window !== 'undefined') {
   window.registerKnockbacksForChar = registerKnockbacksForChar;
   window.setKnockbackForAttack = setKnockbackForAttack;
   window.getKnockbackForAttack = getKnockbackForAttack;
+  // expose throw forces registry for runtime tuning
+  window.registerThrowForcesForChar = registerThrowForcesForChar;
+  window.getThrowForcesForChar = getThrowForcesForChar;
+  window._THROW_FORCES = _throwForcesByChar;
+  // expose throw decay registry and helpers
+  window.registerThrowDecayForChar = registerThrowDecayForChar;
+  window.getThrowDecayForChar = getThrowDecayForChar;
+  window._THROW_DECAY = _throwDecayByChar;
 }
 
 // expose damage helpers for runtime tweaks

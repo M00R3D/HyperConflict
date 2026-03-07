@@ -97,7 +97,7 @@ export function hit(self, attacker = null) {
   const now = millis(); const chainWindow = 800;
   if (!this._consecutiveHitAt || (now - (this._consecutiveHitAt || 0)) > chainWindow) { this._consecutiveHits = 0; }
   let resolvedHitLevel = null;
-  if (typeof attacker.forcedHitLevel === 'number') { resolvedHitLevel = Math.max(1, Math.min(3, Math.floor(attacker.forcedHitLevel))); this._consecutiveHits = resolvedHitLevel; this._consecutiveHitAt = now; }
+  if (typeof attacker.forcedHitLevel === 'number') { resolvedHitLevel = Math.max(1, Math.min(4, Math.floor(attacker.forcedHitLevel))); this._consecutiveHits = resolvedHitLevel; this._consecutiveHitAt = now; }
   else { this._consecutiveHits = (this._consecutiveHits || 0) + 1; if (this._consecutiveHits > 3) this._consecutiveHits = 3; this._consecutiveHitAt = now; resolvedHitLevel = this._consecutiveHits; }
   try { if (this.state && (this.state.current === 'crouchpunch' || this.state.current === 'crouchPunch')) { resolvedHitLevel = 3; this._receivedHitWhileCrouchPunch = true; } } catch (e) {}
   if (prevHitLevel === 3) { try { Anim.forceSetState(self, 'knocked'); } catch (e) { console.warn('[Attacks.hit] failed to force knocked', self.id, e); self._forceKnocked = true; } self.attacking = false; self.attackType = null; self._hitTargets = null; self.vx = 0; self.vy = 0; return; }
@@ -105,7 +105,14 @@ export function hit(self, attacker = null) {
 
   // marcar hit state y tiempos
   this.isHit = true; this.hitStartTime = millis(); this.hitLevel = resolvedHitLevel || 1;
-  const levelDurMap = { 1: (this.actions?.hit1?.duration || 500), 2: (this.actions?.hit2?.duration || 700), 3: (this.actions?.hit3?.duration || 1000) };
+  // support optional centralized durations (level 1..4)
+  const getterAvailable = (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function');
+  const levelDurMap = {
+    1: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 1) : (this.actions?.hit1?.duration || 500),
+    2: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 2) : (this.actions?.hit2?.duration || 700),
+    3: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 3) : (this.actions?.hit3?.duration || 1000),
+    4: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 4) : (this.actions?.hit3?.duration || 1600)
+  };
   this.hitDuration = levelDurMap[this.hitLevel] || (this.hitDuration || 260);
   try { const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3'); this.setState(s); } catch (e) {}
 
@@ -129,6 +136,32 @@ export function hit(self, attacker = null) {
     const kb = { vx: finalH * away, vy: -finalV, decay: 1, frames: 101, sourceId: attacker?.id || null };
     this._knockback = Object.assign({}, kb);
     this._pendingKnockback = { magX: Math.abs(kb.vx), y: kb.vy, away, applied: false, _markLaunched: { start: millis(), duration: 600 } };
+    // Debug: log detailed coords/knockback for heavy launches (punch3/kick3)
+    try {
+      const atkName = String(attackName || '').toLowerCase();
+      let shouldTrace = false;
+      try {
+        if (atkName === 'punch3' || atkName === 'kick3') shouldTrace = true;
+        const m = atkName.match(/(punch|kick)(\d+)/);
+        if (m && Number(m[2]) >= 3) shouldTrace = true;
+        if (!shouldTrace && typeof finalH === 'number' && Math.abs(finalH) >= 6) shouldTrace = true;
+      } catch (e) {}
+      if (shouldTrace) {
+        const snap = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n);
+        console.log('[KB-TRACE]', {
+          t: millis(),
+          attack: atkName,
+          throwerChar: charId,
+          throwerPos: { x: snap(attacker.x), y: snap(attacker.y), vx: snap(attacker.vx), vy: snap(attacker.vy) },
+          victimChar: (self.charId || self.id),
+          victimPos: { x: snap(self.x), y: snap(self.y), vx: snap(self.vx), vy: snap(self.vy) },
+          cfg: cfg,
+          finalH: finalH,
+          finalV: finalV,
+          kb: kb
+        });
+      }
+    } catch (e) {}
     this.isHit2 = (this.hitLevel >= 2); this.isHit3 = (this.hitLevel >= 3);
     this.isHit = true; this.hitStartTime = millis(); this.hitLevel = this.hitLevel || 1; this.hitDuration = this.hitDuration || (this.actions?.hit1?.duration || 260);
     try { const s = (this.hitLevel === 1 ? 'hit1' : this.hitLevel === 2 ? 'hit2' : 'hit3'); Anim.forceSetState(this, s); } catch (e) {}
@@ -140,7 +173,10 @@ export function hit(self, attacker = null) {
   }
 
   try {
-    if ((this.hitLevel || 0) >= 3) {
+    // If hitLevel is 3 -> convert to knocked (shorter knocked as configured).
+    // If hitLevel is 4 -> it's a special launch (grab/throw), do NOT force knocked here.
+    const hl = Number(this.hitLevel || 0);
+    if (hl >= 3 && hl < 4) {
       if (window.PAUSED || window.HITSTOP_ACTIVE) { this._forceKnocked = true; }
       else { try { this.setState('knocked'); } catch (e) {} }
       this.attacking = false; this.attackType = null; this._hitTargets = null; this.vx = 0; this.vy = 0; return;

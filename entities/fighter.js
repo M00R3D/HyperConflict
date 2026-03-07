@@ -249,7 +249,7 @@ class Fighter {
     // Si el atacante forzó un nivel (p. ej. shoryuken), respetarlo; si no, incrementar por cadena
     let resolvedHitLevel = null;
     if (typeof attacker.forcedHitLevel === 'number') {
-      resolvedHitLevel = Math.max(1, Math.min(3, Math.floor(attacker.forcedHitLevel)));
+      resolvedHitLevel = Math.max(1, Math.min(4, Math.floor(attacker.forcedHitLevel)));
       // reset or set consecutive tracking to match forced level
       this._consecutiveHits = resolvedHitLevel;
       this._consecutiveHitAt = now;
@@ -275,11 +275,13 @@ class Fighter {
     this.hitStartTime = millis();
     this.hitLevel = resolvedHitLevel || 1;
 
-    // Prefer centralized per-character hit-level durations if available
+    // Prefer centralized per-character hit-level durations if available (supports level 1..4)
+    const getterAvailable = (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function');
     const levelDurMap = {
-      1: (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') ? window.getHitLevelDuration(this.charId || 'default', 1) : (this.actions?.hit1?.duration || 500),
-      2: (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') ? window.getHitLevelDuration(this.charId || 'default', 2) : (this.actions?.hit2?.duration || 700),
-      3: (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') ? window.getHitLevelDuration(this.charId || 'default', 3) : (this.actions?.hit3?.duration || 1000)
+      1: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 1) : (this.actions?.hit1?.duration || 500),
+      2: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 2) : (this.actions?.hit2?.duration || 700),
+      3: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 3) : (this.actions?.hit3?.duration || 1000),
+      4: getterAvailable ? window.getHitLevelDuration(this.charId || 'default', 4) : (this.actions?.hit3?.duration || 1600)
     };
     this.hitDuration = levelDurMap[this.hitLevel] || (this.hitDuration || 260);
 
@@ -827,12 +829,16 @@ class Fighter {
           victim._grabLock = false;
           victim.grabbedBy = null;
 
-          // efectos comunes de lanzamiento
+          // efectos comunes de lanzamiento -> usar hitLevel 4 (grab/throw)
           victim.isHit = true;
-          victim.hitLevel = 3;
+          victim.hitLevel = 4;
           victim.hitStartTime = millis();
-          // duración de hit/launch muy ampliada para que la animación y movimiento persistan
-          victim.hitDuration = Math.max(victim.hitDuration || 760, 1400);
+          // duración de hit/launch muy ampliada para throws: prefer registry if available
+          if (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') {
+            victim.hitDuration = Math.max(victim.hitDuration || 760, window.getHitLevelDuration(victim.charId || 'default', 4));
+          } else {
+            victim.hitDuration = Math.max(victim.hitDuration || 760, 1600);
+          }
 
           // marcar que se le lanzó para evitar que la lógica de hit sobrescriba la animación
           victim._suppressHitState = true;
@@ -840,13 +846,28 @@ class Fighter {
           if (throwDir === 'up') {
             // lanzamiento vertical fuerte -> usar flyup
             try { victim.setState('flyup'); } catch (e) {}
-            // velocidades muy exageradas (ajusta si lo deseas)
-            victim.vx = 0;
-            victim.vy = -6; // loft muy alto
+            // read per-character throw forces (prefer thrower charId)
+            const tf = (typeof window !== 'undefined' && typeof window.getThrowForcesForChar === 'function') ? window.getThrowForcesForChar(this.charId || 'default') : null;
+            const flyupV = (tf && tf.flyup && typeof tf.flyup.v === 'number') ? tf.flyup.v : 10;
+            const flyupH = (tf && tf.flyup && typeof tf.flyup.h === 'number') ? tf.flyup.h : 0;
+            // compute velocities then apply
+            const computedVx = flyupH * (this.facing || 1);
+            const computedVy = -(typeof flyupV === 'number' ? Math.abs(flyupV) : 10);
+            victim.vx = computedVx;
+            victim.vy = computedVy;
+            // debug log to verify per-character throw forces used
+            try { console.log('[THROW] flyup', { throwerChar: this.charId, victimChar: victim.charId, tf, computedVx, computedVy }); } catch (e) {}
+            // Force persistent knockback matching the throw velocities
+            try {
+              const kb = { vx: computedVx, vy: computedVy, decay: 1, frames: 101, sourceId: this.id };
+              victim._knockback = Object.assign({}, kb);
+              victim._pendingKnockback = { magX: Math.abs(kb.vx), y: kb.vy, away: Math.sign(kb.vx) || 1, applied: true, _markLaunched: { start: victim._launchedStart || millis(), duration: victim._launchedDuration || 600 } };
+              victim.onGround = false;
+            } catch (e) {}
             // marcar lanzamiento para que update() priorice flyup animation
             victim._launched = 'flyup';
             victim._launchedStart = millis();
-            victim._launchedDuration = victim.hitDuration || 1600;
+            victim._launchedDuration = victim.hitDuration || Math.max(1600, (tf && tf.flyup && tf.flyup.duration) || 2200);
             // mantener isHit = true para hitstop/colisiones pero suprimir cambio a hit3
             victim.isHit = true;
 
@@ -861,17 +882,30 @@ class Fighter {
             const dir = (throwDir === 'left') ? -1 : 1;
             // velocidades muy exageradas (ajusta si lo deseas)
             // horizontal fuerte para notarse claramente (se permite un pico alto)
-            victim.vx = dir * 16;
-            // loft también mayor para efecto dramático
-            victim.vy = -6;
+            const tf = (typeof window !== 'undefined' && typeof window.getThrowForcesForChar === 'function') ? window.getThrowForcesForChar(this.charId || 'default') : null;
+            const flybackH = (tf && tf.flyback && typeof tf.flyback.h === 'number') ? tf.flyback.h : 28;
+            const flybackV = (tf && tf.flyback && typeof tf.flyback.v === 'number') ? tf.flyback.v : 10;
+            const computedVx = dir * flybackH;
+            const computedVy = -(typeof flybackV === 'number' ? Math.abs(flybackV) : 10);
+            victim.vx = computedVx;
+            // loft también mucho mayor para efecto dramático
+            victim.vy = computedVy;
+            try { console.log('[THROW] flyback', { throwerChar: this.charId, victimChar: victim.charId, tf, dir, computedVx, computedVy }); } catch (e) {}
             // marcar lanzamiento para que update() priorice flyback animation y dure más
             victim._launched = 'flyback';
             victim._launchedStart = millis();
-            victim._launchedDuration = victim.hitDuration || 1600;
+            victim._launchedDuration = victim.hitDuration || 2200;
             // asegurar que el estado visual no se reemplace por hit3
             victim._suppressHitState = true;
             // ajustar facing para que la animación "flyback" se vea correcta (girada si es hacia adelante)
             victim.facing = (victim.vx >= 0) ? 1 : -1;
+            // Force persistent knockback matching the throw velocities
+            try {
+              const kb2 = { vx: victim.vx, vy: victim.vy, decay: 1, frames: 101, sourceId: this.id };
+              victim._knockback = Object.assign({}, kb2);
+              victim._pendingKnockback = { magX: Math.abs(kb2.vx), y: kb2.vy, away: Math.sign(kb2.vx) || 1, applied: true, _markLaunched: { start: victim._launchedStart || millis(), duration: victim._launchedDuration || 600 } };
+              victim.onGround = false;
+            } catch (e) {}
           }
         }
 
@@ -913,14 +947,35 @@ class Fighter {
           this.opponent._grabLock = false;
           this.opponent.grabbedBy = null;
           // lanzar como hit3 (comportamiento existente)
-          this.opponent.setState('hit3');
+          // normal release push -> treat as throw (hit4) for stronger effect
           this.opponent.isHit = true;
-          this.opponent.hitLevel = 3;
+          this.opponent.hitLevel = 4;
           this.opponent.hitStartTime = millis();
-          this.opponent.hitDuration = 520;
+          if (typeof window !== 'undefined' && typeof window.getHitLevelDuration === 'function') {
+            this.opponent.hitDuration = window.getHitLevelDuration(this.opponent.charId || 'default', 4);
+          } else {
+            this.opponent.hitDuration = 900;
+          }
           const pushDir = this.facing || 1;
-          this.opponent.vx = 7 * pushDir;
-          this.opponent.vy = -5;
+          // use per-character throw forces for a normal release (smaller magnitude)
+          const tfRel = (typeof window !== 'undefined' && typeof window.getThrowForcesForChar === 'function') ? window.getThrowForcesForChar(this.charId || 'default') : null;
+          if (tfRel && tfRel.flyback) {
+            // apply a scaled down flyback as a normal release
+            const compVx = (tfRel.flyback.h || 8) * 0.999 * pushDir;
+            const compVy = -((typeof tfRel.flyback.v === 'number' ? Math.abs(tfRel.flyback.v) : 10) * 0.6);
+            this.opponent.vx = compVx;
+            this.opponent.vy = compVy;
+            try { console.log('[THROW] normal-release (scaled)', { throwerChar: this.charId, victimChar: this.opponent.charId, tfRel, compVx, compVy }); } catch (e) {}
+            // Force persistent knockback for the normal release
+            try {
+              const kb3 = { vx: compVx, vy: compVy, decay: 1, frames: 101, sourceId: this.id };
+              this.opponent._knockback = Object.assign({}, kb3);
+              this.opponent._pendingKnockback = { magX: Math.abs(kb3.vx), y: kb3.vy, away: Math.sign(kb3.vx) || 1, applied: true, _markLaunched: { start: millis(), duration: this.opponent.hitDuration || 600 } };
+              this.opponent.onGround = false;
+            } catch (e) {}
+          } else {
+            try { console.log('[THROW] normal-release (fallback)', { throwerChar: this.charId, victimChar: this.opponent.charId, compVx: this.opponent.vx, compVy: this.opponent.vy }); } catch (e) {}
+          }
         }
         // LIMPIEZA COMPLETA DEL ESTADO DEL AGARRADOR para permitir reintentar inmediatamente
         this.setState('idle');

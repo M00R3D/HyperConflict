@@ -203,7 +203,7 @@ export function hit(self, attacker = null) {
   // Si el atacante forzó un nivel (p. ej. shoryuken), respetarlo; si no, incrementar por cadena
   let resolvedHitLevel = null;
   if (typeof attacker.forcedHitLevel === 'number') {
-    resolvedHitLevel = Math.max(1, Math.min(3, Math.floor(attacker.forcedHitLevel)));
+    resolvedHitLevel = Math.max(1, Math.min(4, Math.floor(attacker.forcedHitLevel)));
     // reset or set consecutive tracking to match forced level
     this._consecutiveHits = resolvedHitLevel;
     this._consecutiveHitAt = now;

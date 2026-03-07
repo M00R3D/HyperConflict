@@ -14,7 +14,7 @@ export function display(self) {
   // Si el fighter está marcado como "isHit", elegir hit1/hit2/hit3 según hitLevel (más robusto que flags independientes)
   let framesByLayer;
   if (self.isHit) {
-    const hl = Math.max(1, Math.min(3, Number(self.hitLevel || 1)));
+    const hl = Math.max(1, Math.min(4, Number(self.hitLevel || 1)));
     if (hl >= 3) {
       framesByLayer = self.hit3FramesByLayer || self.hitFramesByLayer || self.currentFramesByLayer || self.idleFramesByLayer;
     } else if (hl === 2) {
@@ -58,6 +58,27 @@ export function display(self) {
       translate(self.x + self.w / 2, 0);
       scale(-1, 1);
       translate(-(self.x + self.w / 2), 0);
+    }
+
+    // apply tilt/rotation when the character is launched by a throw/fly (we use string markers like 'flyback'/'flyup')
+    let _appliedRotation = false;
+    let _rotationRad = 0;
+    if (typeof self._launched === 'string') {
+      try {
+        const elapsed = millis() - (self._launchedStart || 0);
+        const dur = Math.max(1, (self._launchedDuration || 600));
+        const t = constrain(elapsed / dur, 0, 1);
+        const spins = (self._launched === 'flyback') ? 3.0 : 2.0;
+        const dirSign = (typeof self.vx === 'number' && self.vx !== 0) ? Math.sign(self.vx) : (self.facing || 1);
+        _rotationRad = lerp(0, spins * TWO_PI, t) * dirSign;
+        // rotate around sprite center
+        const cx = Math.round(self.x + (self.w + (renderExtraW || 0)) / 2);
+        const cy = Math.round(self.y + renderYOffset + (self.h + (renderExtraH || 0)) / 2 - (renderExtraH || 0));
+        translate(cx, cy);
+        rotate(_rotationRad);
+        translate(-cx, -cy);
+        _appliedRotation = true;
+      } catch (e) { /* safe fallback: ignore rotation */ }
     }
 
     const fi = Math.max(0, self.frameIndex || 0);
