@@ -132,15 +132,23 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames) {
         const drawY = Math.round(slotY - (drawH - size) / 2);
 
         // If the source is a spritesheet packed horizontally, crop the FIRST frame only.
-        // Heuristic: if width >= height * 2 then assume horizontal frames.
         const frameCount = Math.max(1, Math.round(img.width / img.height));
         const srcW = Math.round(img.width / frameCount);
         const srcX = 0; // first frame
 
         if (!active) tint(160, 160); // slight desaturate for defeated portrait
-        // draw only the first subframe
+        // Special-case: Fernando's frames are 32x38 and need the rightmost ~6px removed
+        // to avoid appearing squashed/bleeding into the next frame. We draw only the
+        // left portion (srcW - 6) and stretch it to the destination slot.
         try {
-          image(img, drawX, drawY, drawW, drawH, srcX, 0, srcW, img.height);
+          if (player && player.charId === 'fernando') {
+            const cutRight = 6; // px to remove from right side
+            const srcWAdj = Math.max(1, srcW - cutRight);
+            image(img, drawX, drawY, drawW, drawH, srcX, 0, srcWAdj, img.height);
+          } else {
+            // draw only the first subframe
+            image(img, drawX, drawY, drawW, drawH, srcX, 0, srcW, img.height);
+          }
         } catch (e) {
           // fallback to drawing whole image if cropping fails
           image(img, drawX, drawY, drawW, drawH);
