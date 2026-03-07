@@ -9,7 +9,7 @@ export const PROJECTILE_HITBOXES = {
   5: { offsetX: 1, offsetY: 0,  w: 18, h: 6  },    // bun
   6: { offsetX: 2, offsetY: 0,  w: 18, h: 6  },    // staple
   7: { offsetX: 3, offsetY: 3, w: 6, h: 6 },    // spit_proj
-  8: { offsetX: 0, offsetY: -2, w: 6, h: 2 },    // thin_laser_proj
+  8: { offsetX: 0, offsetY: 0, w: 6, h: 2 },    // thin_laser_proj (start small; expands at runtime)
   default: { offsetX: -8, offsetY: -8, w: 16, h: 16 }
 };
 

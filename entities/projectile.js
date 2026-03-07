@@ -426,13 +426,10 @@ class Projectile {
           this.x = this._originX + (this.dir === -1 ? -this.w : 0);
           this.y = this._originY;
 
-          // update hitbox override to match visual beam and apply requested +10/+10 offset
-          this._hitboxOverride = this._hitboxOverride || {};
-          this._hitboxOverride.w = this.w;
-          this._hitboxOverride.h = this.h;
-          // offset relative to this.x/this.y: add 10px right and 10px down
-          this._hitboxOverride.offsetX = 10;
-          this._hitboxOverride.offsetY = 10;
+          // NOTE: do not force a permanent _hitboxOverride here.
+          // The base hitbox for type 8 is defined in entities/projectiles/hitboxes.js
+          // and `getHitbox()` will expand that base hitbox dynamically according
+          // to `this.w` so we avoid clobbering _hitboxOverride here.
 
           // advance animation frames if frames available
           if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
@@ -671,6 +668,25 @@ class Projectile {
 
   getHitbox() {
     const hitboxIdToUse = (typeof this._hitboxId !== 'undefined' && this._hitboxId !== null) ? this._hitboxId : this.typeId;
+    // Special-case thin laser (id 8): anchor at the stored origin and expand
+    // its width to match the visual `this.w`. Use origin so the emitter doesn't
+    // move the hitbox as the owner moves.
+    if (this.typeId === 8) {
+      const base = PROJECTILE_HITBOXES[8] || PROJECTILE_HITBOXES[hitboxIdToUse] || PROJECTILE_HITBOXES.default;
+      const anchorX = (typeof this._originX === 'number') ? this._originX : this.x;
+      const anchorY = (typeof this._originY === 'number') ? this._originY : this.y;
+      const desiredW = Math.max(0, Math.round(this.w || base.w || 0));
+      const w = Math.max(base.w || 0, desiredW);
+      const h = base.h || 0;
+      const ox = (typeof base.offsetX === 'number') ? base.offsetX : 0;
+      const oy = (typeof base.offsetY === 'number') ? base.offsetY : 0;
+      // For right-facing beams, origin is the left edge; for left-facing, shift so the
+      // hitbox extends leftwards from the origin.
+      const x = (this.dir === 1) ? (anchorX + ox) : (anchorX + ox - w);
+      const y = anchorY + oy;
+      return { x, y, w, h };
+    }
+
     const def = this._hitboxOverride || PROJECTILE_HITBOXES[hitboxIdToUse] || PROJECTILE_HITBOXES[this.typeId] || PROJECTILE_HITBOXES.default;
     // allow per-instance hitbox scaling (used when spit_proj touch each other)
     const scale = (typeof this._hitboxScale === 'number') ? this._hitboxScale : 1;
