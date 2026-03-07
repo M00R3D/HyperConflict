@@ -13,11 +13,20 @@ export function attack(self, key) {
   if (!chain || chain.length === 0) return;
   if (self.inputLockedByKey[key]) return;
 
+  // --- Cooldown check per attack name ---
+  // use action.cooldown when provided; otherwise use sensible defaults
+  // punches/kicks: short cooldown to avoid spamming/cancels
+  // keys 'p'/'m' (typically specials/projectiles): longer cooldown
+  // store per-attack last-used timestamps on `self._lastAttackUsedByName`
+
   const last = self.lastAttackTimeByKey[key] || 0;
   let step = self.comboStepByKey[key] || 0;
   if (now - last > self.comboWindow) step = 0;
 
   let attackName = chain[step] || chain[0];
+
+  // lazy-init last-used map
+  if (!self._lastAttackUsedByName) self._lastAttackUsedByName = Object.create(null);
 
   // Debug: show requested attack and crouch state
   // try { console.log('[attack] request', { id: self.id, char: self.charId, key, attackName, crouching: !!self.crouching }); } catch (e) {}
@@ -71,6 +80,20 @@ export function attack(self, key) {
   const action = self.actions[attackName];
   if (!action) { console.warn('Acción no definida en actions:', attackName); return; }
 
+  // determine cooldown for this attack
+  const explicitCd = (action && typeof action.cooldown === 'number') ? Number(action.cooldown) : null;
+  let cooldownMs = explicitCd !== null ? explicitCd : null;
+  if (cooldownMs === null) {
+    if (/^punch/i.test(attackName) || /^kick/i.test(attackName)) cooldownMs = 320;
+    else if (key === 'p' || key === 'm') cooldownMs = 420;
+    else cooldownMs = 0;
+  }
+  const lastUsed = Number(self._lastAttackUsedByName[attackName] || 0);
+  if (cooldownMs > 0 && (millis() - lastUsed) < cooldownMs) {
+    // still cooling down — ignore this attack request
+    return;
+  }
+
   self.attackType = attackName;
   self.setState(attackName);
   self.attacking = true;
@@ -79,6 +102,8 @@ export function attack(self, key) {
   // inicializar set de objetivos golpeados por esta activación (evita multi-hit repetido)
   self._hitTargets = new Set();
   self.lastAttackTimeByKey[key] = now;
+  // record last-used for this specific attack name to enforce cooldowns
+  try { self._lastAttackUsedByName[attackName] = now; } catch (e) {}
   self.inputLockedByKey[key] = true;
   // Defer combo advancement until the attack actually hits.
   // Store the key that initiated this attack and whether it should reset on hit (crouch variants).
