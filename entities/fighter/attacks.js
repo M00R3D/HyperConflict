@@ -119,6 +119,47 @@ export function attack(self, key) {
       if (projArr && Array.isArray(projArr)) projArr.push(p);
     }
   } catch (e) { try { console.warn('[Attacks.attack] failed to spawn stapler projectile', e); } catch (ee) {} }
+  // --- Special: spawn or renew thin_laser projectile for Fernando ---
+  try {
+    if (attackName === 'thin_laser') {
+      const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (state && Array.isArray(state.projectiles) ? state.projectiles : null);
+      const dir = (self.facing === -1) ? -1 : 1;
+      const sx = Math.round(self.x + (dir === 1 ? self.w : 0));
+      const sy = Math.round(self.y + self.h / 2);
+
+      // Try to find existing thin_laser by this owner and renew it instead of creating duplicates
+      let existing = null;
+      if (projArr && Array.isArray(projArr)) {
+        for (let i = projArr.length - 1; i >= 0; i--) {
+          const q = projArr[i];
+          if (!q) continue;
+          if (q.ownerId === self.id && q.typeId === 8) { existing = q; break; }
+        }
+      }
+
+      if (existing) {
+        existing.age = 0;
+        existing.lifespan = existing.lifespan || 4000;
+        existing.toRemove = false;
+        existing._visible = true;
+        existing._originX = sx;
+        existing._originY = sy;
+        // reset beam visual length so it restarts at base size
+        try { existing._beamLength = existing.w || 6; existing._beamTargetLength = existing.w || 6; } catch (e) {}
+        existing.frameIndex = 0;
+        existing._frameTimer = millis();
+      } else {
+        const p = spawnProjectileFromType(8, sx, sy, dir, self.id, {}, {}, (self.thinLaserProjFramesByLayer || null));
+        p.attackType = 'thin_laser';
+        p.damageQuarters = (typeof p.damageQuarters === 'number') ? p.damageQuarters : 4;
+        p.ownerRef = self; p._ownerRef = self; p.ownerId = self.id; p.charId = self.charId;
+        if (projArr && Array.isArray(projArr)) projArr.push(p);
+      }
+
+      // suppress fighter overlay if thin_laser will be handled by projectile drawing
+      self._suppressThinLaserOverlay = true;
+    }
+  } catch (e) { try { console.warn('[Attacks.attack] failed to spawn thin_laser projectile', e); } catch (ee) {} }
 }
 
 export function attackHits(self, opponent) {

@@ -117,7 +117,26 @@ export function applyProjectileTypeInit(self, opts = {}, resources = {}, framesB
         self._rollSpeed = (typeof self._rollSpeed === 'number' ? self._rollSpeed : 1.6) * factor;
       } catch (e) { self._spawnIndex = 1; }
       break;
+    
 
+    case 8: // thin_laser_proj
+      if (!self._framesPromise) self.framesByLayer = self.framesByLayer ?? resources.thinLaserProj ?? null;
+      // self.w = opts.w ?? 6;
+      self.h = opts.h ?? 2;
+      self.speed = opts.speed ?? 24;
+      self.gravity = opts.gravity ?? 0;
+      self.frameDelay = opts.frameDelay ?? 4;
+      self.framesKey = opts.framesKey ?? 'thin_laser_proj';
+      self.hitboxId = opts.hitboxId ?? 7;
+      self.lifespan = opts.lifespan ?? 4000;
+      self.damageQuarters = opts.damageQuarters ?? 4;
+      self._originX = (typeof self._originX === 'number') ? self._originX : self.x;
+      self._originY = (typeof self._originY === 'number') ? self._originY : self.y;
+      // expansion: gradual growth until _maxLength is reached. Initialize defaults.
+      self.w = opts.w ?? self.w ?? 6;
+      self._expandSpeed = (typeof opts.expandSpeed === 'number') ? opts.expandSpeed : (PROJECTILE_TYPES && PROJECTILE_TYPES[8] ? PROJECTILE_TYPES[8].expandSpeed : 12);
+      self._maxLength = (typeof opts.maxLength === 'number') ? opts.maxLength : (PROJECTILE_TYPES && PROJECTILE_TYPES[8] ? PROJECTILE_TYPES[8].maxLength : 120);
+      break;
     default:
       self.framesByLayer = self.framesByLayer ?? null;
       self.w = 16;

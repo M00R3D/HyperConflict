@@ -10,7 +10,8 @@ export const FRAMEKEY_MAP = {
   tats: 'src/tyeman/tyeman_tats_proj.piskel',
   bun: 'src/tyeman/tyeman_bun.piskel',
   staple: 'src/tyeman/tyeman_staple.piskel',
-  spit_proj: 'src/sbluer/sbluer_spit_proj.piskel'
+  spit_proj: 'src/sbluer/sbluer_spit_proj.piskel',
+  thin_laser_proj: 'src/fernando/fernando_thin_laser_proj.piskel'
 };
 
 const _frameKeyPromises = Object.create(null);
@@ -147,6 +148,26 @@ export const PROJECTILE_TYPES = {
     touchHitboxScale: 1.6,
     touchSlowFactor: 0.5
   },
+  8: {
+    id: 8,
+    name: 'thin_laser_proj',
+    linear: true,
+    speed: 0,
+    gravity: 0,
+    w: 6,
+    h: 2,
+    frameDelay: 4,
+    framesKey: 'thin_laser_proj',
+    hitboxId: 7,
+    lifespan: 4000,
+    damageQuarters: 4,
+    expandSpeed: 52,
+    maxLength: 1120,
+    collisionWithAttacks: true,
+    collisionWithFighters: true,
+    collisionWithProjectiles: true
+  },
+
   default: {
     id: 'default',
     name: 'default',

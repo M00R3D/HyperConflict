@@ -408,15 +408,53 @@ class Projectile {
           }
         }
       } else {
-        // normal lineal
-        this.x += this.speed * this.dir;
-        // anim loop...
-        if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
-          this._frameTimer++;
-          if (this._frameTimer >= this.frameDelay) {
-            this._frameTimer = 0;
-            const n = this.framesByLayer[0].length;
-            this.frameIndex = (this.frameIndex + 1) % n;
+        // special linear-stretch projectile (thin laser)
+        if (this.typeId === 8) {
+          // ensure origin persists
+          this._originX = (typeof this._originX === 'number') ? this._originX : this.x;
+          this._originY = (typeof this._originY === 'number') ? this._originY : this.y;
+          // initialize beam length if missing
+          if (typeof this._beamLength !== 'number') this._beamLength = Math.max(1, this.w || 6);
+          // growth per frame (respect dt)
+          const growSpeed = (typeof this._expandSpeed === 'number') ? this._expandSpeed : 12;
+          const inc = growSpeed * (dt / 16);
+          this._beamLength = Math.min((typeof this._maxLength === 'number' ? this._maxLength : 120), this._beamLength + inc);
+          // sync public width so display() uses it
+          this.w = Math.max(1, Math.round(this._beamLength));
+
+          // anchor drawing at origin; for left-facing beams shift x so image grows left
+          this.x = this._originX + (this.dir === -1 ? -this.w : 0);
+          this.y = this._originY;
+
+          // update hitbox override to match visual beam and apply requested +10/+10 offset
+          this._hitboxOverride = this._hitboxOverride || {};
+          this._hitboxOverride.w = this.w;
+          this._hitboxOverride.h = this.h;
+          // offset relative to this.x/this.y: add 10px right and 10px down
+          this._hitboxOverride.offsetX = 10;
+          this._hitboxOverride.offsetY = 10;
+
+          // advance animation frames if frames available
+          if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+            this._frameTimer++;
+            if (this._frameTimer >= this.frameDelay) {
+              this._frameTimer = 0;
+              const n = this.framesByLayer[0].length;
+              this.frameIndex = (this.frameIndex + 1) % n;
+            }
+          }
+          // don't perform normal linear movement for this type
+        } else {
+          // normal lineal
+          this.x += this.speed * this.dir;
+          // anim loop...
+          if (this.framesByLayer && this.framesByLayer[0]?.length > 0) {
+            this._frameTimer++;
+            if (this._frameTimer >= this.frameDelay) {
+              this._frameTimer = 0;
+              const n = this.framesByLayer[0].length;
+              this.frameIndex = (this.frameIndex + 1) % n;
+            }
           }
         }
       }
