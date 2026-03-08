@@ -45,6 +45,8 @@ export function spawnParticle(typeName, x, y, opts = {}) {
   if (!def) return;
   const cx = (typeof x === 'number') ? x : 0;
   const cy = (typeof y === 'number') ? y : 0;
+  // collect created particles for debug logging
+  const _createdForLog = [];
 
   // If pattern present, spawn per-pixel particles arranged by pattern
   if (Array.isArray(def.pattern) && def.pattern.length > 0) {
@@ -117,9 +119,14 @@ export function spawnParticle(typeName, x, y, opts = {}) {
         // allow per-character color/alpha override
         const pixelColor = (chMeta && Array.isArray(chMeta.color)) ? chMeta.color.slice(0,3) : color;
         const pixelAlpha = (typeof (chMeta && chMeta.alpha) === 'number') ? chMeta.alpha : ((typeof opts.alpha === 'number') ? opts.alpha : def.alpha);
-        _particles.push({ x: px, y: py, vx, vy, ax: 0, ay: 0, gravity: (typeof opts.gravity === 'number') ? opts.gravity : def.gravity, w: pixelW, h: pixelH, size: baseSize, life, maxLife: life, color: pixelColor, alpha: pixelAlpha, shape: 'pixel', _screen: !!opts.screenSpace, rot, rotVel, lightIntensity, lightColor, lightGradient });
+        const pObj = { x: px, y: py, vx, vy, ax: 0, ay: 0, gravity: (typeof opts.gravity === 'number') ? opts.gravity : def.gravity, w: pixelW, h: pixelH, size: baseSize, life, maxLife: life, color: pixelColor, alpha: pixelAlpha, shape: 'pixel', _screen: !!opts.screenSpace, rot, rotVel, lightIntensity, lightColor, lightGradient };
+        _particles.push(pObj);
+        try { _createdForLog.push(JSON.parse(JSON.stringify(pObj))); } catch (e) { _createdForLog.push(Object.assign({}, pObj)); }
       }
     }
+    }
+    if (typeof console !== 'undefined' && console.log) {
+      try { console.log('[PARTICLE_SPAWN]', typeName, _createdForLog, opts); } catch (e) {}
     }
     return;
   }
@@ -154,7 +161,7 @@ export function spawnParticle(typeName, x, y, opts = {}) {
       }).filter(Boolean);
       if (lightGradient.length === 0) lightGradient = null;
     }
-    _particles.push({
+    const pObj = {
       x: cx,
       y: cy,
       vx: vx,
@@ -170,7 +177,12 @@ export function spawnParticle(typeName, x, y, opts = {}) {
       shape: opts.shape || def.shape,
       _screen: !!opts.screenSpace,
       rot, rotVel, lightIntensity, lightColor, lightGradient
-    });
+    };
+    _particles.push(pObj);
+    try { _createdForLog.push(JSON.parse(JSON.stringify(pObj))); } catch (e) { _createdForLog.push(Object.assign({}, pObj)); }
+  }
+  if (typeof console !== 'undefined' && console.log) {
+    try { console.log('[PARTICLE_SPAWN]', typeName, _createdForLog, opts); } catch (e) {}
   }
 }
 
@@ -266,13 +278,23 @@ export function drawParticles(screenSpace = false) {
 registerParticleType('heart', {
   // Use an ASCII pattern to form a heart shape; pattern characters other than space are pixels
   spread: 2,
-  patternSpacing: -10,
+  patternSpacing: -9,
   speed: 0.006,
   life: 400,
   gravity: -0.0038,
   color: [220,40,80],
   alpha: 1,
   shape: 'pixel',
+    // allow disabling per-pixel size jitter (true = randomize base pixel size)
+    sizeJitter: true,
+    // optional light/glow per-particle
+    lightIntensity: 0.41,
+    // lightColor: [255, 200, 160],
+    // optional radial gradient for light: array of stops { offset:0..1, color:[r,g,b], alpha:0..1 }
+    // lightGradient: [{offset: 0, color: [55,100,160], alpha: 0.2}],
+    // rotation controls (0 = random side, -1 left, 1 right)
+    rotationSide: 0,
+    rotationSpeed: 10,
   patternMeta: { 'X': { w:2, h:2, color:[255,0,0] } },
   pattern: [
     "  XX   XX  ",
@@ -309,13 +331,31 @@ if (typeof window !== 'undefined') {
       try {
         if (e.key === 'F8') {
           // prefer mouse pos if available
-          const mx = (typeof window.mouseX === 'number') ? window.mouseX : (typeof mouseX === 'number' ? mouseX : Math.round((window.innerWidth || 800)/2));
-          const my = (typeof window.mouseY === 'number') ? window.mouseY : (typeof mouseY === 'number' ? mouseY : Math.round((window.innerHeight || 400)/2));
+          let mx = (typeof window.mouseX === 'number') ? window.mouseX : (typeof mouseX === 'number' ? mouseX : Math.round((window.innerWidth || 800)/2));
+          let my = (typeof window.mouseY === 'number') ? window.mouseY : (typeof mouseY === 'number' ? mouseY : Math.round((window.innerHeight || 400)/2));
+          // Convert screen (mouse) coords to world coords using the same transform as `applyCamera`:
+          // applyCamera does: translate(width/2, height/2 + map(cam.zoom,0.6,1.5,80,20)); scale(cam.zoom); translate(-cam.x,-cam.y)
+          const cam = (typeof window !== 'undefined' && window.state && window.state.cam) ? window.state.cam : (typeof window !== 'undefined' && window.cam ? window.cam : { x: 0, y: 0, zoom: 1 });
+          try {
+            const offsetY = (typeof map === 'function') ? map(cam.zoom, 0.6, 1.5, 80, 20) : 40;
+            const sx = mx - (width / 2);
+            const sy = my - (height / 2 + offsetY);
+            const wz = (cam && typeof cam.zoom === 'number' && cam.zoom !== 0) ? cam.zoom : 1;
+            const worldMx = sx / wz + (cam.x || 0);
+            const worldMy = sy / wz + (cam.y || 0);
+            // override mx/my with world coords for world-space spawn
+            // but preserve original screen coords if anything goes wrong
+            if (typeof worldMx === 'number' && typeof worldMy === 'number') {
+              mx = Math.round(worldMx);
+              my = Math.round(worldMy);
+            }
+          } catch (ee) { /* fall back to raw mx,my */ }
           if (e.shiftKey) {
-            try { if (window.player1) spawnParticle('heart', Math.round(window.player1.x + (window.player1.w||0)/2), Math.round(window.player1.y + (window.player1.h||0)/2), { size: 10, screenSpace: false }); } catch (ee) {}
-            try { if (window.player2) spawnParticle('heart', Math.round(window.player2.x + (window.player2.w||0)/2), Math.round(window.player2.y + (window.player2.h||0)/2), { size: 10, screenSpace: false }); } catch (ee) {}
+            try { if (window.player1) spawnParticle('heart', Math.round(window.player1.x + (window.player1.w||0)/2), Math.round(window.player1.y + (window.player1.h||0)/2), { size: 8, screenSpace: false }); } catch (ee) {}
+            try { if (window.player2) spawnParticle('heart', Math.round(window.player2.x + (window.player2.w||0)/2), Math.round(window.player2.y + (window.player2.h||0)/2), { size: 8, screenSpace: false }); } catch (ee) {}
           } else {
-            spawnParticle('heart', mx, my, { size: 14, screenSpace: true });
+            // Use same options as health-driven spawns: smaller pattern, world-space
+            spawnParticle('heart', mx, my, { size: 8, screenSpace: false });
           }
         }
       } catch (err) {}
