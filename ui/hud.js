@@ -6,6 +6,34 @@ const _heartStateByPlayer = new Map();
 
 // NEW: state para boots (escala por-bota)
 const _bootStateByPlayer = new Map();
+
+// NEW: configuración por-player para las sprites de lifebar.
+// Cada entrada puede ajustar `angle` (radianes) y `originX`/`originY` (0..1) usados
+// como punto de origen de la rotación dentro del bloque (fractions of block size).
+// Index 0 => player izquierdo (P1), Index 1 => player derecho (P2).
+export const LIFEBAR_SPRITE_CONFIG = [
+  // P1 (left)
+  {
+    angle: Math.PI / 2,    // rotation in radians (default: 90deg)
+    originX: 0.5,          // rotation origin inside block (0..1)
+    originY: 0.5,
+    mirror: false,         // mirror the sprite horizontally
+    scale: 1.0,            // per-block draw scale
+    tint: null,            // [r,g,b] or null
+    alpha: 1.0             // opacity 0..1
+  },
+  // P2 (right)
+  {
+    angle: Math.PI / 2,
+    originX: 0.5,
+    originY: 0.5,
+    mirror: true,
+    scale: 1.0,
+    tint: null,
+    alpha: 1.0
+  }
+];
+if (typeof window !== 'undefined') window.LIFEBAR_SPRITE_CONFIG = LIFEBAR_SPRITE_CONFIG;
 function _getBootState(player, bootsCount) {
   if (!player) return null;
   let st = _bootStateByPlayer.get(player.id);
@@ -370,6 +398,16 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
     const baseX = rightAligned ? (width - 12 - totalW) : 12;
     const lifey = heartYOffset + heartH + 8;
 
+    // per-player lifebar sprite config
+    const cfg = (Array.isArray(LIFEBAR_SPRITE_CONFIG) ? (LIFEBAR_SPRITE_CONFIG[rightAligned ? 1 : 0] || {}) : {});
+    const rotateAngleCfg = (typeof cfg.angle === 'number') ? cfg.angle : HALF_PI;
+    const originXCfg = (typeof cfg.originX === 'number') ? cfg.originX : 0.5;
+    const originYCfg = (typeof cfg.originY === 'number') ? cfg.originY : 0.5;
+    const scaleCfg = (typeof cfg.scale === 'number') ? Math.max(0.01, cfg.scale) : 1.0;
+    const mirrorCfg = !!cfg.mirror;
+    const tintCfg = Array.isArray(cfg.tint) && cfg.tint.length >= 3 ? cfg.tint.slice(0,3) : null;
+    const alphaCfg = (typeof cfg.alpha === 'number') ? Math.max(0, Math.min(1, cfg.alpha)) : 1.0;
+
     // background slightly larger
     const pad = 6;
     push();
@@ -385,34 +423,57 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
       const partially = (!filled && currentUnits > (i * unitForBlock));
       if (lifebarLayer && lifebarLayer.length > 0) {
         // Draw only filled blocks and partial image portions. Empty blocks are left transparent
-        // so the black background shows through.
-          // rotate blocks 90deg clockwise (right) for consistent orientation
-          const rotateAngle = HALF_PI;
-          if (filled) {
-            const img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
+        // so the black background shows through. Use per-player config (rotate/scale/mirror/tint).
+        if (filled) {
+          const img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
             try {
               push();
+              // apply tint/alpha if configured
+              if (tintCfg) {
+                tint(tintCfg[0], tintCfg[1], tintCfg[2], Math.round(255 * alphaCfg));
+              } else if (alphaCfg < 1) {
+                tint(255, Math.round(255 * alphaCfg));
+              }
+
+              // compute scaled destination size and pivot
+              const dstSize = Math.round(lifebarBlockSize * scaleCfg);
+              const tx = bx + (lifebarBlockSize * originXCfg);
+              const ty = lifey + (lifebarBlockSize * originYCfg);
+
+              // translate to pivot, optionally mirror, then rotate
+              translate(tx, ty);
+              if (mirrorCfg) scale(-1, 1);
+              rotate(rotateAngleCfg);
+
+              // draw image centered so pivot (originXCfg, originYCfg) aligns with translated origin
               imageMode(CENTER);
-              translate(bx + lifebarBlockSize / 2, lifey + lifebarBlockSize / 2);
-              rotate(rotateAngle);
-              image(img, 0, 0, lifebarBlockSize, lifebarBlockSize);
+              const drawOffsetX = -(originXCfg - 0.5) * dstSize;
+              const drawOffsetY = -(originYCfg - 0.5) * dstSize;
+              image(img, drawOffsetX, drawOffsetY, dstSize, dstSize);
+              noTint();
               pop();
             } catch (e) {
               fill(220); rect(bx, lifey, lifebarBlockSize, lifebarBlockSize, 6);
             }
-          } else if (partially) {
+        } else if (partially) {
             // Create a rotated block buffer first, then crop horizontally from the rotated
             // buffer so the visible portion shrinks left/right in screen-space. This ensures
             // P1 reduces right->left and P2 reduces left->right.
             const ratio = (currentUnits - (i * unitForBlock)) / unitForBlock;
             const img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
             try {
-              if (img && img.width && img.height) {
+                if (img && img.width && img.height) {
                 // prepare full-square buffer (one block)
                 const g = createGraphics(lifebarBlockSize, lifebarBlockSize);
                 g.noSmooth();
                 try {
-                  g.image(img, 0, 0, lifebarBlockSize, lifebarBlockSize);
+                  // If the source image contains multiple horizontal subframes (a spritesheet),
+                  // crop a single square subframe first to avoid packing multiple tiles into the
+                  // block buffer which causes repeated visuals when we later slice.
+                  const internalFrames = Math.max(1, Math.round(img.width / img.height));
+                  const frameW = Math.round(img.width / internalFrames);
+                  const frameSrcX = 0; // prefer left-most subframe (most lifebar sheets are single-frame)
+                  g.image(img, 0, 0, lifebarBlockSize, lifebarBlockSize, frameSrcX, 0, frameW, img.height);
                 } catch (ge) {
                   g.push(); g.noStroke(); g.fill(220, 120, 120, 160); g.rect(0, 0, lifebarBlockSize, lifebarBlockSize, 6); g.pop();
                 }
@@ -421,27 +482,41 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
                 const g2 = createGraphics(lifebarBlockSize, lifebarBlockSize);
                 g2.noSmooth();
                 g2.push();
-                g2.imageMode(CENTER);
-                g2.translate(lifebarBlockSize / 2, lifebarBlockSize / 2);
-                g2.rotate(rotateAngle);
-                g2.image(g, 0, 0, lifebarBlockSize, lifebarBlockSize);
+                g2.imageMode(CORNER);
+                // rotate around configured origin inside the small buffer
+                g2.translate(lifebarBlockSize * originXCfg, lifebarBlockSize * originYCfg);
+                g2.rotate(rotateAngleCfg);
+                g2.image(g, -lifebarBlockSize * originXCfg, -lifebarBlockSize * originYCfg, lifebarBlockSize, lifebarBlockSize);
                 g2.pop();
 
-                const destW = Math.max(1, Math.round(lifebarBlockSize * ratio));
-                const destH = lifebarBlockSize;
+                // g2 already contains the rotated image — crop it horizontally in screen-space
+                // so lifebar blocks consume from right-to-left visually.
+                // srcW = how many pixels wide the visible portion is (shrinks as HP drops)
+                const srcW = Math.max(1, Math.round(lifebarBlockSize * ratio));
+                // Take from left side so the right portion disappears first (right-to-left consumption)
+                const srcX = 0;
 
-                // When drawing from the rotated buffer we can crop horizontally in screen-space:
-                // - For P1 (rightAligned=false) we want the visible piece anchored to the right
-                //   inner edge, so take the rightmost src slice.
-                // - For P2 (rightAligned=true) anchor to the left edge (take leftmost src slice).
-                const srcX = rightAligned ? 0 : (lifebarBlockSize - destW);
-                const srcW = destW;
+                // Destination sizes: apply scaling
+                const dstW = Math.round(srcW * scaleCfg);
+                const dstH = Math.round(lifebarBlockSize * scaleCfg);
 
-                const drawX = bx + (rightAligned ? 0 : (lifebarBlockSize - destW));
+                // apply tint/alpha for partial block
+                if (tintCfg) tint(tintCfg[0], tintCfg[1], tintCfg[2], Math.round(255 * alphaCfg));
+                else if (alphaCfg < 1) tint(255, Math.round(255 * alphaCfg));
 
-                // finally draw the cropped portion from the rotated buffer into screen-space
+                // Draw g2 directly — NO extra rotation since g2 is already rotated.
+                // Position at block coordinates with simple scaling/mirror.
+                push();
                 imageMode(CORNER);
-                image(g2, drawX, lifey, destW, destH, srcX, 0, srcW, lifebarBlockSize);
+                if (mirrorCfg) {
+                  translate(bx + dstW, lifey);
+                  scale(-1, 1);
+                } else {
+                  translate(bx, lifey);
+                }
+                image(g2, 0, 0, dstW, dstH, srcX, 0, srcW, lifebarBlockSize);
+                noTint();
+                pop();
               } else {
                 fill(220, 120, 120, 160);
                 rect(bx, lifey + lifebarBlockSize * (1 - ratio), lifebarBlockSize, lifebarBlockSize * ratio, 6);
@@ -458,12 +533,20 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
             pop();
           }
       } else {
-        // fallback: colored rectangles
-        fill(filled ? color(220, 30, 30) : color(60, 60, 60));
+        // fallback: colored rectangles (respect tint/alpha config)
+        if (tintCfg) {
+          fill(color(tintCfg[0], tintCfg[1], tintCfg[2], Math.round(255 * alphaCfg)));
+        } else {
+          fill(filled ? color(220, 30, 30, Math.round(255 * alphaCfg)) : color(60, 60, 60, Math.round(255 * alphaCfg)));
+        }
         rect(bx, lifey, lifebarBlockSize, lifebarBlockSize, 6);
         if (partially) {
-          fill(220, 120, 120, 160);
           const ratio = (currentUnits - (i * unitForBlock)) / unitForBlock;
+          if (tintCfg) {
+            fill(color(tintCfg[0], tintCfg[1], tintCfg[2], Math.round(160 * alphaCfg)));
+          } else {
+            fill(220, 120, 120, Math.round(160 * alphaCfg));
+          }
           rect(bx, lifey + lifebarBlockSize * (1 - ratio), lifebarBlockSize, lifebarBlockSize * ratio, 6);
         }
       }
