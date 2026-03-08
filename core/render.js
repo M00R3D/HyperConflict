@@ -3,6 +3,7 @@ import { applyCamera } from './camera.js';
 import { drawBackground } from '../ui/background.js';
 import { drawSavedItems } from '../ui/stageEditor.js';
 import { capturePendingHitstopSnapshot, isHitstopActive, remainingHitstopMs } from './hitstop.js';
+import { updateParticles, drawParticles } from './particleSystem.js';
 
 export function renderScene(ctx = {}) {
   // ctx: { player1, player2, projectiles, cam, appliedCamZoom, _hitEffect, _blockstunZoom, _prevBlockstun, PAUSED }
@@ -56,6 +57,7 @@ export function renderScene(ctx = {}) {
 
     try { if (typeof drawSavedItems === 'function') drawSavedItems({ x: cam.x + shakeX, y: cam.y + shakeY, zoom: appliedCamZoom }); } catch (e) { console.warn('drawSavedItems failed', e); }
 
+
     if (typeof window !== 'undefined' && window.SHOW_DEBUG_OVERLAYS) { push(); noFill(); stroke(255,160,60); strokeWeight(2); rect(0, height - 40, width, 40); pop(); }
 
     if (player1 && typeof player1.display === 'function') player1.display();
@@ -75,7 +77,14 @@ export function renderScene(ctx = {}) {
       }
     }
 
+    try { if (typeof updateParticles === 'function') updateParticles(); } catch (e) { /* ignore */ }
+
+    try { if (typeof drawParticles === 'function') drawParticles(false); } catch (e) { /* ignore */ }
+
     pop();
+
+    // Draw screen-space particles (e.g., debug) after camera/pop so they are in screen coords
+    try { if (typeof drawParticles === 'function') drawParticles(true); } catch (e) { /* ignore */ }
 
     try { if (typeof capturePendingHitstopSnapshot === 'function') capturePendingHitstopSnapshot(); } catch (e) {}
 

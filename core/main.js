@@ -30,6 +30,7 @@ import { handleHUDAndMatch, resetToSelection as _resetToSelection } from './hudA
 import { applyDamage } from './health.js';
 import { tryCreatePlayers, clearMatchOverState } from './lifecycle.js';
 import renderScene from './render.js';
+import { spawnParticle } from './particleSystem.js';
 
 let player1, player2;
 let projectiles = [];
@@ -833,7 +834,18 @@ function draw() {
     } else if (player1.hp < _prevHp.p1) {
       // usar frame-based hitstop calculado dinámicamente según vida restante
       const framesPerHit = computeFramesPerHitFor(player1);
-      _hitEffect = startDamageEffect(player1, _prevHp.p1 - player1.hp);
+      const lost = Math.max(0, (_prevHp.p1 - player1.hp));
+      _hitEffect = startDamageEffect(player1, lost);
+      try {
+        // Emitir partículas tipo 'heart' para pérdidas grandes (cada 4/8 quarters)
+        const hb = (player1 && typeof player1.getCurrentHitbox === 'function') ? player1.getCurrentHitbox() : null;
+        const cx = hb ? Math.round(hb.x + (hb.w || 0) / 2) : Math.round((player1.x || 0) + ((player1.w || 0) / 2));
+        const cy = hb ? Math.round(hb.y + (hb.h || 0) / 2) : Math.round((player1.y || 0) + ((player1.h || 0) / 2));
+        if (typeof spawnParticle === 'function') {
+          if (lost >= 8) spawnParticle('heart', cx, cy, { count: 8 });
+          else if (lost >= 4) spawnParticle('heart', cx, cy, { count: 4 });
+        }
+      } catch (e) {}
       try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p1 = player1.hp;
@@ -843,7 +855,17 @@ function draw() {
       _prevHp.p2 = player2.hp;
     } else if (player2.hp < _prevHp.p2) {
       const framesPerHit = computeFramesPerHitFor(player2);
-      _hitEffect = startDamageEffect(player2, _prevHp.p2 - player2.hp);
+      const lost = Math.max(0, (_prevHp.p2 - player2.hp));
+      _hitEffect = startDamageEffect(player2, lost);
+      try {
+        const hb = (player2 && typeof player2.getCurrentHitbox === 'function') ? player2.getCurrentHitbox() : null;
+        const cx = hb ? Math.round(hb.x + (hb.w || 0) / 2) : Math.round((player2.x || 0) + ((player2.w || 0) / 2));
+        const cy = hb ? Math.round(hb.y + (hb.h || 0) / 2) : Math.round((player2.y || 0) + ((player2.h || 0) / 2));
+        if (typeof spawnParticle === 'function') {
+          if (lost >= 8) spawnParticle('heart', cx, cy, { count: 8 });
+          else if (lost >= 4) spawnParticle('heart', cx, cy, { count: 4 });
+        }
+      } catch (e) {}
       try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p2 = player2.hp;
