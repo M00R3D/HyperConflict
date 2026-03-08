@@ -125,9 +125,15 @@ export function spawnParticle(typeName, x, y, opts = {}) {
       }
     }
     }
-    if (typeof console !== 'undefined' && console.log) {
-      try { console.log('[PARTICLE_SPAWN]', typeName, _createdForLog, opts); } catch (e) {}
-    }
+    try {
+      const dbg = (typeof window !== 'undefined' && window.ParticleSystem && window.ParticleSystem.debug);
+      if (dbg && typeof console !== 'undefined' && console.log) {
+        try {
+          const toLog = (_createdForLog.length > 100) ? _createdForLog.slice(0, 100) : _createdForLog;
+          console.log('[PARTICLE_SPAWN]', typeName, toLog, _createdForLog.length, opts);
+        } catch (e) {}
+      }
+    } catch (e) {}
     return;
   }
 
@@ -181,9 +187,15 @@ export function spawnParticle(typeName, x, y, opts = {}) {
     _particles.push(pObj);
     try { _createdForLog.push(JSON.parse(JSON.stringify(pObj))); } catch (e) { _createdForLog.push(Object.assign({}, pObj)); }
   }
-  if (typeof console !== 'undefined' && console.log) {
-    try { console.log('[PARTICLE_SPAWN]', typeName, _createdForLog, opts); } catch (e) {}
-  }
+  try {
+    const dbg2 = (typeof window !== 'undefined' && window.ParticleSystem && window.ParticleSystem.debug);
+    if (dbg2 && typeof console !== 'undefined' && console.log) {
+      try {
+        const toLog2 = (_createdForLog.length > 100) ? _createdForLog.slice(0, 100) : _createdForLog;
+        console.log('[PARTICLE_SPAWN]', typeName, toLog2, _createdForLog.length, opts);
+      } catch (e) {}
+    }
+  } catch (e) {}
 }
 
 export function updateParticles() {
@@ -201,6 +213,15 @@ export function updateParticles() {
     p.life -= dt;
     if (p.life <= 0) _particles.splice(i, 1);
   }
+  // Safety prune: if particles grow unbounded (bug), trim oldest to avoid OOM/frame collapse
+  try {
+    const MAX_PARTICLES_SOFT = 2000;
+    const TRIM_TO = 1500;
+    if (_particles.length > MAX_PARTICLES_SOFT) {
+      _particles.splice(0, Math.max(0, _particles.length - TRIM_TO));
+      if (typeof console !== 'undefined' && console.warn) console.warn('[PARTICLE_SYSTEM] pruned particles to', _particles.length);
+    }
+  } catch (e) {}
 }
 
 export function drawParticles(screenSpace = false) {
@@ -312,6 +333,14 @@ export function clearParticles() { _particles.length = 0; }
 export default {
   registerParticleType, spawnParticle, updateParticles, drawParticles, clearParticles
 };
+
+// Debug helpers
+if (typeof window !== 'undefined') {
+  window.ParticleSystem = window.ParticleSystem || {};
+  window.ParticleSystem.getCounts = function() { try { return { particles: _particles.length, projectiles: (Array.isArray(window.projectiles) ? window.projectiles.length : 0) }; } catch (e) { return { particles: _particles.length }; } };
+  // debug flag: set to true to enable detailed spawn logging (disabled by default)
+  window.ParticleSystem.debug = !!window.ParticleSystem.debug;
+}
 
 // Expose minimal debug API to window for quick testing
 if (typeof window !== 'undefined') {

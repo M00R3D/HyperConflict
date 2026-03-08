@@ -229,3 +229,22 @@ export function remainingHitstopMs() {
   if (typeof window !== 'undefined') window.HITSTOP_REMAINING_MS = 0;
   return 0;
 }
+
+// Reset internal hitstop state (used when restarting a match)
+export function resetHitstop() {
+  _end = 0;
+  _frameFreezeRemaining = 0;
+  _pendingFrames = 0;
+  _pendingRequest = false;
+  try { _frozenImg = null; } catch (e) { _frozenImg = null; }
+  if (typeof window !== 'undefined') {
+    window.HITSTOP_ACTIVE = false;
+    window.HITSTOP_PENDING = false;
+    window.HITSTOP_REMAINING_MS = 0;
+  }
+}
+
+// Expose helper on window for legacy callers
+if (typeof window !== 'undefined') {
+  window.resetHitstop = window.resetHitstop || resetHitstop;
+}

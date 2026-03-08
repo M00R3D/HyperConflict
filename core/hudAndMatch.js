@@ -74,6 +74,12 @@ export function resetToSelection(ctx = {}) {
   try { if (ctx.player1) ctx.player1 = null; } catch(e){}
   try { if (ctx.player2) ctx.player2 = null; } catch(e){}
   try { if (Array.isArray(ctx.projectiles)) ctx.projectiles.length = 0; } catch(e){}
+  // also clear global/window projectiles and particle system to avoid accumulation
+  try { if (typeof window !== 'undefined') { if (Array.isArray(window.projectiles)) window.projectiles.length = 0; } } catch (e) {}
+  try { if (typeof state !== 'undefined' && Array.isArray(state.projectiles)) state.projectiles.length = 0; } catch (e) {}
+  try { if (typeof window !== 'undefined' && window.ParticleSystem && typeof window.ParticleSystem.clearParticles === 'function') window.ParticleSystem.clearParticles(); } catch (e) {}
+  // reset hitstop internals if helper available
+  try { if (typeof window !== 'undefined' && typeof window.resetHitstop === 'function') window.resetHitstop(); } catch (e) {}
   if (typeof ctx.playersReady !== 'undefined') ctx.playersReady = false;
   if (typeof ctx.selectionActive !== 'undefined') ctx.selectionActive = true;
 
