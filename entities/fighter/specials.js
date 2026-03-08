@@ -47,6 +47,20 @@ function getEffectiveSpecialDefs(self) {
 }
 
 export function checkSpecialMoves(self) {
+  // Respect a short special lock to avoid repeated activations from buffered spam
+  const now = millis();
+  const lockUntil = (self && typeof self._specialLockUntil === 'number') ? self._specialLockUntil : 0;
+  if (now < lockUntil) return;
+  // global per-fighter special cooldown to avoid chaining different specials too quickly
+  const globalUntil = (self && typeof self._specialGlobalCooldownUntil === 'number') ? self._specialGlobalCooldownUntil : 0;
+  if (now < globalUntil) {
+    // record blocked event for debugging
+    try {
+      const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+      if (r && r.active) r.pushEvent({ type: 'specialBlocked', reason: 'globalCooldown', time: Math.max(0, now - (r.startedAt || 0)), fighterId: self.id });
+    } catch (e) {}
+    return;
+  }
   const defsMap = getEffectiveSpecialDefs(self);
   const bufSymbols = (self.inputBuffer || []).map(i => i.symbol || '');
   // identificar el último símbolo direccional (si existe)
@@ -78,8 +92,42 @@ export function checkSpecialMoves(self) {
     }
 
     if (Buffer.bufferEndsWith(self, seq)) {
+      // per-move debounce: prevent the same special from firing repeatedly
+      const debounceMs = (typeof self.specialDebounceMs === 'number') ? Math.max(0, Number(self.specialDebounceMs)) : 120;
+      self._lastSpecialAt = self._lastSpecialAt || Object.create(null);
+      const lastAt = (typeof self._lastSpecialAt[moveName] === 'number') ? self._lastSpecialAt[moveName] : 0;
+      if ((now - lastAt) < debounceMs) {
+        // skip this trigger as it is within debounce window
+        continue;
+      }
+
+      // Strict-window check (Option A): ensure the matched sequence was entered quickly
+      const strictMs = (typeof self.specialStrictWindowMs === 'number') ? Math.max(0, Number(self.specialStrictWindowMs)) : 300;
+      const buf = self.inputBuffer || [];
+      const len = buf.length;
+      const firstIdx = len - seq.length;
+      if (firstIdx < 0) continue; // safety
+      const firstTime = buf[firstIdx] && buf[firstIdx].time ? buf[firstIdx].time : now;
+      const lastTime = (buf[len - 1] && buf[len - 1].time) ? buf[len - 1].time : now;
+      if ((lastTime - firstTime) > strictMs) {
+        // too slow — record blocked attempt for diagnostics
+        try {
+          const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+          if (r && r.active) r.pushEvent({ type: 'specialBlocked', reason: 'tooSlow', move: moveName, time: Math.max(0, now - (r.startedAt || 0)), fighterId: self.id, span: lastTime - firstTime, allowedMs: strictMs });
+        } catch (e) {}
+        continue;
+      }
+
+      // Passed timing checks — execute special and clear the entire buffer to avoid chained triggers
       doSpecial(self, moveName);
-      Buffer.bufferConsumeLast(self, seq.length);
+      try { Buffer.bufferClear(self); } catch (e) { Buffer.bufferConsumeLast(self, seq.length); }
+      // impose a short global cooldown after any special to avoid immediate chaining
+      const globalMs = (typeof self.specialGlobalCooldownMs === 'number') ? Math.max(0, Number(self.specialGlobalCooldownMs)) : 300;
+      try { self._specialGlobalCooldownUntil = millis() + globalMs; } catch (e) { self._specialGlobalCooldownUntil = now + globalMs; }
+      // set a short lock so the same buffer can't trigger another special immediately
+      const dur = (typeof self.specialLockDuration === 'number') ? Math.max(0, Number(self.specialLockDuration)) : 240;
+      try { self._specialLockUntil = millis() + dur; } catch (e) { self._specialLockUntil = now + dur; }
+      try { self._lastSpecialAt[moveName] = millis(); } catch (e) { self._lastSpecialAt[moveName] = now; }
       return;
     }
   }
@@ -114,6 +162,12 @@ export function doSpecial(self, moveName) {
     const py = Math.round(self.y + self.h / 2 - 6);
     const p = spawnProjectileFromType(1, px, py, dir, self.id, {}, {}, self.projectileFramesByLayer);
     projectiles.push(p);
+    try {
+      const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+      if (r && r.active) {
+        r.pushEvent({ type: 'special', move: 'hadouken', time: Math.max(0, millis() - (r.startedAt || 0)), fighterId: self.id, projectiles: [{ typeId: p.typeId, x: p.x, y: p.y, dir: p.dir, ownerId: p.ownerId, damageQuarters: p.damageQuarters }] });
+      }
+    } catch (e) {}
   } else if (moveName === 'shoryuken') {
     self.setState('punch3'); self.attackType = 'punch3'; self.attacking = true;
     self.attackStartTime = millis(); self.attackDuration = self.actions.punch3.duration || 800;
@@ -176,6 +230,7 @@ export function doSpecial(self, moveName) {
     const initialOffset = Math.round(self.w / 2); // offset base desde el centro
     const step = 18; // px entre piezas
     const centerX = Math.round(self.x + self.w / 2);
+    const created = [];
     for (let k = 0; k < 4; k++) {
       const dir = self.facing === 1 ? 1 : -1;
       // offset relativo al centro del fighter; para facing=-1 offset será negativo
@@ -189,7 +244,15 @@ export function doSpecial(self, moveName) {
       const p = spawnProjectileFromType(4, px, py, dir, self.id, {}, opts, tatsProj);
       p._barrierIndex = k;
       projectiles.push(p);
+      created.push({ typeId: p.typeId, x: p.x, y: p.y, dir: p.dir, ownerId: p.ownerId, barrierIndex: p._barrierIndex });
     }
+    // single recorder event for the multi-projectile special
+    try {
+      const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+      if (r && r.active) {
+        r.pushEvent({ type: 'special', move: 'ty_tats', time: Math.max(0, millis() - (r.startedAt || 0)), fighterId: self.id, projectiles: created });
+      }
+    } catch (e) {}
 
     return;
   } else if (moveName === 'taunt') {
@@ -243,6 +306,12 @@ export function doSpecial(self, moveName) {
     const p = spawnProjectileFromType(5, px, py, dir, self.id, { string: stringFrames }, opts, bunFrames);
     p._ownerRef = self;
     projectiles.push(p);
+    try {
+      const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+      if (r && r.active) {
+        r.pushEvent({ type: 'special', move: 'bun', time: Math.max(0, millis() - (r.startedAt || 0)), fighterId: self.id, projectiles: [{ typeId: p.typeId, x: p.x, y: p.y, dir: p.dir, ownerId: p.ownerId, damageQuarters: p.damageQuarters }] });
+      }
+    } catch (e) {}
     return;
   } else if (moveName === 'dash') {
     // Determine last directional symbol in buffer to decide dash direction

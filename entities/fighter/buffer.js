@@ -3,6 +3,32 @@
 
 import { keysDown, keysPressed, keysUp, keysDownTime, keysUpTime } from '../../core/input.js';
 
+// --- Global recorder for buffer/special debugging ---
+if (typeof window !== 'undefined') {
+  window._bufferRecorder = window._bufferRecorder || {
+    active: false,
+    startedAt: 0,
+    recorded: [],
+    start() { this.active = true; this.startedAt = millis(); this.recorded = []; console.log('[Recorder] started'); },
+    stop() { this.active = false; console.log('[Recorder] stopped — events:', this.recorded); window._lastBufferRecording = this.recorded.slice(); },
+    clear() { this.recorded = []; },
+    pushEvent(e) { try { if (!this.active) return; this.recorded.push(e); } catch (err) { /* ignore */ } }
+  };
+
+  // Toggle with key '7' globally (start/stop)
+  if (!window._bufferRecorder._listenerAdded) {
+    window.addEventListener('keydown', (ev) => {
+      if (ev && ev.key === '7') {
+        const r = window._bufferRecorder;
+        if (!r.active) r.start(); else r.stop();
+      }
+    });
+    window._bufferRecorder._listenerAdded = true;
+  }
+  // expose short alias for console usage
+  window.BufferRecorder = window._bufferRecorder;
+}
+
 // Nota: no importamos Fighter para evitar ciclos. Todas las utilidades necesarias se definen aquí.
 
 export function trimBuffer(self) {
@@ -17,7 +43,27 @@ export function bufferConsumeLast(self, n) {
   if (!n || n <= 0) return;
   const len = self.inputBuffer ? self.inputBuffer.length : 0;
   const start = Math.max(0, len - n);
-  self.inputBuffer.splice(start, Math.min(n, len));
+  const removed = self.inputBuffer.splice(start, Math.min(n, len));
+  // record buffer consumption for debugging
+  try {
+    const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+    if (r && r.active) {
+      r.pushEvent({ type: 'bufferConsume', removed: removed.map(x => x.symbol), count: removed.length, time: Math.max(0, millis() - (r.startedAt || 0)), fighterId: (self && self.id) ? self.id : null });
+    }
+  } catch (e) {}
+}
+
+// Clear the entire input buffer for this fighter (used when using strict buffer mode)
+export function bufferClear(self) {
+  if (!self) return;
+  const had = (self.inputBuffer && self.inputBuffer.length) ? self.inputBuffer.length : 0;
+  self.inputBuffer = [];
+  try {
+    const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+    if (r && r.active) {
+      r.pushEvent({ type: 'bufferClear', removedCount: had, time: Math.max(0, millis() - (r.startedAt || 0)), fighterId: (self && self.id) ? self.id : null });
+    }
+  } catch (e) {}
 }
 
 export function addInput(self, symbol) {
@@ -49,6 +95,14 @@ export function addInput(self, symbol) {
   self.inputBuffer.push({ symbol, time: now });
   normalizeDiagonals(self);
   trimBuffer(self);
+
+  // record input event if recorder active
+  try {
+    const r = (typeof window !== 'undefined') ? window._bufferRecorder : null;
+    if (r && r.active) {
+      r.pushEvent({ type: 'input', symbol, time: Math.max(0, now - (r.startedAt || 0)), fighterId: (self && self.id) ? self.id : null });
+    }
+  } catch (e) {}
 }
 
 export function normalizeDiagonals(self) {
