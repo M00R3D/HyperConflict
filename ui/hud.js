@@ -410,6 +410,21 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
 
     // background slightly larger
     const pad = 6;
+    // Optionally rotate the entire lifebar for the right-aligned player by 180deg
+    // around the lifebar's center. We implement this by adding an outer push()
+    // + translate/rotate + inverse translate. Track via `_outerRotated` so
+    // we can pop the outer transform after finishing drawing.
+    let _outerRotated = false;
+    if (rightAligned) {
+      const cx = baseX + totalW / 2;
+      const cy = lifey + lifebarBlockSize / 2;
+      push();
+      translate(cx, cy);
+      rotate(PI);
+      translate(-cx, -cy);
+      _outerRotated = true;
+    }
+
     push();
     noStroke();
     fill(0, 220);
@@ -552,12 +567,15 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
       }
     }
 
-    // draw numeric label centered under lifebar
+    pop();
+    // If we applied an outer rotation transform for right-aligned lifebar,
+    // pop that outer push now.
+    if (_outerRotated) pop();
+    // draw numeric label centered under lifebar (always unrotated)
     fill(255);
     textSize(12);
     textAlign(CENTER, TOP);
     text(`${currentUnits}/${totalUnits}`, baseX + totalW / 2, lifey + lifebarBlockSize + 6);
-    pop();
   };
 
   drawLifebarFor(p1, false);
