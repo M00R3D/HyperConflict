@@ -975,7 +975,7 @@ class Fighter {
             const compVy = -((typeof tfRel.flyback.v === 'number' ? Math.abs(tfRel.flyback.v) : 10) * 0.6);
             this.opponent.vx = compVx;
             this.opponent.vy = compVy;
-            try { console.log('[THROW] normal-release (scaled)', { throwerChar: this.charId, victimChar: this.opponent.charId, tfRel, compVx, compVy }); } catch (e) {}
+            // try { console.log('[THROW] normal-release (scaled)', { throwerChar: this.charId, victimChar: this.opponent.charId, tfRel, compVx, compVy }); } catch (e) {}
             // Force persistent knockback for the normal release
             try {
               const kb3 = { vx: compVx, vy: compVy, decay: 1, frames: 101, sourceId: this.id };

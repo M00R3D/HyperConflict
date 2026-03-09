@@ -17,7 +17,9 @@ export function updateMovement(self) {
         if (!self._knockback._vyApplied) {
           self.vy = self._knockback.vy;
           self._knockback._vyApplied = true;
-          try { console.log('[KNOCKBACK-VY-APPLIED]', { char: self.charId || self.id, vy: self.vy, startedAt: self._knockback._startedAt }); } catch (e) {}
+          // try { 
+            // console.log('[KNOCKBACK-VY-APPLIED]', { char: self.charId || self.id, vy: self.vy, startedAt: self._knockback._startedAt }); 
+          // } catch (e) {}
         }
       }
 
@@ -371,14 +373,14 @@ export function updateMovement(self) {
     if (stateIsFly || launchedIsFly) {
       const opp = self.opponent || (typeof window !== 'undefined' ? ((window.player1 && window.player1.id === self.id) ? window.player2 : window.player1) : null);
       const snap = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n);
-      console.log('[LAUNCH-TRACE]', {
-        t: millis(),
-        char: self.charId || self.id,
-        state: self.state?.current || null,
-        launched: self._launched || null,
-        x: snap(self.x), y: snap(self.y), vx: snap(self.vx), vy: snap(self.vy), onGround: !!self.onGround,
-        opponent: opp ? { char: opp.charId || opp.id, x: snap(opp.x), y: snap(opp.y), vx: snap(opp.vx), vy: snap(opp.vy) } : null
-      });
+      // console.log('[LAUNCH-TRACE]', {
+      //   t: millis(),
+      //   char: self.charId || self.id,
+      //   state: self.state?.current || null,
+      //   launched: self._launched || null,
+      //   x: snap(self.x), y: snap(self.y), vx: snap(self.vx), vy: snap(self.vy), onGround: !!self.onGround,
+      //   opponent: opp ? { char: opp.charId || opp.id, x: snap(opp.x), y: snap(opp.y), vx: snap(opp.vx), vy: snap(opp.vy) } : null
+      // });
     }
   } catch (e) {}
 

@@ -15,6 +15,56 @@ import {
   handleWheel as stageHandleWheel
 } from '../ui/stageEditor.js';
 
+// Global log toggle: press '9' to mute/unmute `console.log` and `console.info`.
+// Certain important messages remain visible (whitelisted substrings).
+if (typeof window !== 'undefined') {
+  window._hcLogsEnabled = (typeof window._hcLogsEnabled === 'boolean') ? window._hcLogsEnabled : true;
+  (function() {
+    const origLog = console.log.bind(console);
+    const origInfo = (console.info && console.info.bind) ? console.info.bind(console) : origLog;
+    const whitelist = [
+      'Live reload enabled',
+      'you have used a p5.js reserved function',
+      'p5.js dice'
+    ];
+    function msgToString(args) {
+      try {
+        return args.map(a => (typeof a === 'string') ? a : (typeof a === 'undefined' ? 'undefined' : (a && a.toString && a.toString() ) || JSON.stringify(a))).join(' ');
+      } catch (e) {
+        try { return String(args); } catch (ee) { return ''; }
+      }
+    }
+    function isWhitelisted(s) {
+      if (!s) return false;
+      for (const w of whitelist) if (s.indexOf(w) !== -1) return true;
+      return false;
+    }
+
+    console.log = function(...args) {
+      try {
+        const s = msgToString(args);
+        if (window._hcLogsEnabled || isWhitelisted(s)) origLog(...args);
+      } catch (e) { origLog(...args); }
+    };
+
+    console.info = function(...args) {
+      try {
+        const s = msgToString(args);
+        if (window._hcLogsEnabled || isWhitelisted(s)) origInfo(...args);
+      } catch (e) { origInfo(...args); }
+    };
+
+    window.addEventListener('keydown', (ev) => {
+      try {
+        if (ev && ev.key === '9') {
+          window._hcLogsEnabled = !window._hcLogsEnabled;
+          origLog('[HC Logs] toggled', window._hcLogsEnabled ? 'ON' : 'OFF');
+        }
+      } catch (e) {}
+    });
+  })();
+}
+
 export async function setup() {
   createCanvas(800, 400);
   pixelDensity(1);
