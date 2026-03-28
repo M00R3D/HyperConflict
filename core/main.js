@@ -22,6 +22,8 @@ import {
   loadStageItems as stageLoadItems
 } from '../ui/stageEditor.js';
 import './sceneManager.js';
+import { startMemoryRefresh, stopMemoryRefresh } from './memoryManager.js';
+import cleanup from './cleanup.js';
 
 registerCharData();
 import { state as gameState, assignFrom as assignGameState } from './gameState.js';
@@ -44,6 +46,23 @@ let MATCH_WINNER = null;          // <-- new: winner id when match ends
 window.MATCH_OVER = window.MATCH_OVER || false;
 window.MATCH_WINNER = window.MATCH_WINNER || null;
 
+// Soft limits to avoid runaway memory usage at runtime
+const SOFT_MAX_PROJECTILES = 800;
+const SOFT_TRIM_PROJECTILES_TO = 600;
+const SOFT_MAX_PARTICLES = 1200;
+const SOFT_TRIM_PARTICLES_TO = 800;
+
+// Register a disposable with the cleanup registry to clear main runtime state
+try {
+  if (typeof cleanup !== 'undefined' && cleanup && typeof cleanup.registerDisposable === 'function') {
+    cleanup.registerDisposable(function() {
+      try { projectiles.length = 0; } catch (e) {}
+      try { player1 = null; player2 = null; } catch (e) {}
+      try { if (typeof window !== 'undefined') { window.projectiles = projectiles; window.player1 = null; window.player2 = null; } } catch (e) {}
+    });
+  }
+} catch (e) {}
+
 // NEW: menu state for MATCH_OVER overlay (behaves like pause menu)
 const _matchMenu = {
   items: ['Rematch', 'Character Select'],
@@ -56,6 +75,7 @@ window._matchMenu = window._matchMenu || _matchMenu;
 const MAX_HP_QUARTERS = 24;
 let _hitEffect = { active: false, start: 0, end: 0, duration: 0, mag: 0, zoom: 0, targetPlayerId: null };
 let _prevHp = { p1: null, p2: null };
+let _prevHearts = { p1: null, p2: null };
 let _hsPrevActive = false;
 let _hsStartedAt = 0;
 let _prevBlockstun = { p1: false, p2: false };
@@ -63,6 +83,10 @@ let _blockstunZoom = { active: false, start: 0, duration: 360, targetAdd: 0.16, 
 
 
 let _tyemanAssets = null;let _sbluerAssets = null;let _heartFrames = null;let _lifebarFrames = null;let _slotAssets = null;let _bootFrames = null;let selectionActive = false;
+
+// Reusable per-frame context objects to avoid creating new objects every frame (60/s GC pressure)
+const _renderCtx = {};
+const _syncBuf = {};
 const choices = ['tyeman', 'sbluer'];let p1Choice = 0;
 let p2Choice = 1;let p1Confirmed = false;let p2Confirmed = false;let p1SelIndex = 0;let p2SelIndex = 1;
 
@@ -79,6 +103,78 @@ try {
     selectionActive, choices, p1Choice, p2Choice, p1Confirmed, p2Confirmed, p1SelIndex, p2SelIndex
   });
 } catch (e) { /* defensive: allow older runtimes during edit */ }
+
+// Set up window.resetToSelection ONCE (not inside draw) to avoid per-frame closure leak.
+// It reads from gameState which is synced each frame anyway.
+try {
+  if (typeof window !== 'undefined') {
+    window.resetToSelection = function() {
+      const ctx = {
+        player1: gameState.player1 || null,
+        player2: gameState.player2 || null,
+        projectiles: gameState.projectiles || [],
+        keysPressed: (typeof keysPressed !== 'undefined') ? keysPressed : {},
+        keysDown: (typeof keysDown !== 'undefined') ? keysDown : {},
+        keysUp: (typeof keysUp !== 'undefined') ? keysUp : {},
+        clearMatchOverState: (typeof clearMatchOverState !== 'undefined') ? clearMatchOverState : null,
+        initInput: (typeof initInput !== 'undefined') ? initInput : null,
+        PAUSED: gameState.PAUSED,
+        appliedHUDAlpha: gameState.appliedHUDAlpha,
+        cam: gameState.cam,
+        appliedCamZoom: gameState.appliedCamZoom,
+        _hitEffect: gameState._hitEffect,
+        _prevHp: gameState._prevHp,
+        _hsPrevActive: gameState._hsPrevActive,
+        _hsStartedAt: gameState._hsStartedAt,
+        _prevBlockstun: gameState._prevBlockstun,
+        _blockstunZoom: gameState._blockstunZoom,
+        playersReady: gameState.playersReady,
+        selectionActive: gameState.selectionActive,
+        p1Confirmed: gameState.p1Confirmed,
+        p2Confirmed: gameState.p2Confirmed,
+        p1SelIndex: gameState.p1SelIndex,
+        p2SelIndex: gameState.p2SelIndex,
+        p1Choice: gameState.p1Choice,
+        p2Choice: gameState.p2Choice
+      };
+      _resetToSelection(ctx);
+      // sync back to gameState
+      try {
+        PAUSED = (typeof ctx.PAUSED === 'undefined') ? PAUSED : ctx.PAUSED;
+        window.PAUSED = PAUSED;
+        assignGameState({
+          PAUSED: PAUSED,
+          selectionActive: ctx.selectionActive,
+          player1: ctx.player1,
+          player2: ctx.player2,
+          projectiles: ctx.projectiles,
+          appliedHUDAlpha: ctx.appliedHUDAlpha,
+          cam: ctx.cam,
+          appliedCamZoom: ctx.appliedCamZoom,
+          _hitEffect: ctx._hitEffect,
+          _prevHp: ctx._prevHp,
+          _hsPrevActive: ctx._hsPrevActive,
+          _hsStartedAt: ctx._hsStartedAt,
+          _prevBlockstun: ctx._prevBlockstun,
+          _blockstunZoom: ctx._blockstunZoom,
+          playersReady: ctx.playersReady,
+          p1Confirmed: ctx.p1Confirmed,
+          p2Confirmed: ctx.p2Confirmed,
+          p1SelIndex: ctx.p1SelIndex,
+          p2SelIndex: ctx.p2SelIndex,
+          p1Choice: ctx.p1Choice,
+          p2Choice: ctx.p2Choice
+        });
+      } catch (e) {}
+      // update module-level locals from gameState
+      player1 = gameState.player1; player2 = gameState.player2;
+      projectiles = gameState.projectiles || projectiles;
+      selectionActive = (typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
+      playersReady = (typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
+    };
+  }
+} catch (e) {}
+
 async function setup() {
   createCanvas(800, 400);pixelDensity(1);noSmooth();
   if (typeof drawingContext !== 'undefined' && drawingContext) drawingContext.imageSmoothingEnabled = false;
@@ -101,6 +197,7 @@ async function setup() {
     window._tyemanAssets = _tyemanAssets;
     window._sbluerAssets = _sbluerAssets;
     window._fernandoAssets = _fernandoAssets;
+    try { if (typeof startMemoryRefresh === 'function') { window.startMemoryRefresh = startMemoryRefresh; window.stopMemoryRefresh = stopMemoryRefresh; startMemoryRefresh(25000); } } catch (e) {}
   }
   console.log('[setup] assets loaded:', {
     tyeman: !!_tyemanAssets, sbluer: !!_sbluerAssets, fernando: !!_fernandoAssets
@@ -147,29 +244,25 @@ async function setup() {
 
   // forward mouse / wheel to editor when active
   // NOTE: passive:false para poder call e.preventDefault()
-  window.addEventListener('mousedown', (e) => {
-    try {
-      if (isStageEditorActive()) {
-        stageHandleMousePressed(e, cam);
-        e.preventDefault();
-      }
-    } catch (err) {}
-  }, { passive: false });
-
-  window.addEventListener('contextmenu', (e) => {
-    if (isStageEditorActive()) {
-      e.preventDefault();
+  const _main_mousedown = function(e) {
+    try { if (isStageEditorActive()) { stageHandleMousePressed(e, cam); e.preventDefault(); } } catch (err) {}
+  };
+  const _main_context = function(e) { try { if (isStageEditorActive()) e.preventDefault(); } catch (err) {} };
+  const _main_wheel = function(e) { try { if (isStageEditorActive()) { stageHandleWheel(e.deltaY, cam); e.preventDefault(); } } catch (err) {} };
+  try {
+    if (cleanup && typeof cleanup.registerListener === 'function') {
+      cleanup.registerListener(window, 'mousedown', _main_mousedown, { passive: false });
+      cleanup.registerListener(window, 'contextmenu', _main_context, { passive: false });
+      cleanup.registerListener(window, 'wheel', _main_wheel, { passive: false });
+    } else {
+      window.addEventListener('mousedown', _main_mousedown, { passive: false });
+      window.addEventListener('contextmenu', _main_context, { passive: false });
+      window.addEventListener('wheel', _main_wheel, { passive: false });
     }
-  }, { passive: false });
-
-  window.addEventListener('wheel', (e) => {
-    try {
-      if (isStageEditorActive()) {
-        stageHandleWheel(e.deltaY, cam);
-        e.preventDefault();
-      }
-    } catch (err) {}
-  }, { passive: false });
+    window._mainMouseDownHandler = _main_mousedown;
+    window._mainContextHandler = _main_context;
+    window._mainWheelHandler = _main_wheel;
+  } catch (e) { try { window.addEventListener('mousedown', _main_mousedown, { passive: false }); window.addEventListener('contextmenu', _main_context, { passive: false }); window.addEventListener('wheel', _main_wheel, { passive: false }); } catch (ee) {} }
 
   // expose quick toggles
   if (typeof window !== 'undefined') {
@@ -311,6 +404,9 @@ function draw() {
     playersReady = (typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
     selectionActive = (typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
     _prevHp = gameState._prevHp || _prevHp;
+    // Keep local PAUSED in sync with shared gameState so external modules
+    // (e.g. lifecycle) can clear the pause by updating gameState.PAUSED.
+    if (typeof gameState.PAUSED !== 'undefined') PAUSED = !!gameState.PAUSED;
   } catch (e) {}
   // allow toggling the stage editor immediately (works even during selection/screens)
   if (typeof keysPressed !== 'undefined' && keysPressed['4']) {
@@ -587,8 +683,8 @@ function draw() {
                   try { applyDamage(player1, dmg, 2, 4); } catch (e) { player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player1.x >= (owner.x || 0)) ? 1 : -1;
-                    const push = 1.8;
-                    player1.vx = awaySign * push;
+                    const pushStrength = 1.8;
+                    player1.vx = awaySign * pushStrength;
                     player1.vy = Math.min(player1.vy, -1.2);
                   }
                   if (!p.persistent) p.toRemove = true;
@@ -652,8 +748,8 @@ function draw() {
                   try { applyDamage(player1, dmg, 2, 4); } catch (e) { player1.hp = Math.max(0, (typeof player1.hp === 'number' ? player1.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player1.x >= (owner.x || 0)) ? 1 : -1;
-                    const push = 1.8;
-                    player1.vx = awaySign * push;
+                    const pushStrength = 1.8;
+                    player1.vx = awaySign * pushStrength;
                     player1.vy = Math.min(player1.vy, -1.2);
                   }
                   if (!p.persistent) p.toRemove = true;
@@ -718,8 +814,8 @@ function draw() {
                   try { applyDamage(player2, dmg, 2, 4); } catch (e) { player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player2.x >= (owner.x || 0)) ? 1 : -1;
-                    const push = 1.8;
-                    player2.vx = awaySign * push;
+                    const pushStrength = 1.8;
+                    player2.vx = awaySign * pushStrength;
                     player2.vy = Math.min(player2.vy, -1.2);
                   }
                   if (!p.persistent) p.toRemove = true;
@@ -779,8 +875,8 @@ function draw() {
                   try { applyDamage(player2, dmg, 2, 4); } catch (e) { player2.hp = Math.max(0, (typeof player2.hp === 'number' ? player2.hp : 0) - dmg); }
                   if (owner) {
                     const awaySign = (player2.x >= (owner.x || 0)) ? 1 : -1;
-                    const push = 1.8;
-                    player2.vx = awaySign * push;
+                    const pushStrength = 1.8;
+                    player2.vx = awaySign * pushStrength;
                     player2.vy = Math.min(player2.vy, -1.2);
                   }
                   if (!p.persistent) p.toRemove = true;
@@ -818,6 +914,27 @@ function draw() {
         projectiles.splice(i, 1);
       }
     }
+    // --- SOFT PRUNE: prevent runaway growth of projectile array ---
+    try {
+      if (Array.isArray(projectiles) && projectiles.length > SOFT_MAX_PROJECTILES) {
+        const removeCount = Math.max(0, projectiles.length - SOFT_TRIM_PROJECTILES_TO);
+        projectiles.splice(0, removeCount);
+        console.warn('[MAIN] pruned projectiles to', projectiles.length);
+      }
+    } catch (e) { /* ignore pruning errors */ }
+
+    // --- SOFT PARTICLE CLEANUP: if particle system grows too large, clear to free memory ---
+    try {
+      if (typeof window !== 'undefined' && window.ParticleSystem && typeof window.ParticleSystem.getCounts === 'function') {
+        const counts = window.ParticleSystem.getCounts();
+        if (counts && counts.particles > SOFT_MAX_PARTICLES) {
+          try { window.ParticleSystem.clearParticles(); console.warn('[MAIN] cleared particles due to high count', counts.particles); } catch (ee) {}
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    // expose global reference so devtools/monitors can inspect live arrays
+    try { if (typeof window !== 'undefined') window.projectiles = projectiles; } catch (e) {}
 
     cam = updateCamera(player1, player2, cam);
   } else {
@@ -837,18 +954,32 @@ function draw() {
       const lost = Math.max(0, (_prevHp.p1 - player1.hp));
       _hitEffect = startDamageEffect(player1, lost);
       try {
-        // Emitir partículas tipo 'heart' para pérdidas grandes (cada 4/8 quarters)
+        // Emitir partículas tipo 'heart' SOLO cuando se pierdan corazones visibles
         const hb = (player1 && typeof player1.getCurrentHitbox === 'function') ? player1.getCurrentHitbox() : null;
         const cx = hb ? Math.round(hb.x + (hb.w || 0) / 2) : Math.round((player1.x || 0) + ((player1.w || 0) / 2));
         const cy = hb ? Math.round(hb.y + (hb.h || 0) / 2) : Math.round((player1.y || 0) + ((player1.h || 0) / 2));
-        if (typeof spawnParticle === 'function') {
-          if (lost >= 8) spawnParticle('heart', cx, cy, { count: 8 });
-          else if (lost >= 4) spawnParticle('heart', cx, cy, { count: 4 });
+        // visible hearts capacity (heartsCount * quartersPerHeart) — defaults used in applyDamage
+        const visibleCap = 2 * 4; // 2 hearts * 4 quarters
+        const quartersPerHeart = 4;
+        const prevH = (typeof _prevHearts.p1 === 'number') ? _prevHearts.p1 : (typeof player1.hearts === 'number' ? player1.hearts : null);
+        const newH = (typeof player1.hearts === 'number') ? player1.hearts : null;
+        let heartsLostVisible = 0;
+        if (prevH !== null && newH !== null) {
+          const prevLostQ = Math.max(0, visibleCap - prevH);
+          const newLostQ = Math.max(0, visibleCap - newH);
+          const prevFullLost = Math.floor(prevLostQ / quartersPerHeart);
+          const newFullLost = Math.floor(newLostQ / quartersPerHeart);
+          heartsLostVisible = Math.max(0, newFullLost - prevFullLost);
+        }
+        if (typeof spawnParticle === 'function' && heartsLostVisible > 0) {
+          if (heartsLostVisible >= 2) spawnParticle('heart', cx, cy, { count: 8 });
+          else if (heartsLostVisible >= 1) spawnParticle('heart', cx, cy, { count: 4 });
         }
       } catch (e) {}
       try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p1 = player1.hp;
+    try { _prevHearts.p1 = (typeof player1.hearts === 'number') ? player1.hearts : _prevHearts.p1; } catch (e) {}
   }
   if (player2) {
     if (_prevHp.p2 == null) {
@@ -861,23 +992,36 @@ function draw() {
         const hb = (player2 && typeof player2.getCurrentHitbox === 'function') ? player2.getCurrentHitbox() : null;
         const cx = hb ? Math.round(hb.x + (hb.w || 0) / 2) : Math.round((player2.x || 0) + ((player2.w || 0) / 2));
         const cy = hb ? Math.round(hb.y + (hb.h || 0) / 2) : Math.round((player2.y || 0) + ((player2.h || 0) / 2));
-        if (typeof spawnParticle === 'function') {
-          if (lost >= 8) spawnParticle('heart', cx, cy, { count: 8 });
-          else if (lost >= 4) spawnParticle('heart', cx, cy, { count: 4 });
+        const visibleCap = 2 * 4;
+        const quartersPerHeart = 4;
+        const prevH = (typeof _prevHearts.p2 === 'number') ? _prevHearts.p2 : (typeof player2.hearts === 'number' ? player2.hearts : null);
+        const newH = (typeof player2.hearts === 'number') ? player2.hearts : null;
+        let heartsLostVisible = 0;
+        if (prevH !== null && newH !== null) {
+          const prevLostQ = Math.max(0, visibleCap - prevH);
+          const newLostQ = Math.max(0, visibleCap - newH);
+          const prevFullLost = Math.floor(prevLostQ / quartersPerHeart);
+          const newFullLost = Math.floor(newLostQ / quartersPerHeart);
+          heartsLostVisible = Math.max(0, newFullLost - prevFullLost);
+        }
+        if (typeof spawnParticle === 'function' && heartsLostVisible > 0) {
+          if (heartsLostVisible >= 2) spawnParticle('heart', cx, cy, { count: 8 });
+          else if (heartsLostVisible >= 1) spawnParticle('heart', cx, cy, { count: 4 });
         }
       } catch (e) {}
       try { if (typeof applyHitstopFrames === 'function') applyHitstopFrames(framesPerHit); else if (typeof applyHitstop === 'function') applyHitstop(Math.max(1, Math.round((framesPerHit / (frameRate ? Math.max(30, Math.round(frameRate())) : 60)) * 1000))); } catch (e) {}
     }
     _prevHp.p2 = player2.hp;
+    try { _prevHearts.p2 = (typeof player2.hearts === 'number') ? player2.hearts : _prevHearts.p2; } catch (e) {}
   }
 
   // render (delegado a core/render.js)
   try {
-    const renderCtx = {
-      player1, player2, projectiles, cam,
-      appliedCamZoom, _hitEffect, _blockstunZoom, _prevBlockstun, PAUSED
-    };
-    const rr = renderScene(renderCtx) || {};
+    _renderCtx.player1 = player1; _renderCtx.player2 = player2; _renderCtx.projectiles = projectiles;
+    _renderCtx.cam = cam; _renderCtx.appliedCamZoom = appliedCamZoom;
+    _renderCtx._hitEffect = _hitEffect; _renderCtx._blockstunZoom = _blockstunZoom;
+    _renderCtx._prevBlockstun = _prevBlockstun; _renderCtx.PAUSED = PAUSED;
+    const rr = renderScene(_renderCtx) || {};
     cam = rr.cam || cam;
     appliedCamZoom = (typeof rr.appliedCamZoom === 'number') ? rr.appliedCamZoom : appliedCamZoom;
     _hitEffect = rr._hitEffect || _hitEffect;
@@ -969,97 +1113,44 @@ function draw() {
   MATCH_OVER = (__hudCtx.MATCH_OVER === undefined) ? MATCH_OVER : __hudCtx.MATCH_OVER;
 
   // re-expose resetToSelection on window to preserve legacy callers
-  try {
-    if (typeof window !== 'undefined') {
-      window.resetToSelection = function() {
-        const ctx = Object.assign({}, __hudCtx, {
-          player1,
-          player2,
-          projectiles,
-          keysPressed: (typeof keysPressed !== 'undefined') ? keysPressed : {},
-          keysDown: (typeof keysDown !== 'undefined') ? keysDown : {},
-          keysUp: (typeof keysUp !== 'undefined') ? keysUp : {},
-          clearMatchOverState: (typeof clearMatchOverState !== 'undefined') ? clearMatchOverState : null,
-          initInput: (typeof initInput !== 'undefined') ? initInput : null
-        });
-        _resetToSelection(ctx);
-        // ensure local and global PAUSED are updated from ctx so pause overlay closes
-        PAUSED = (typeof ctx.PAUSED === 'undefined') ? PAUSED : ctx.PAUSED;
-        try { if (typeof window !== 'undefined') window.PAUSED = PAUSED; } catch(e) {}
-        // sync key values into shared gameState so they survive the early-frame sync
-        try {
-          if (typeof gameState !== 'undefined') {
-            gameState.PAUSED = PAUSED;
-            gameState.selectionActive = (typeof ctx.selectionActive === 'undefined') ? gameState.selectionActive : ctx.selectionActive;
-            gameState.player1 = (typeof ctx.player1 === 'undefined') ? gameState.player1 : ctx.player1;
-            gameState.player2 = (typeof ctx.player2 === 'undefined') ? gameState.player2 : ctx.player2;
-            gameState.projectiles = (typeof ctx.projectiles === 'undefined') ? gameState.projectiles : ctx.projectiles;
-          }
-        } catch (e) {}
-        appliedHUDAlpha = ctx.appliedHUDAlpha;
-        cam = ctx.cam || cam;
-        appliedCamZoom = ctx.appliedCamZoom || appliedCamZoom;
-        _hitEffect = ctx._hitEffect || _hitEffect;
-        _prevHp = ctx._prevHp || _prevHp;
-        _hsPrevActive = ctx._hsPrevActive || _hsPrevActive;
-        _hsStartedAt = ctx._hsStartedAt || _hsStartedAt;
-        _prevBlockstun = ctx._prevBlockstun || _prevBlockstun;
-        _blockstunZoom = ctx._blockstunZoom || _blockstunZoom;
-        playersReady = (ctx.playersReady === undefined) ? playersReady : ctx.playersReady;
-        selectionActive = (ctx.selectionActive === undefined) ? selectionActive : ctx.selectionActive;
-        p1Confirmed = (ctx.p1Confirmed === undefined) ? p1Confirmed : ctx.p1Confirmed;
-        p2Confirmed = (ctx.p2Confirmed === undefined) ? p2Confirmed : ctx.p2Confirmed;
-        p1SelIndex = (ctx.p1SelIndex === undefined) ? p1SelIndex : ctx.p1SelIndex;
-        p2SelIndex = (ctx.p2SelIndex === undefined) ? p2SelIndex : ctx.p2SelIndex;
-        p1Choice = (ctx.p1Choice === undefined) ? p1Choice : ctx.p1Choice;
-        p2Choice = (ctx.p2Choice === undefined) ? p2Choice : ctx.p2Choice;
-        projectiles = (typeof ctx.projectiles === 'undefined') ? projectiles : ctx.projectiles;
-        player1 = (typeof ctx.player1 === 'undefined') ? player1 : ctx.player1;
-        player2 = (typeof ctx.player2 === 'undefined') ? player2 : ctx.player2;
-        if (typeof keysPressed !== 'undefined') Object.assign(keysPressed, ctx.keysPressed || {});
-        if (typeof keysDown !== 'undefined') Object.assign(keysDown, ctx.keysDown || {});
-        if (typeof keysUp !== 'undefined') Object.assign(keysUp, ctx.keysUp || {});
-      };
-    }
-  } catch (e) {}
+  // window.resetToSelection is set up once (outside draw) to avoid creating
+  // a new closure that captures the entire draw scope every frame.
 
   // Sync main's local state back into the shared gameState module each frame
   try {
-    // Prefer values already present in the shared gameState to avoid
-    // overwriting lifecycle-created objects with stale locals.
-    const sync = {};
-    sync.player1 = gameState.player1 || (player1 || null);
-    sync.player2 = gameState.player2 || (player2 || null);
-    sync.projectiles = (Array.isArray(gameState.projectiles) && gameState.projectiles.length) ? gameState.projectiles : projectiles;
-    sync.playersReady = (typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
-    sync.cam = gameState.cam || cam;
-    sync.PAUSED = (typeof gameState.PAUSED !== 'undefined') ? gameState.PAUSED : PAUSED;
-    sync.appliedCamZoom = (typeof gameState.appliedCamZoom !== 'undefined') ? gameState.appliedCamZoom : appliedCamZoom;
-    sync.appliedHUDAlpha = (typeof gameState.appliedHUDAlpha !== 'undefined') ? gameState.appliedHUDAlpha : appliedHUDAlpha;
-    sync.MATCH_OVER = (typeof gameState.MATCH_OVER !== 'undefined') ? gameState.MATCH_OVER : MATCH_OVER;
-    sync.MATCH_WINNER = (typeof gameState.MATCH_WINNER !== 'undefined') ? gameState.MATCH_WINNER : MATCH_WINNER;
-    sync._matchMenu = gameState._matchMenu || _matchMenu;
-    sync._hitEffect = gameState._hitEffect || _hitEffect;
-    sync._prevHp = gameState._prevHp || _prevHp;
-    sync._hsPrevActive = (typeof gameState._hsPrevActive !== 'undefined') ? gameState._hsPrevActive : _hsPrevActive;
-    sync._hsStartedAt = (typeof gameState._hsStartedAt !== 'undefined') ? gameState._hsStartedAt : _hsStartedAt;
-    sync._prevBlockstun = gameState._prevBlockstun || _prevBlockstun;
-    sync._blockstunZoom = gameState._blockstunZoom || _blockstunZoom;
-    sync._tyemanAssets = (typeof gameState._tyemanAssets !== 'undefined') ? gameState._tyemanAssets : _tyemanAssets;
-    sync._sbluerAssets = (typeof gameState._sbluerAssets !== 'undefined') ? gameState._sbluerAssets : _sbluerAssets;
-    sync._heartFrames = (typeof gameState._heartFrames !== 'undefined') ? gameState._heartFrames : _heartFrames;
-    sync._slotAssets = (typeof gameState._slotAssets !== 'undefined') ? gameState._slotAssets : _slotAssets;
-    sync._bootFrames = (typeof gameState._bootFrames !== 'undefined') ? gameState._bootFrames : _bootFrames;
-    sync.selectionActive = (typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
-    sync.choices = (typeof gameState.choices !== 'undefined') ? gameState.choices : choices;
-    sync.p1Choice = (typeof gameState.p1Choice !== 'undefined') ? gameState.p1Choice : p1Choice;
-    sync.p2Choice = (typeof gameState.p2Choice !== 'undefined') ? gameState.p2Choice : p2Choice;
-    sync.p1Confirmed = (typeof gameState.p1Confirmed !== 'undefined') ? gameState.p1Confirmed : p1Confirmed;
-    sync.p2Confirmed = (typeof gameState.p2Confirmed !== 'undefined') ? gameState.p2Confirmed : p2Confirmed;
-    sync.p1SelIndex = (typeof gameState.p1SelIndex !== 'undefined') ? gameState.p1SelIndex : p1SelIndex;
-    sync.p2SelIndex = (typeof gameState.p2SelIndex !== 'undefined') ? gameState.p2SelIndex : p2SelIndex;
+    // Reuse _syncBuf to avoid allocating a new object every frame
+    _syncBuf.player1 = gameState.player1 || (player1 || null);
+    _syncBuf.player2 = gameState.player2 || (player2 || null);
+    _syncBuf.projectiles = (Array.isArray(gameState.projectiles) && gameState.projectiles.length) ? gameState.projectiles : projectiles;
+    _syncBuf.playersReady = (typeof gameState.playersReady !== 'undefined') ? gameState.playersReady : playersReady;
+    _syncBuf.cam = gameState.cam || cam;
+    _syncBuf.PAUSED = PAUSED;
+    _syncBuf.appliedCamZoom = (typeof gameState.appliedCamZoom !== 'undefined') ? gameState.appliedCamZoom : appliedCamZoom;
+    _syncBuf.appliedHUDAlpha = (typeof gameState.appliedHUDAlpha !== 'undefined') ? gameState.appliedHUDAlpha : appliedHUDAlpha;
+    _syncBuf.MATCH_OVER = (typeof gameState.MATCH_OVER !== 'undefined') ? gameState.MATCH_OVER : MATCH_OVER;
+    _syncBuf.MATCH_WINNER = (typeof gameState.MATCH_WINNER !== 'undefined') ? gameState.MATCH_WINNER : MATCH_WINNER;
+    _syncBuf._matchMenu = gameState._matchMenu || _matchMenu;
+    _syncBuf._hitEffect = gameState._hitEffect || _hitEffect;
+    _syncBuf._prevHp = gameState._prevHp || _prevHp;
+    _syncBuf._hsPrevActive = (typeof gameState._hsPrevActive !== 'undefined') ? gameState._hsPrevActive : _hsPrevActive;
+    _syncBuf._hsStartedAt = (typeof gameState._hsStartedAt !== 'undefined') ? gameState._hsStartedAt : _hsStartedAt;
+    _syncBuf._prevBlockstun = gameState._prevBlockstun || _prevBlockstun;
+    _syncBuf._blockstunZoom = gameState._blockstunZoom || _blockstunZoom;
+    _syncBuf._tyemanAssets = (typeof gameState._tyemanAssets !== 'undefined') ? gameState._tyemanAssets : _tyemanAssets;
+    _syncBuf._sbluerAssets = (typeof gameState._sbluerAssets !== 'undefined') ? gameState._sbluerAssets : _sbluerAssets;
+    _syncBuf._heartFrames = (typeof gameState._heartFrames !== 'undefined') ? gameState._heartFrames : _heartFrames;
+    _syncBuf._slotAssets = (typeof gameState._slotAssets !== 'undefined') ? gameState._slotAssets : _slotAssets;
+    _syncBuf._bootFrames = (typeof gameState._bootFrames !== 'undefined') ? gameState._bootFrames : _bootFrames;
+    _syncBuf.selectionActive = (typeof gameState.selectionActive !== 'undefined') ? gameState.selectionActive : selectionActive;
+    _syncBuf.choices = (typeof gameState.choices !== 'undefined') ? gameState.choices : choices;
+    _syncBuf.p1Choice = (typeof gameState.p1Choice !== 'undefined') ? gameState.p1Choice : p1Choice;
+    _syncBuf.p2Choice = (typeof gameState.p2Choice !== 'undefined') ? gameState.p2Choice : p2Choice;
+    _syncBuf.p1Confirmed = (typeof gameState.p1Confirmed !== 'undefined') ? gameState.p1Confirmed : p1Confirmed;
+    _syncBuf.p2Confirmed = (typeof gameState.p2Confirmed !== 'undefined') ? gameState.p2Confirmed : p2Confirmed;
+    _syncBuf.p1SelIndex = (typeof gameState.p1SelIndex !== 'undefined') ? gameState.p1SelIndex : p1SelIndex;
+    _syncBuf.p2SelIndex = (typeof gameState.p2SelIndex !== 'undefined') ? gameState.p2SelIndex : p2SelIndex;
 
-    assignGameState(sync);
+    assignGameState(_syncBuf);
   } catch (e) { /* ignore sync errors */ }
 }
 

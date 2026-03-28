@@ -17,6 +17,7 @@ import {
 
 // Global log toggle: press '9' to mute/unmute `console.log` and `console.info`.
 // Certain important messages remain visible (whitelisted substrings).
+import cleanup from './cleanup.js';
 if (typeof window !== 'undefined') {
   window._hcLogsEnabled = (typeof window._hcLogsEnabled === 'boolean') ? window._hcLogsEnabled : true;
   (function() {
@@ -54,14 +55,19 @@ if (typeof window !== 'undefined') {
       } catch (e) { origInfo(...args); }
     };
 
-    window.addEventListener('keydown', (ev) => {
+    const _hc_logs_key = function(ev) {
       try {
         if (ev && ev.key === '9') {
           window._hcLogsEnabled = !window._hcLogsEnabled;
           origLog('[HC Logs] toggled', window._hcLogsEnabled ? 'ON' : 'OFF');
         }
       } catch (e) {}
-    });
+    };
+    try {
+      if (cleanup && typeof cleanup.registerListener === 'function') cleanup.registerListener(window, 'keydown', _hc_logs_key, false);
+      else window.addEventListener('keydown', _hc_logs_key);
+      window._hcLogsToggleHandler = _hc_logs_key;
+    } catch (e) { try { window.addEventListener('keydown', _hc_logs_key); window._hcLogsToggleHandler = _hc_logs_key; } catch (ee) {} }
   })();
 }
 
@@ -120,27 +126,24 @@ export async function setup() {
 
   // forward mouse / wheel to editor when active
   try {
-    window.addEventListener('mousedown', (e) => {
+    const _setup_mousedown = function(e) { try { if (isStageEditorActive()) { stageHandleMousePressed(e, state.cam); e.preventDefault(); } } catch (err) {} };
+    const _setup_context = function(e) { try { if (isStageEditorActive()) e.preventDefault(); } catch (err) {} };
+    const _setup_wheel = function(e) { try { if (isStageEditorActive()) { stageHandleWheel(e.deltaY, state.cam); e.preventDefault(); } } catch (err) {} };
     try {
-      if (isStageEditorActive()) {
-        stageHandleMousePressed(e, state.cam);
-        e.preventDefault();
+      if (typeof cleanup !== 'undefined' && cleanup && typeof cleanup.registerListener === 'function') {
+        cleanup.registerListener(window, 'mousedown', _setup_mousedown, { passive: false });
+        cleanup.registerListener(window, 'contextmenu', _setup_context, { passive: false });
+        cleanup.registerListener(window, 'wheel', _setup_wheel, { passive: false });
+      } else {
+        window.addEventListener('mousedown', _setup_mousedown, { passive: false });
+        window.addEventListener('contextmenu', _setup_context, { passive: false });
+        window.addEventListener('wheel', _setup_wheel, { passive: false });
       }
-    } catch (err) {}
-  }, { passive: false });
-
-  window.addEventListener('contextmenu', (e) => {
-    if (isStageEditorActive()) e.preventDefault();
-  }, { passive: false });
-
-  window.addEventListener('wheel', (e) => {
-    try {
-      if (isStageEditorActive()) {
-        stageHandleWheel(e.deltaY, state.cam);
-        e.preventDefault();
-      }
-    } catch (err) {}
-  }, { passive: false });
+      window._setupMouseDownHandler = _setup_mousedown;
+      window._setupContextHandler = _setup_context;
+      window._setupWheelHandler = _setup_wheel;
+    } catch (e) { try { window.addEventListener('mousedown', _setup_mousedown, { passive: false }); window.addEventListener('contextmenu', _setup_context, { passive: false }); window.addEventListener('wheel', _setup_wheel, { passive: false }); } catch (ee) {} }
+  } catch (err) {}
 
   // mantener compatibilidad global si otros módulos lo esperan
   window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;

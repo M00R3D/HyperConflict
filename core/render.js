@@ -5,6 +5,9 @@ import { drawSavedItems } from '../ui/stageEditor.js';
 import { capturePendingHitstopSnapshot, isHitstopActive, remainingHitstopMs } from './hitstop.js';
 import { updateParticles, drawParticles } from './particleSystem.js';
 
+// Reusable object returned each frame to avoid per-frame allocation
+const _renderResult = { cam: null, appliedCamZoom: 0, _hitEffect: null, _blockstunZoom: null, _prevBlockstun: null, projectiles: null };
+
 export function renderScene(ctx = {}) {
   // ctx: { player1, player2, projectiles, cam, appliedCamZoom, _hitEffect, _blockstunZoom, _prevBlockstun, PAUSED }
   try {
@@ -103,7 +106,10 @@ export function renderScene(ctx = {}) {
       } catch (e) {}
     }
 
-    return { cam, appliedCamZoom, _hitEffect, _blockstunZoom, _prevBlockstun, projectiles };
+    _renderResult.cam = cam; _renderResult.appliedCamZoom = appliedCamZoom;
+    _renderResult._hitEffect = _hitEffect; _renderResult._blockstunZoom = _blockstunZoom;
+    _renderResult._prevBlockstun = _prevBlockstun; _renderResult.projectiles = projectiles;
+    return _renderResult;
   } catch (e) {
     console.warn('renderScene error', e);
     return null;

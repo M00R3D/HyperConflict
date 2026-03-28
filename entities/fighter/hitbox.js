@@ -39,7 +39,7 @@ export function getAttackHitbox(self) {
   try {
     const reg = getAttackHitboxForChar(self.charId, self.attackType);
     if (reg && typeof reg === 'object' && reg.w !== undefined) {
-      try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando reg found', { attackType: self.attackType, reg }); } catch(e) {}
+      try { if (typeof window !== 'undefined' && window.DEBUG_HITBOX) console.log('[getAttackHitbox] reg found', self.charId, self.attackType, reg); } catch(e) {}
       // permitir defs compactos: { offsetX, offsetY, w, h }
       // compute normal attack box (target/extended position)
       const normalBox = {
@@ -89,7 +89,7 @@ export function getAttackHitbox(self) {
       }
 
       const box = normalBox;
-      try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando computed atkHB', JSON.stringify({ attackType: self.attackType, box, selfX: self.x, selfW: self.w, facing: self.facing })); } catch(e) {}
+      try { if (typeof window !== 'undefined' && window.DEBUG_HITBOX) console.log('[getAttackHitbox] computed atkHB', self.charId, self.attackType, box, self.x, self.w, self.facing); } catch(e) {}
       return box;
     }
   } catch (e) {
@@ -99,13 +99,13 @@ export function getAttackHitbox(self) {
   // 2) fallback a las hitboxes definidas en la instancia (legacy)
   const raw = self.attackHitboxes[self.attackType] || self.attackHitboxes[self.attackType.replace(/\d+$/, '')];
   if (!raw) return null;
-  try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando fallback raw', { attackType: self.attackType, raw }); } catch(e) {}
+  try { if (typeof window !== 'undefined' && window.DEBUG_HITBOX) console.log('[getAttackHitbox] fallback raw', self.charId, self.attackType, raw); } catch(e) {}
   const box = {
     x: self.facing === 1 ? self.x + raw.offsetX : self.x + self.w - raw.offsetX - raw.w,
     y: self.y + raw.offsetY,
     w: raw.w, h: raw.h
   };
-  try { if (self && self.charId === 'fernando') console.log('[getAttackHitbox] fernando computed atkHB fallback', JSON.stringify({ attackType: self.attackType, box, selfX: self.x, selfW: self.w, facing: self.facing })); } catch(e) {}
+  try { if (typeof window !== 'undefined' && window.DEBUG_HITBOX) console.log('[getAttackHitbox] computed atkHB fallback', self.charId, self.attackType, box, self.x, self.w, self.facing); } catch(e) {}
   return box;
 }
 

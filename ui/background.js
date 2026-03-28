@@ -1,17 +1,22 @@
 // ui/background.js
+// Pre-allocate sky colors once (lazily) to avoid creating 4 new p5.Color objects every frame
+let _skyColors = null;
+
 function drawBackground() {
-  const skyColors = [
-    color(135, 206, 235),
-    color(255, 140, 0),
-    color(0, 0, 0),
-    color(25, 25, 112)
-  ];
+  if (!_skyColors) {
+    _skyColors = [
+      color(135, 206, 235),
+      color(255, 140, 0),
+      color(0, 0, 0),
+      color(25, 25, 112)
+    ];
+  }
   const speed = 0.00002;
   const t = (frameCount * speed) % 1;
-  const total = skyColors.length;
+  const total = _skyColors.length;
   const index1 = floor(frameCount * speed) % total;
   const index2 = (index1 + 1) % total;
-  const c = lerpColor(skyColors[index1], skyColors[index2], t);
+  const c = lerpColor(_skyColors[index1], _skyColors[index2], t);
   background(c);
 }
 

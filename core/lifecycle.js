@@ -1,5 +1,6 @@
 // core/lifecycle.js
 import { state as gameState, assignFrom as assignGameState } from './gameState.js';
+import cleanup from './cleanup.js';
 import { Fighter } from '../../entities/fighter.js';
 import { getStatsForChar, getActionsForChar } from './charConfig.js';
 import { registerSpecials } from './registerCharData.js';
@@ -7,6 +8,9 @@ import { initInput } from './input.js';
 import { loadStageItems } from '../ui/stageEditor.js';
 
 export function clearMatchOverState() {
+  try { if (typeof cleanup !== 'undefined' && cleanup && typeof cleanup.clearAllMatchResources === 'function') {
+    cleanup.clearAllMatchResources();
+  }} catch (ee) {}
   gameState.MATCH_OVER = false;
   gameState.MATCH_WINNER = null;
   try { if (typeof window !== 'undefined') { window.MATCH_OVER = false; window.MATCH_WINNER = null; } } catch(e){}
@@ -25,6 +29,10 @@ export function clearMatchOverState() {
     p._lifeHandled = false;
     if (p._lifeHandledAt) delete p._lifeHandledAt;
   });
+
+  // Null out player references so old fighter instances can be GC'd
+  try { gameState.player1 = null; gameState.player2 = null; } catch (e) {}
+  try { if (typeof window !== 'undefined') { window.player1 = null; window.player2 = null; } } catch (e) {}
 
   assignGameState(gameState);
 }

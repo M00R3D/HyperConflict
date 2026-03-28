@@ -45,8 +45,9 @@ export function spawnParticle(typeName, x, y, opts = {}) {
   if (!def) return;
   const cx = (typeof x === 'number') ? x : 0;
   const cy = (typeof y === 'number') ? y : 0;
-  // collect created particles for debug logging
-  const _createdForLog = [];
+  // only collect debug log copies when debug mode is explicitly enabled
+  const _debugActive = (typeof window !== 'undefined' && window.ParticleSystem && window.ParticleSystem.debug);
+  const _createdForLog = _debugActive ? [] : null;
 
   // If pattern present, spawn per-pixel particles arranged by pattern
   if (Array.isArray(def.pattern) && def.pattern.length > 0) {
@@ -121,19 +122,16 @@ export function spawnParticle(typeName, x, y, opts = {}) {
         const pixelAlpha = (typeof (chMeta && chMeta.alpha) === 'number') ? chMeta.alpha : ((typeof opts.alpha === 'number') ? opts.alpha : def.alpha);
         const pObj = { x: px, y: py, vx, vy, ax: 0, ay: 0, gravity: (typeof opts.gravity === 'number') ? opts.gravity : def.gravity, w: pixelW, h: pixelH, size: baseSize, life, maxLife: life, color: pixelColor, alpha: pixelAlpha, shape: 'pixel', _screen: !!opts.screenSpace, rot, rotVel, lightIntensity, lightColor, lightGradient };
         _particles.push(pObj);
-        try { _createdForLog.push(JSON.parse(JSON.stringify(pObj))); } catch (e) { _createdForLog.push(Object.assign({}, pObj)); }
+        if (_createdForLog) { try { _createdForLog.push(Object.assign({}, pObj)); } catch (e) {} }
       }
     }
     }
-    try {
-      const dbg = (typeof window !== 'undefined' && window.ParticleSystem && window.ParticleSystem.debug);
-      if (dbg && typeof console !== 'undefined' && console.log) {
-        try {
-          const toLog = (_createdForLog.length > 100) ? _createdForLog.slice(0, 100) : _createdForLog;
-          console.log('[PARTICLE_SPAWN]', typeName, toLog, _createdForLog.length, opts);
-        } catch (e) {}
-      }
-    } catch (e) {}
+    if (_createdForLog && _createdForLog.length > 0) {
+      try {
+        const toLog = (_createdForLog.length > 100) ? _createdForLog.slice(0, 100) : _createdForLog;
+        console.log('[PARTICLE_SPAWN]', typeName, toLog, _createdForLog.length, opts);
+      } catch (e) {}
+    }
     return;
   }
 
@@ -185,43 +183,40 @@ export function spawnParticle(typeName, x, y, opts = {}) {
       rot, rotVel, lightIntensity, lightColor, lightGradient
     };
     _particles.push(pObj);
-    try { _createdForLog.push(JSON.parse(JSON.stringify(pObj))); } catch (e) { _createdForLog.push(Object.assign({}, pObj)); }
+    if (_createdForLog) { try { _createdForLog.push(Object.assign({}, pObj)); } catch (e) {} }
   }
-  try {
-    const dbg2 = (typeof window !== 'undefined' && window.ParticleSystem && window.ParticleSystem.debug);
-    if (dbg2 && typeof console !== 'undefined' && console.log) {
-      try {
-        const toLog2 = (_createdForLog.length > 100) ? _createdForLog.slice(0, 100) : _createdForLog;
-        console.log('[PARTICLE_SPAWN]', typeName, toLog2, _createdForLog.length, opts);
-      } catch (e) {}
-    }
-  } catch (e) {}
+  if (_createdForLog && _createdForLog.length > 0) {
+    try {
+      const toLog2 = (_createdForLog.length > 100) ? _createdForLog.slice(0, 100) : _createdForLog;
+      console.log('[PARTICLE_SPAWN]', typeName, toLog2, _createdForLog.length, opts);
+    } catch (e) {}
+  }
 }
 
 export function updateParticles() {
   const dt = (typeof deltaTime === 'number') ? deltaTime : 16.67; // ms
-  for (let i = _particles.length - 1; i >= 0; i--) {
+  const dtScale = dt / 16.67;
+  let writeIdx = 0;
+  for (let i = 0; i < _particles.length; i++) {
     const p = _particles[i];
-    // simple physics
     p.vy += p.gravity * dt;
-    p.x += p.vx * (dt / 16.67);
-    p.y += p.vy * (dt / 16.67);
-    // rotation update (if any)
+    p.x += p.vx * dtScale;
+    p.y += p.vy * dtScale;
     if (typeof p.rot === 'number' && typeof p.rotVel === 'number') {
-      p.rot += p.rotVel * (dt / 16.67);
+      p.rot += p.rotVel * dtScale;
     }
     p.life -= dt;
-    if (p.life <= 0) _particles.splice(i, 1);
-  }
-  // Safety prune: if particles grow unbounded (bug), trim oldest to avoid OOM/frame collapse
-  try {
-    const MAX_PARTICLES_SOFT = 2000;
-    const TRIM_TO = 1500;
-    if (_particles.length > MAX_PARTICLES_SOFT) {
-      _particles.splice(0, Math.max(0, _particles.length - TRIM_TO));
-      if (typeof console !== 'undefined' && console.warn) console.warn('[PARTICLE_SYSTEM] pruned particles to', _particles.length);
+    if (p.life > 0) {
+      _particles[writeIdx++] = p;
     }
-  } catch (e) {}
+  }
+  _particles.length = writeIdx;
+  // Safety prune: if particles grow unbounded (bug), trim oldest to avoid OOM/frame collapse
+  const MAX_PARTICLES_SOFT = 1200;
+  const TRIM_TO = 800;
+  if (_particles.length > MAX_PARTICLES_SOFT) {
+    _particles.splice(0, _particles.length - TRIM_TO);
+  }
 }
 
 export function drawParticles(screenSpace = false) {
@@ -353,17 +348,15 @@ if (typeof window !== 'undefined') {
 }
 
 // Debug hotkey: F8 spawns a big heart at mouse or center; Shift+F8 spawns at both players
+import cleanup from './cleanup.js';
 if (typeof window !== 'undefined') {
   if (!window._particleSystemHotkeyAttached) {
     window._particleSystemHotkeyAttached = true;
-    window.addEventListener('keydown', function _ps_key(e) {
+    const _ps_key = function (e) {
       try {
         if (e.key === 'F8') {
-          // prefer mouse pos if available
           let mx = (typeof window.mouseX === 'number') ? window.mouseX : (typeof mouseX === 'number' ? mouseX : Math.round((window.innerWidth || 800)/2));
           let my = (typeof window.mouseY === 'number') ? window.mouseY : (typeof mouseY === 'number' ? mouseY : Math.round((window.innerHeight || 400)/2));
-          // Convert screen (mouse) coords to world coords using the same transform as `applyCamera`:
-          // applyCamera does: translate(width/2, height/2 + map(cam.zoom,0.6,1.5,80,20)); scale(cam.zoom); translate(-cam.x,-cam.y)
           const cam = (typeof window !== 'undefined' && window.state && window.state.cam) ? window.state.cam : (typeof window !== 'undefined' && window.cam ? window.cam : { x: 0, y: 0, zoom: 1 });
           try {
             const offsetY = (typeof map === 'function') ? map(cam.zoom, 0.6, 1.5, 80, 20) : 40;
@@ -372,22 +365,41 @@ if (typeof window !== 'undefined') {
             const wz = (cam && typeof cam.zoom === 'number' && cam.zoom !== 0) ? cam.zoom : 1;
             const worldMx = sx / wz + (cam.x || 0);
             const worldMy = sy / wz + (cam.y || 0);
-            // override mx/my with world coords for world-space spawn
-            // but preserve original screen coords if anything goes wrong
             if (typeof worldMx === 'number' && typeof worldMy === 'number') {
               mx = Math.round(worldMx);
               my = Math.round(worldMy);
             }
-          } catch (ee) { /* fall back to raw mx,my */ }
+          } catch (ee) { }
           if (e.shiftKey) {
             try { if (window.player1) spawnParticle('heart', Math.round(window.player1.x + (window.player1.w||0)/2), Math.round(window.player1.y + (window.player1.h||0)/2), { size: 8, screenSpace: false }); } catch (ee) {}
             try { if (window.player2) spawnParticle('heart', Math.round(window.player2.x + (window.player2.w||0)/2), Math.round(window.player2.y + (window.player2.h||0)/2), { size: 8, screenSpace: false }); } catch (ee) {}
           } else {
-            // Use same options as health-driven spawns: smaller pattern, world-space
             spawnParticle('heart', mx, my, { size: 8, screenSpace: false });
           }
         }
       } catch (err) {}
-    });
+    };
+
+    // register via cleanup when available so it can be torn down on match reset
+    try {
+      if (cleanup && typeof cleanup.registerListener === 'function') {
+        cleanup.registerListener(window, 'keydown', _ps_key, false);
+      } else {
+        window.addEventListener('keydown', _ps_key);
+      }
+      window._particleSystemHotkeyHandler = _ps_key;
+    } catch (e) { try { window.addEventListener('keydown', _ps_key); window._particleSystemHotkeyHandler = _ps_key; } catch (ee) {} }
+
+    // expose detach helper
+    window.ParticleSystem = window.ParticleSystem || {};
+    window.ParticleSystem.detachHotkey = function() {
+      try {
+        if (window._particleSystemHotkeyHandler) {
+          try { window.removeEventListener('keydown', window._particleSystemHotkeyHandler); } catch (e) {}
+          window._particleSystemHotkeyHandler = null;
+        }
+      } catch (e) {}
+      window._particleSystemHotkeyAttached = false;
+    };
   }
 }

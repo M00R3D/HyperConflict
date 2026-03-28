@@ -4,6 +4,7 @@ const p1ControlKeys = new Set(['w','a','s','d','i','o',' ', 'u','p']);
 const p2ControlKeys = new Set(['arrowup','arrowleft','arrowdown','arrowright','b','n','backspace', 'v','m']);
 
 let keysDown = {};let keysUp = {};let keysPressed = {};let keysDownTime = {};let keysUpTime = {};
+import cleanup from './cleanup.js';
 let _inited = false;
 // separate state for keyboard vs gamepad so both can drive movement simultaneously
 const kbDown = {}; // physical keyboard down state
@@ -16,7 +17,7 @@ function initInput({ p1 = null, p2 = null, ready = false } = {}) {
   playerRefs.p1 = p1;playerRefs.p2 = p2;playersReady = ready;
   if (_inited) return;
   _inited = true;
-  window.addEventListener("keydown", (e) => {
+  const _kbd_down_handler = function(e) {
     const key = (e.key || "").toLowerCase();
     if (!key) return;
     if (!kbDown[key]) {
@@ -29,8 +30,8 @@ function initInput({ p1 = null, p2 = null, ready = false } = {}) {
       }
       keysDown[key] = true; keysUp[key] = false; prevMergedDown[key] = true;
     }
-  });
-  window.addEventListener("keyup", (e) => {
+  };
+  const _kbd_up_handler = function(e) {
     const key = (e.key || "").toLowerCase();
     if (!key) return;
     kbDown[key] = false;
@@ -40,7 +41,20 @@ function initInput({ p1 = null, p2 = null, ready = false } = {}) {
     } else {
       // still held by other source (gamepad) — keep merged true
     }
-  });
+  };
+  try {
+    if (cleanup && typeof cleanup.registerListener === 'function') {
+      cleanup.registerListener(window, 'keydown', _kbd_down_handler, false);
+      cleanup.registerListener(window, 'keyup', _kbd_up_handler, false);
+    } else {
+      window.addEventListener('keydown', _kbd_down_handler);
+      window.addEventListener('keyup', _kbd_up_handler);
+    }
+    window._inputKeydownHandler = _kbd_down_handler;
+    window._inputKeyupHandler = _kbd_up_handler;
+  } catch (e) {
+    try { window.addEventListener('keydown', _kbd_down_handler); window.addEventListener('keyup', _kbd_up_handler); window._inputKeydownHandler = _kbd_down_handler; window._inputKeyupHandler = _kbd_up_handler; } catch (ee) {}
+  }
 }
 function setPlayersReady(flag = true) {  playersReady = !!flag;}
 function clearFrameFlags() {for (let k in keysPressed) keysPressed[k] = false;for (let k in keysUp) keysUp[k] = false;}
@@ -120,4 +134,21 @@ function pollGamepads() {
     _prevGPButtons[idx] = pressed;
   }
 }
+export function clearInputState() {
+  try {
+    for (let k in keysPressed) keysPressed[k] = false;
+    for (let k in keysDown) keysDown[k] = false;
+    for (let k in keysUp) keysUp[k] = false;
+    for (let k in keysDownTime) delete keysDownTime[k];
+    for (let k in keysUpTime) delete keysUpTime[k];
+    // remove handlers if present
+    try { if (window && window._inputKeydownHandler) { window.removeEventListener('keydown', window._inputKeydownHandler); window._inputKeydownHandler = null; } } catch (e) {}
+    try { if (window && window._inputKeyupHandler) { window.removeEventListener('keyup', window._inputKeyupHandler); window._inputKeyupHandler = null; } } catch (e) {}
+    _inited = false;
+  } catch (e) {}
+}
+
+// Expose a global hook so cleanup can call it defensively when clearing resources.
+try { if (typeof window !== 'undefined') window.clearInputState = clearInputState; } catch (e) {}
+
 export {initInput,setPlayersReady,clearFrameFlags,pollGamepads,  keysDown, keysUp, keysPressed, keysDownTime, keysUpTime};

@@ -215,6 +215,34 @@ export function doSpecial(self, moveName) {
     self.attackStartTime = millis();
     self.attackDuration = (self.actions && self.actions.tats && self.actions.tats.duration) || 420;
 
+    // Anti-spam: limit concurrent tats per-owner and globally, and enforce a short per-owner cooldown
+    try {
+      const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (typeof projectiles !== 'undefined' && Array.isArray(projectiles) ? projectiles : null);
+      if (projArr) {
+        const now = millis();
+        const perOwnerMax = (typeof self.tatsMaxPerOwner === 'number') ? Math.max(1, Math.floor(self.tatsMaxPerOwner)) : 4;
+        const globalMax = (typeof window !== 'undefined' && typeof window._GLOBAL_TATS_MAX === 'number') ? Math.max(1, Math.floor(window._GLOBAL_TATS_MAX)) : 12;
+        const perOwnerCooldownMs = (typeof self.tatsSpawnCooldownMs === 'number') ? Math.max(0, Number(self.tatsSpawnCooldownMs)) : 180;
+
+        const existingOwner = projArr.filter(pp => pp && pp.ownerId === self.id && pp.typeId === 4);
+        if (existingOwner.length >= perOwnerMax) {
+          if (typeof window !== 'undefined' && window.DEBUG_PROJECTILES) console.warn('ty_tats: blocked spawn, per-owner limit', { ownerId: self.id, existing: existingOwner.length, perOwnerMax });
+          return;
+        }
+        const existingGlobal = projArr.filter(pp => pp && pp.typeId === 4);
+        if (existingGlobal.length >= globalMax) {
+          if (typeof window !== 'undefined' && window.DEBUG_PROJECTILES) console.warn('ty_tats: blocked spawn, global limit', { existingGlobal: existingGlobal.length, globalMax });
+          return;
+        }
+
+        const last = (typeof self._lastTatsAt === 'number') ? self._lastTatsAt : 0;
+        if ((now - last) < perOwnerCooldownMs) {
+          if (typeof window !== 'undefined' && window.DEBUG_PROJECTILES) console.warn('ty_tats: blocked spawn, cooldown', { ownerId: self.id, sinceMs: now - last, cooldownMs: perOwnerCooldownMs });
+          return;
+        }
+        try { self._lastTatsAt = now; } catch (e) {}
+      }
+    } catch (e) { /* ignore safety */ }
     // parámetros base del proyectil barrier
     const baseOpts = {
       duration: 3000,    // duración visible más larga
@@ -303,6 +331,16 @@ export function doSpecial(self, moveName) {
 
     const bunFrames = (self.bunProjFramesByLayer && self.bunProjFramesByLayer.length) ? self.bunProjFramesByLayer : null;
     const stringFrames = (self.bunStringFramesByLayer && self.bunStringFramesByLayer.length) ? self.bunStringFramesByLayer : null;
+    // limit concurrent buns per owner to avoid spam/alloc storms
+    try {
+      const projArr = (typeof window !== 'undefined' && Array.isArray(window.projectiles)) ? window.projectiles : (typeof projectiles !== 'undefined' && Array.isArray(projectiles) ? projectiles : null);
+      const maxBunsPerOwner = 2;
+      if (projArr) {
+        const existing = projArr.filter(pp => pp && pp.ownerId === self.id && pp.typeId === 5 && !pp.returning);
+        if (existing.length >= maxBunsPerOwner) return; // skip spawn
+      }
+    } catch (e) { /* ignore */ }
+
     const p = spawnProjectileFromType(5, px, py, dir, self.id, { string: stringFrames }, opts, bunFrames);
     p._ownerRef = self;
     projectiles.push(p);

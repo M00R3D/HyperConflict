@@ -124,6 +124,7 @@ export function showStagePicker(cb) {
     const el = document.getElementById('hc-stage-picker');
     if (el && el.parentNode) el.parentNode.removeChild(el);
     window.removeEventListener('keydown', onKey);
+    try { if (typeof window !== 'undefined' && window.Loader && typeof window.Loader.clearPiskelCache === 'function') window.Loader.clearPiskelCache(); } catch (e) { /* ignore */ }
   }
   function closeAndCallback(res) { close(); if (typeof cb === 'function') cb(res); }
 

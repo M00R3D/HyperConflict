@@ -17,13 +17,27 @@ if (typeof window !== 'undefined') {
 
   // Toggle with key '7' globally (start/stop)
   if (!window._bufferRecorder._listenerAdded) {
-    window.addEventListener('keydown', (ev) => {
-      if (ev && ev.key === '7') {
-        const r = window._bufferRecorder;
-        if (!r.active) r.start(); else r.stop();
-      }
-    });
-    window._bufferRecorder._listenerAdded = true;
+      const _buf_rec_key = function(ev) {
+        if (ev && ev.key === '7') {
+          const r = window._bufferRecorder;
+          if (!r.active) r.start(); else r.stop();
+        }
+      };
+      (async () => {
+        try {
+          let cleanup = null;
+          try {
+            const mod = await import('../../core/cleanup.js');
+            cleanup = mod && (mod.default || mod);
+          } catch (ie) { cleanup = null; }
+          if (cleanup && typeof cleanup.registerListener === 'function') cleanup.registerListener(window, 'keydown', _buf_rec_key, false);
+          else window.addEventListener('keydown', _buf_rec_key);
+          window._bufferRecorder._listenerAdded = true;
+          window._bufferRecorder._keyHandler = _buf_rec_key;
+        } catch (e) {
+          try { window.addEventListener('keydown', _buf_rec_key); window._bufferRecorder._listenerAdded = true; window._bufferRecorder._keyHandler = _buf_rec_key; } catch (ee) {}
+        }
+      })();
   }
   // expose short alias for console usage
   window.BufferRecorder = window._bufferRecorder;

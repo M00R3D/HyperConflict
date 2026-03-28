@@ -333,30 +333,31 @@ export function loadStageCode(code) {
 }
 
 // bind key '5' to print+copy the generated stage code
-window.addEventListener('keydown', (ev) => {
-  const k = (ev.key || '').toString();
-  if (k === '5') {
-    const code = generateStageCode();
-    if (code) {
-      console.log('[StageEditor] StageCode:', code);
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).catch(()=>{/* ignore */});
+import cleanup from '../core/cleanup.js';
+const _stageeditor_key = function(ev) {
+  try {
+    const k = (ev.key || '').toString();
+    if (k === '5') {
+      const code = generateStageCode();
+      if (code) {
+        console.log('[StageEditor] StageCode:', code);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).catch(()=>{/* ignore */});
+        }
+      } else {
+        console.warn('[StageEditor] no code generated');
       }
-    } else {
-      console.warn('[StageEditor] no code generated');
     }
-  }
-
-  // Open slots picker (save) with '6'
-  if (k === '6') {
-    try {
-      showSlotsPicker('save', (picked) => {
-        // optional callback after save; picked = { slotNumber, rec } or null
-        if (picked && picked.rec) console.log('[StageEditor] saved slot', picked.slotNumber, picked.rec);
-      });
-    } catch (e) { console.warn('[StageEditor] save slot action failed', e); }
-  }
-}, { passive: true });
+    if (k === '6') {
+      try {
+        showSlotsPicker('save', (picked) => {
+          if (picked && picked.rec) console.log('[StageEditor] saved slot', picked.slotNumber, picked.rec);
+        });
+      } catch (e) { console.warn('[StageEditor] save slot action failed', e); }
+    }
+  } catch (e) {}
+};
+try { if (cleanup && typeof cleanup.registerListener === 'function') cleanup.registerListener(window, 'keydown', _stageeditor_key, { passive: true }); else window.addEventListener('keydown', _stageeditor_key, { passive: true }); window._stageEditorKeyHandler = _stageeditor_key; } catch (e) { try { window.addEventListener('keydown', _stageeditor_key, { passive: true }); window._stageEditorKeyHandler = _stageeditor_key; } catch (ee) {} }
 
 // --- Levels API: almacenar niveles (name + stageCode) y picker UI ---
 const LEVELS_KEY = 'hyperconf_levels_v1';
@@ -545,6 +546,7 @@ export function showSlotsPicker(mode = 'load', cb = () => {}) {
     const el = document.getElementById('hc-slots-picker');
     if (el) el.remove();
     window.removeEventListener('keydown', onKey, { passive: false });
+    try { if (typeof window !== 'undefined' && window.Loader && typeof window.Loader.clearPiskelCache === 'function') window.Loader.clearPiskelCache(); } catch (e) { /* ignore */ }
   }
   function closeAndCallback(res) {
     try { cb(res); } catch (e) { /* ignore callback errors */ }

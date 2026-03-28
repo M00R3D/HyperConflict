@@ -108,7 +108,7 @@ export const PROJECTILE_TYPES = {
     stringOptions: { stringW: 4, stringH: 2, stringFrameDelay: 6 },
     framesKey: 'bun',
     hitboxId: 5,
-    damageQuarters: 1
+    damageQuarters: 0
   },
   6: {
     id: 6,

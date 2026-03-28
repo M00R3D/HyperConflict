@@ -151,8 +151,8 @@ class Projectile {
       try { console.log('[Projectile ctor]', { typeId: this.typeId, w: this.w, h: this.h, speed: this.speed, duration: this.duration, lifespan: this.lifespan, maxRange: this.maxRange, spriteScale: this.spriteScale }); } catch (e) {}
     }
 
-    // extra debug for bun specifically (unconditional logging helpful while debugging)
-    if (this.typeId === 5) {
+    // extra debug for bun specifically (gate behind global flag to avoid spamming logs)
+    if (this.typeId === 5 && typeof window !== 'undefined' && window.DEBUG_PROJECTILES) {
       try {
         console.log('[Projectile ctor BUN]', {
           opts: opts,

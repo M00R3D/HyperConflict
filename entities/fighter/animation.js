@@ -178,23 +178,8 @@ export function setState(self, newState) {
     }
   } catch (e) {}
 
-  // Si SALIMOS de un estado de ataque importante, evitar que la regeneración nos devuelva
-  // instantáneamente lo gastado: marcar consumo reciente y resetar acumulador/lastTime.
-  try {
-    // Añadimos estados de "hit" y launch para evitar picos de regeneración al salir de ellos
-    const attackStates = new Set([
-      'punch','punch2','punch3','kick','kick2','kick3',
-      'hadouken','tats','bun','grab','taunt','shoot',
-      // hit-related states
-      'hit','hit1','hit2','hit3','flyback','flyup',
-      'knocking','knocked','recovery'
-    ]);
-    const wasInAttack = attackStates.has(prevState);
-    const nowInAttack = attackStates.has(newState);
-    // Stamina removed: no need to mark recent consumption on state transitions.
-  } catch (e) {
-    /* silent */
-  }
+  // Stamina system was removed — no need to track attack-state transitions.
+  // (previously created a new Set on every setState call)
 }
 
 export function updateAnimation(self) {

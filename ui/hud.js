@@ -4,6 +4,15 @@
 // State to track per-player heart frames + shake timings
 const _heartStateByPlayer = new Map();
 
+// Reusable offscreen graphics buffers to avoid per-frame createGraphics() leaks
+let _lifebarGfx = null;
+let _lifebarGfx2 = null;
+let _lifebarGfxSize = 0;
+
+// Reusable offscreen buffer for offscreen player indicators
+let _offscreenIndicatorGfx = null;
+let _offscreenIndicatorGfxSize = 0;
+
 // NEW: state para boots (escala por-bota)
 const _bootStateByPlayer = new Map();
 
@@ -478,8 +487,16 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
             const img = lifebarLayer[lifebarAnimIdx % lifebarFrameCount] || lifebarLayer[0];
             try {
                 if (img && img.width && img.height) {
-                // prepare full-square buffer (one block)
-                const g = createGraphics(lifebarBlockSize, lifebarBlockSize);
+                // Reuse shared offscreen buffers (resize only when block size changes)
+                if (!_lifebarGfx || _lifebarGfxSize !== lifebarBlockSize) {
+                  if (_lifebarGfx) try { _lifebarGfx.remove(); } catch(e){}
+                  if (_lifebarGfx2) try { _lifebarGfx2.remove(); } catch(e){}
+                  _lifebarGfx = createGraphics(lifebarBlockSize, lifebarBlockSize);
+                  _lifebarGfx2 = createGraphics(lifebarBlockSize, lifebarBlockSize);
+                  _lifebarGfxSize = lifebarBlockSize;
+                }
+                const g = _lifebarGfx;
+                g.clear();
                 g.noSmooth();
                 try {
                   // If the source image contains multiple horizontal subframes (a spritesheet),
@@ -493,8 +510,9 @@ function drawHealthBars(p1, p2, heartFrames, bootFrames, lifebarFrames) {
                   g.push(); g.noStroke(); g.fill(220, 120, 120, 160); g.rect(0, 0, lifebarBlockSize, lifebarBlockSize, 6); g.pop();
                 }
 
-                // create a second buffer containing the rotated block
-                const g2 = createGraphics(lifebarBlockSize, lifebarBlockSize);
+                // reuse second buffer containing the rotated block
+                const g2 = _lifebarGfx2;
+                g2.clear();
                 g2.noSmooth();
                 g2.push();
                 g2.imageMode(CORNER);
@@ -742,9 +760,15 @@ function drawOffscreenIndicators(cam, players = []) {
     if (img && img.width && img.height) {
       // low resolution target for pixelation (smaller -> blockier)
       const lowResSize = 8; // tweak: 6..16. Lower = more blocky
-      const g = createGraphics(lowResSize, lowResSize);
+      // Reuse a shared offscreen buffer for offscreen indicators
+      if (!_offscreenIndicatorGfx || _offscreenIndicatorGfxSize !== lowResSize) {
+        if (_offscreenIndicatorGfx) try { _offscreenIndicatorGfx.remove(); } catch(e){}
+        _offscreenIndicatorGfx = createGraphics(lowResSize, lowResSize);
+        _offscreenIndicatorGfxSize = lowResSize;
+      }
+      const g = _offscreenIndicatorGfx;
       g.pixelDensity(1);
-      g.noSmooth(); // ensure buffer is rendered with nearest-neighbor inside
+      g.noSmooth();
       g.clear();
       g.push();
       g.imageMode(CORNER);
@@ -769,11 +793,7 @@ function drawOffscreenIndicators(cam, players = []) {
       // temporarily switch global noSmooth() then restore to avoid affecting other draws:
       noSmooth();
       image(g, 0, 0, spriteDrawSize, spriteDrawSize);
-      // restore smoothing (use smooth() to return to previous behaviour)
       smooth();
-
-      // dispose reference (p5 will handle memory, but clear var to avoid accidental reuse)
-      // (no explicit removeGraphics API in p5; leaving g for GC)
     } else {
       // fallback: small colored rect with char initial
       noStroke();
