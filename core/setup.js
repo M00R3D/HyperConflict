@@ -142,8 +142,40 @@ export async function setup() {
       window._setupMouseDownHandler = _setup_mousedown;
       window._setupContextHandler = _setup_context;
       window._setupWheelHandler = _setup_wheel;
+      console.log('[setup] registered global stage editor handlers');
     } catch (e) { try { window.addEventListener('mousedown', _setup_mousedown, { passive: false }); window.addEventListener('contextmenu', _setup_context, { passive: false }); window.addEventListener('wheel', _setup_wheel, { passive: false }); } catch (ee) {} }
   } catch (err) {}
+
+  // Also bind directly to the canvas element using pointer events to avoid cases
+  // where canvas consumes mouse events before they reach window.
+  try {
+    const bindCanvasHandlers = () => {
+      try {
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return;
+        const _canvas_pointer = function(ev) { try { if (isStageEditorActive()) { stageHandleMousePressed(ev, state.cam); ev.preventDefault(); } } catch (e) {} };
+        const _canvas_wheel = function(ev) { try { if (isStageEditorActive()) { stageHandleWheel(ev.deltaY, state.cam); ev.preventDefault(); } } catch (e) {} };
+        // prefer pointerdown for broader device support
+        canvas.addEventListener('pointerdown', _canvas_pointer, { passive: false });
+        canvas.addEventListener('wheel', _canvas_wheel, { passive: false });
+        // expose references so cleanup can remove them if needed
+        window._stageCanvasPointer = _canvas_pointer;
+        window._stageCanvasWheel = _canvas_wheel;
+        console.log('[setup] bound stage editor to canvas pointer/wheel events');
+      } catch (e) {
+        console.warn('[setup] failed to bind canvas handlers for stage editor', e);
+      }
+    };
+    // bind now if canvas exists, otherwise poll until canvas appears (robust for p5 timing)
+    (function tryBind(retries = 0) {
+      try {
+        const canvas = document.querySelector('canvas');
+        if (canvas) { bindCanvasHandlers(); return; }
+      } catch (e) {}
+      if (retries < 40) setTimeout(() => tryBind(retries + 1), 200);
+      else console.warn('[setup] giving up binding canvas handlers for stage editor after retries');
+    })(0);
+  } catch (e) {}
 
   // mantener compatibilidad global si otros módulos lo esperan
   window.SHOW_DEBUG_OVERLAYS = window.SHOW_DEBUG_OVERLAYS || false;
@@ -166,7 +198,4 @@ export async function setup() {
   window.p2Confirmed = state.p2Confirmed;
   window.p1Choice = state.p1Choice;
   window.p2Choice = state.p2Choice;
-  } catch (e) {
-    console.warn('setup: unable to mirror state to window globals', e);
   }
-}

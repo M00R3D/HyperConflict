@@ -28,6 +28,7 @@ export async function initStageEditor(piskelPath = DEFAULT_PISKEL, opts = {}) {
     currentFrame = 0;
     loaded = true;
     console.log('[StageEditor] frames loaded:', frames.length);
+    try { if (typeof window !== 'undefined') window._stageEditorFramesCount = frames.length; } catch(e) {}
 
     // Auto-load slot only when explicitly enabled (default is 'slot6')
     if (autoLoadSlot !== null && typeof autoLoadSlot === 'string') {
@@ -48,9 +49,9 @@ export async function initStageEditor(piskelPath = DEFAULT_PISKEL, opts = {}) {
   return true;
 }
 
-export function toggleStageEditor() { active = !active; return active; }
+export function toggleStageEditor() { active = !active; try { if (typeof window !== 'undefined') window._stageEditorActive = active; } catch(e) {} console.log('[StageEditor] toggled ->', active); return active; }
 export function isStageEditorActive() { return !!active; }
-export function setStageEditorActive(bool) { active = !!bool; }
+export function setStageEditorActive(bool) { active = !!bool; try { if (typeof window !== 'undefined') window._stageEditorActive = active; } catch(e) {} console.log('[StageEditor] set active ->', active); }
 
 // Convert screen <-> world using the same camera math used elsewhere
 function _camYOffset(zoom) { return map(zoom||1, 0.6, 1.5, 80, 20); }
@@ -71,7 +72,9 @@ export function screenToWorld(sx, sy, cam = { x:0, y:0, zoom:1 }) {
 
 // Place / remove
 export function placeItemAtWorld(wx, wy, frameIdx = currentFrame) {
-  items.push({ x: Math.round(wx), y: Math.round(wy), frameIndex: Math.max(0, Math.min((frames.length-1)||0, Math.floor(Number(frameIdx||0)))) });
+  const it = { x: Math.round(wx), y: Math.round(wy), frameIndex: Math.max(0, Math.min((frames.length-1)||0, Math.floor(Number(frameIdx||0)))) };
+  items.push(it);
+  console.log('[StageEditor] placeItemAtWorld', it, 'frames:', frames.length, 'items:', items.length);
 }
 export function removeNearest(wx, wy, maxDist = 28) {
   if (!items.length) return false;
@@ -83,7 +86,8 @@ export function removeNearest(wx, wy, maxDist = 28) {
     if (d < bestDist) { bestDist = d; best = i; }
   }
   if (best !== -1 && bestDist <= maxDist) {
-    items.splice(best, 1);
+    const removed = items.splice(best, 1);
+    console.log('[StageEditor] removeNearest removed', removed, 'remaining:', items.length);
     return true;
   }
   return false;
@@ -106,6 +110,7 @@ export function handleMousePressed(e, cam = { x:0, y:0, zoom:1 }) {
 
   const btn = (typeof e.button === 'number') ? e.button : 0;
   const { wx, wy } = screenToWorld(sx, sy, cam || { x:0,y:0,zoom:1 });
+  console.log('[StageEditor] handleMousePressed', { sx, sy, wx, wy, btn, active, framesLen: frames.length });
 
   if (btn === 0) placeItemAtWorld(wx, wy, currentFrame);
   else if (btn === 2) removeNearest(wx, wy, 32);
@@ -113,8 +118,10 @@ export function handleMousePressed(e, cam = { x:0, y:0, zoom:1 }) {
 
 export function handleWheel(deltaY, cam = { x:0, y:0, zoom:1 }) {
   if (!active || !frames.length) return;
+  console.log('[StageEditor] wheel', { deltaY, before: currentFrame, framesLen: frames.length });
   if (deltaY > 0) currentFrame = (currentFrame - 1 + frames.length) % frames.length;
   else currentFrame = (currentFrame + 1) % frames.length;
+  console.log('[StageEditor] wheel -> currentFrame', currentFrame);
 }
 
 // Drawing: editor overlay (call from main draw when in scene)
@@ -333,31 +340,56 @@ export function loadStageCode(code) {
 }
 
 // bind key '5' to print+copy the generated stage code
-import cleanup from '../core/cleanup.js';
+// NOTE: registered DIRECTLY (not via cleanup.registerListener) so it survives clearAllMatchResources()
 const _stageeditor_key = function(ev) {
   try {
     const k = (ev.key || '').toString();
-    if (k === '5') {
-      const code = generateStageCode();
-      if (code) {
-        console.log('[StageEditor] StageCode:', code);
+    const evCode = (ev.code || '').toString();
+    const is5 = (k === '5' || evCode === 'Digit5' || evCode === 'Numpad5');
+    const is6 = (k === '6' || evCode === 'Digit6' || evCode === 'Numpad6');
+    if (!is5 && !is6) return;
+    if (!active) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (is5) {
+      const stageCode = generateStageCode();
+      if (stageCode) {
+        console.warn('[StageEditor] StageCode:', stageCode);
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(code).catch(()=>{/* ignore */});
+          navigator.clipboard.writeText(stageCode).then(() => {
+            console.warn('[StageEditor] code copied to clipboard');
+          }).catch(() => {});
         }
       } else {
         console.warn('[StageEditor] no code generated');
       }
     }
-    if (k === '6') {
+    if (is6) {
       try {
         showSlotsPicker('save', (picked) => {
-          if (picked && picked.rec) console.log('[StageEditor] saved slot', picked.slotNumber, picked.rec);
+          if (picked && picked.rec) console.warn('[StageEditor] saved slot', picked.slotNumber, picked.rec);
         });
       } catch (e) { console.warn('[StageEditor] save slot action failed', e); }
     }
+  } catch (e) { console.warn('[StageEditor] keydown handler error', e); }
+};
+// Register directly — bypass cleanup registry so the handler persists across match resets
+document.addEventListener('keydown', _stageeditor_key, { capture: true });
+window._stageEditorKeyHandler = _stageeditor_key;
+
+// Prevent browser context menu when editor is active (capture phase)
+// NOTE: registered DIRECTLY (not via cleanup) so it persists across match resets
+const _stageeditor_ctx = function(ev) {
+  try {
+    if (active) {
+      try { ev.preventDefault(); } catch (e) {}
+      try { ev.stopPropagation(); } catch (e) {}
+      return;
+    }
   } catch (e) {}
 };
-try { if (cleanup && typeof cleanup.registerListener === 'function') cleanup.registerListener(window, 'keydown', _stageeditor_key, { passive: true }); else window.addEventListener('keydown', _stageeditor_key, { passive: true }); window._stageEditorKeyHandler = _stageeditor_key; } catch (e) { try { window.addEventListener('keydown', _stageeditor_key, { passive: true }); window._stageEditorKeyHandler = _stageeditor_key; } catch (ee) {} }
+document.addEventListener('contextmenu', _stageeditor_ctx, { passive: false, capture: true });
+window._stageEditorContextHandler = _stageeditor_ctx;
 
 // --- Levels API: almacenar niveles (name + stageCode) y picker UI ---
 const LEVELS_KEY = 'hyperconf_levels_v1';

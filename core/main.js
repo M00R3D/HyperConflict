@@ -262,6 +262,7 @@ async function setup() {
     window._mainMouseDownHandler = _main_mousedown;
     window._mainContextHandler = _main_context;
     window._mainWheelHandler = _main_wheel;
+    console.log('[main] registered global stage editor handlers');
   } catch (e) { try { window.addEventListener('mousedown', _main_mousedown, { passive: false }); window.addEventListener('contextmenu', _main_context, { passive: false }); window.addEventListener('wheel', _main_wheel, { passive: false }); } catch (ee) {} }
 
   // expose quick toggles
@@ -270,6 +271,27 @@ async function setup() {
     window.stageExportItems = stageExportItems;
     window.stageLoadItems = stageLoadItems;
   }
+
+  // Also bind pointer events directly on the p5 canvas to ensure events arrive
+  (function tryBindCanvas(retries = 0) {
+    try {
+      const canvas = document.querySelector('canvas');
+      if (canvas) {
+        const _canvas_pointer = function(ev) { try { if (isStageEditorActive()) { stageHandleMousePressed(ev, cam); ev.preventDefault(); console.log('[main] canvas pointerdown', {clientX: ev.clientX, clientY: ev.clientY}); } } catch (e) {} };
+        const _canvas_wheel = function(ev) { try { if (isStageEditorActive()) { stageHandleWheel(ev.deltaY, cam); ev.preventDefault(); console.log('[main] canvas wheel', {deltaY: ev.deltaY}); } } catch (e) {} };
+        canvas.addEventListener('pointerdown', _canvas_pointer, { passive: false });
+        canvas.addEventListener('wheel', _canvas_wheel, { passive: false });
+        const _canvas_ctxmenu = function(ev) { try { if (isStageEditorActive()) { ev.preventDefault(); ev.stopPropagation(); console.log('[main] canvas contextmenu blocked'); } } catch (e) {} };
+        canvas.addEventListener('contextmenu', _canvas_ctxmenu, { passive: false, capture: true });
+        window._mainCanvasContextmenu = _canvas_ctxmenu;
+        window._mainCanvasPointer = _canvas_pointer; window._mainCanvasWheel = _canvas_wheel;
+        console.log('[main] bound canvas pointer/wheel for stage editor');
+        return;
+      }
+    } catch (e) {}
+    if (retries < 40) setTimeout(() => tryBindCanvas(retries + 1), 200);
+    else console.warn('[main] giving up binding canvas pointer/wheel after retries');
+  })(0);
 }
 // clearMatchOverState moved to core/lifecycle.js
 
